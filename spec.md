@@ -10,6 +10,7 @@ Supported Instructions
 3. retrieve_knowledge_graph
 4. retrieve_knowledge_embedded_chunks
 5. condition
+6. reasoning
 Parameters and Variable References
 Variables and Dependencies
 Plan Structure
@@ -155,6 +156,25 @@ Copy code
     ]
   }
 }
+6. reasoning
+Purpose: Provides a detailed explanation of the plan's reasoning, analysis, and steps.
+
+Parameters:
+
+explanation: A string containing the reasoning and analysis for the plan.
+dependency_analysis: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
+
+Example:
+
+json
+Copy code
+{
+  "type": "reasoning",
+  "parameters": {
+    "explanation": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer.",
+    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3.\nStep 5 depends on Step 4.\nStep 6 depends on Step 5."
+  }
+}
 Parameters and Variable References
 Parameters can be either direct values or variable references. To reference a variable, use a dictionary with the key "var" and the variable name as the value.
 
@@ -185,46 +205,82 @@ Contextual Prompts: Provide sufficient context to the LLM in prompts to ensure a
 Consistency: Maintain a consistent structure and format throughout the plan.
 Testing: Verify the plan for syntax correctness and logical flow before execution.
 Example Plan
-Goal: Determine if the number 42 is even or odd.
+Goal: Determine the population of the capital city of the third largest neighboring country of France by area.
 
-json
-Copy code
+The plan:
 [
   {
-    "type": "assign",
+    "type": "reasoning",
     "parameters": {
-      "value": 42,
-      "var_name": "number"
+      "explanation": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer."
+    }
+  },
+  {
+    "type": "retrieve_knowledge_graph",
+    "parameters": {
+      "query": "Countries neighboring France sorted by area in descending order",
+      "output_var": "france_neighbors"
     }
   },
   {
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Determine if the number {{number}} is even or odd.",
+      "prompt": "Given this list of France's neighboring countries sorted by area: {{france_neighbors}}, what is the name of the third largest country?",
       "context": null,
-      "output_var": "llm_response"
+      "output_var": "third_largest_country"
+    }
+  },
+  {
+    "type": "retrieve_knowledge_graph",
+    "parameters": {
+      "query": "Capital city of {{third_largest_country}}",
+      "output_var": "capital_city"
+    }
+  },
+  {
+    "type": "retrieve_knowledge_embedded_chunks",
+    "parameters": {
+      "embedding_query": "Population of {{capital_city}}",
+      "top_k": 3,
+      "output_var": "population_data"
+    }
+  },
+  {
+    "type": "llm_generate",
+    "parameters": {
+      "prompt": "Based on this information: {{population_data}}, what is the current population of {{capital_city}}? Provide only the number.",
+      "context": null,
+      "output_var": "population_number"
     }
   },
   {
     "type": "condition",
     "parameters": {
-      "prompt": "Is {{number}} even? Respond with 'true' or 'false'.",
+      "prompt": "Is {{population_number}} a valid number? Respond with 'true' or 'false'.",
       "context": null,
       "true_branch": [
         {
           "type": "assign",
           "parameters": {
-            "value": "The number {{number}} is even.",
-            "var_name": "result"
+            "value": "The population of {{capital_city}}, the capital of {{third_largest_country}} (the third largest neighboring country of France by area), is {{population_number}}.",
+            "var_name": "final_answer"
           }
         }
       ],
       "false_branch": [
         {
+          "type": "llm_generate",
+          "parameters": {
+            "prompt": "The population number {{population_number}} seems invalid. Please provide a reasonable estimate for the population of {{capital_city}}, the capital of {{third_largest_country}}.",
+            "context": null,
+            "output_var": "estimated_population"
+          }
+        },
+        {
           "type": "assign",
           "parameters": {
-            "value": "The number {{number}} is odd.",
-            "var_name": "result"
+            "value": "The estimated population of {{capital_city}}, the capital of {{third_largest_country}} (the third largest neighboring country of France by area), is approximately {{estimated_population}}.",
+            "var_name": "final_answer"
           }
         }
       ]
