@@ -13,33 +13,35 @@ class InstructionHandlers:
             self.vm.state['errors'].append("Invalid parameters for 'retrieve_knowledge_graph'.")
             return False
 
-        result = self.retrieve_knowledge_graph(query)
-        if result is None:
+        result = self.vm.instruction_handlers.retrieve_knowledge_graph(query)
+        if result is not None:
+            self.vm.variables[output_var] = result
+            self.vm.logger.info(f"Retrieved knowledge graph data for query '{query}' and stored in '{output_var}'.")
+            return True
+        else:
+            self.vm.logger.error(f"Failed to retrieve knowledge graph data for query '{query}'.")
+            self.vm.state['errors'].append(f"Failed to retrieve knowledge graph data for query '{query}'.")
             return False
-
-        self.vm.variables[output_var] = result
-        self.vm.logger.info(f"Stored result in variable '{output_var}'.")
-        self.vm.save_milestone("AfterKnowledgeGraphRetrieval")
-        return True
 
     def retrieve_knowledge_embedded_chunks_handler(self, params: Dict[str, Any]) -> bool:
         embedding_query = self.vm.resolve_parameter(params.get('embedding_query'))
-        top_k = self.vm.resolve_parameter(params.get('top_k'))
         output_var = params.get('output_var')
+        top_k = params.get('top_k', 5)
 
-        if not isinstance(embedding_query, str) or not isinstance(top_k, int) or not isinstance(output_var, str):
+        if not isinstance(embedding_query, str) or not isinstance(output_var, str):
             self.vm.logger.error("Invalid parameters for 'retrieve_knowledge_embedded_chunks'.")
             self.vm.state['errors'].append("Invalid parameters for 'retrieve_knowledge_embedded_chunks'.")
             return False
 
-        result = self.retrieve_knowledge_embedded_chunks(embedding_query, top_k)
-        if result is None:
+        result = self.vm.instruction_handlers.retrieve_knowledge_embedded_chunks(embedding_query, top_k)
+        if result is not None:
+            self.vm.variables[output_var] = result
+            self.vm.logger.info(f"Retrieved top {top_k} embedded chunks for query '{embedding_query}' and stored in '{output_var}'.")
+            return True
+        else:
+            self.vm.logger.error(f"Failed to retrieve embedded chunks for query '{embedding_query}'.")
+            self.vm.state['errors'].append(f"Failed to retrieve embedded chunks for query '{embedding_query}'.")
             return False
-
-        self.vm.variables[output_var] = result
-        self.vm.logger.info(f"Stored result in variable '{output_var}'.")
-        self.vm.save_milestone("AfterEmbeddedChunksRetrieval")
-        return True
 
     def llm_generate_handler(self, params: Dict[str, Any]) -> bool:
         prompt = self.vm.resolve_parameter(params.get('prompt'))
@@ -52,39 +54,34 @@ class InstructionHandlers:
             return False
 
         result = self.vm.llm_interface.generate(prompt, context)
-        if result is None:
+        if result is not None:
+            self.vm.variables[output_var] = result
+            self.vm.logger.info(f"Generated content and stored in '{output_var}'.")
+            return True
+        else:
+            self.vm.logger.error("Failed to generate content using LLM.")
+            self.vm.state['errors'].append("Failed to generate content using LLM.")
             return False
-
-        self.vm.variables[output_var] = result
-        self.vm.logger.info(f"Stored LLM output in variable '{output_var}'.")
-        self.vm.save_milestone("AfterLLMGeneration")
-        return True
 
     def condition_handler(self, params: Dict[str, Any]) -> bool:
-        condition_prompt = self.vm.resolve_parameter(params.get('prompt'))
-        context = self.vm.resolve_parameter(params.get('context'))
-        true_branch = params.get('true_branch')
-        false_branch = params.get('false_branch')
+        condition = self.vm.resolve_parameter(params.get('condition'))
+        if_true = params.get('if_true', [])
+        if_false = params.get('if_false', [])
 
-        if not isinstance(condition_prompt, str):
-            self.vm.logger.error("Invalid condition prompt for 'condition'.")
-            self.vm.state['errors'].append("Invalid condition prompt for 'condition'.")
-            return False
-        if not isinstance(true_branch, list) or not isinstance(false_branch, list):
-            self.vm.logger.error("Invalid branches for 'condition'.")
-            self.vm.state['errors'].append("Invalid branches for 'condition'.")
+        if not isinstance(condition, str):
+            self.vm.logger.error("Invalid condition for 'condition' instruction.")
+            self.vm.state['errors'].append("Invalid condition for 'condition' instruction.")
             return False
 
-        condition_result = self.vm.llm_interface.evaluate_condition(condition_prompt, context)
-        if condition_result is None:
-            return False
-
-        if condition_result.lower() == 'true':
-            self.vm.logger.info("Condition evaluated to True. Executing true_branch.")
-            return self.vm.execute_subplan(true_branch)
+        result = self.vm.llm_interface.evaluate_condition(condition)
+        if result == 'true':
+            return self.vm.execute_subplan(if_true)
+        elif result == 'false':
+            return self.vm.execute_subplan(if_false)
         else:
-            self.vm.logger.info("Condition evaluated to False. Executing false_branch.")
-            return self.vm.execute_subplan(false_branch)
+            self.vm.logger.error(f"Invalid condition result: {result}")
+            self.vm.state['errors'].append(f"Invalid condition result: {result}")
+            return False
 
     def assign_handler(self, params: Dict[str, Any]) -> bool:
         value = self.vm.resolve_parameter(params.get('value'))
@@ -104,6 +101,20 @@ class InstructionHandlers:
         
         return True
 
+    def reasoning_handler(self, params: Dict[str, Any]) -> bool:
+        explanation = params.get('explanation')
+        dependency_analysis = params.get('dependency_analysis')
+
+        if not isinstance(explanation, str) or not isinstance(dependency_analysis, str):
+            self.vm.logger.error("Invalid parameters for 'reasoning'.")
+            self.vm.state['errors'].append("Invalid parameters for 'reasoning'.")
+            return False
+
+        self.vm.logger.info("Reasoning step:")
+        self.vm.logger.info(f"Explanation: {explanation}")
+        self.vm.logger.info(f"Dependency Analysis: {dependency_analysis}")
+        return True
+
     def retrieve_knowledge_graph(self, query: str) -> Optional[Dict[str, Any]]:
         self.vm.logger.info(f"Retrieving knowledge graph data for query: '{query}'")
         knowledge_graph_data = {
@@ -117,22 +128,10 @@ class InstructionHandlers:
         embedded_chunks = [f"Chunk {i+1} related to '{embedding_query}'" for i in range(top_k)]
         return embedded_chunks
 
-    def reasoning_handler(self, params: Dict[str, Any]) -> bool:
-        explanation = params.get('explanation')
-        dependency_analysis = params.get('dependency_analysis')
-
-        if not isinstance(explanation, str):
-            self.vm.logger.error("Invalid explanation for 'reasoning'.")
-            self.vm.state['errors'].append("Invalid explanation for 'reasoning'.")
-            return False
-
-        if dependency_analysis and not isinstance(dependency_analysis, (str, dict, list)):
-            self.vm.logger.error("Invalid dependency analysis for 'reasoning'.")
-            self.vm.state['errors'].append("Invalid dependency analysis for 'reasoning'.")
-            return False
-
-        self.vm.logger.info(f"Plan reasoning: {explanation}")
-        if dependency_analysis:
-            self.vm.logger.info(f"Dependency analysis: {dependency_analysis}")
-
-        return True
+    def revisit_plan(self) -> None:
+        self.vm.logger.info("Revisiting the plan based on new information...")
+        adjust_success = self.vm.adjust_plan()
+        if adjust_success:
+            self.vm.logger.info("Plan adjusted successfully.")
+        else:
+            self.vm.logger.error("Failed to adjust the plan.")

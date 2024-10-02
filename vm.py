@@ -182,21 +182,62 @@ Please provide your response as a JSON array of instruction steps, where each st
             'milestones': list(self.state['milestones'].keys()),
             'previous_plans': len(self.state['previous_plans'])
         }
-        prompt = f"Given the goal '{self.state['goal']}' and the following context:\n{context_info}\nGenerate an adjusted plan in JSON format that includes variable assignments and references."
+        prompt = f"""You are an intelligent assistant designed to analyze and adjust plans. Given the following context and the original goal, please generate an adjusted plan:
+
+1. Original Goal: {self.state['goal']}
+2. Context Information:
+   {json.dumps(context_info, indent=2)}
+
+3. Current Plan:
+   {json.dumps(self.state['current_plan'], indent=2)}
+
+Please provide an adjusted plan that addresses the errors and follows the format specified in the spec.md file. The plan should be a JSON array of instruction steps, where each step has a 'type' and 'parameters'. The final step should assign the result to the 'result' variable.
+
+Include a 'reasoning' step at the beginning of the plan that explains the adjustments made and provides a dependency analysis of the steps.
+
+Ensure that the plan adheres to the following guidelines from spec.md:
+1. Use supported instruction types: assign, llm_generate, retrieve_knowledge_graph, retrieve_knowledge_embedded_chunks, condition, and reasoning.
+2. Follow the correct parameter structure for each instruction type.
+3. Use variable references where appropriate, using the format {{"var": "variable_name"}}.
+4. Include error handling and conditional logic where necessary.
+5. Maintain a logical flow and dependencies between steps.
+
+Provide your response as a valid JSON array of instruction steps.
+"""
+
+        with open('spec.md', 'r') as file:
+            prompt += "\n\nFor reference, here is the content of spec.md:\n\n" + file.read()
+
         plan_response = self.llm_interface.generate(prompt)
         if not plan_response:
+            self.logger.error("LLM failed to generate an adjusted plan.")
+            self.state['errors'].append("LLM failed to generate an adjusted plan.")
             return False
+
         new_plan = parse_plan(plan_response)
         if new_plan:
             self.state['current_plan'] = new_plan
             self.state['previous_plans'].append(new_plan)
             self.save_milestone("AfterPlanAdjustment")
             self.state['errors'] = []
+            self.logger.info("Plan adjusted successfully.")
             return True
         else:
-            self.logger.error("Failed to adjust the plan.")
-            self.state['errors'].append("Failed to adjust the plan.")
+            self.logger.error("Failed to parse the adjusted plan.")
+            self.state['errors'].append("Failed to parse the adjusted plan.")
             return False
+
+    def update_plan(self, new_plan: List[Dict[str, Any]]) -> None:
+        """
+        Updates the current plan with a new plan.
+        """
+        if new_plan:
+            self.state['current_plan'] = new_plan
+            self.state['previous_plans'].append(new_plan)
+            self.save_milestone("AfterPlanUpdate")
+            self.logger.info("Plan updated successfully.")
+        else:
+            self.logger.info("No changes to the current plan.")
 
     def run(self) -> None:
         max_iterations = 5
@@ -254,6 +295,20 @@ Please provide your response as a JSON array of instruction steps, where each st
             return
         setattr(self.instruction_handlers, f"{instruction_name}_handler", handler_method)
         self.logger.info(f"Registered handler for instruction: {instruction_name}")
+
+    def get_current_state(self) -> Dict[str, Any]:
+        """
+        Returns the current state of the VM.
+        """
+        return {
+            'variables': self.variables,
+            'state': self.state,
+            'program_counter': self.state['program_counter'],
+            'errors': self.state['errors'],
+            'goal': self.state['goal'],
+            'current_plan': self.state['current_plan'],
+            'goal_completed': self.state['goal_completed']
+        }
 
 if __name__ == "__main__":
     vm = PlanExecutionVM()
