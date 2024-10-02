@@ -155,9 +155,6 @@ class StackVM:
             self.state['errors'].append("Invalid parameters for 'retrieve_knowledge_graph'.")
             return False
 
-        # Interpolate variables in the query
-        query = self.interpolate_variables(query)
-
         result = self.retrieve_knowledge_graph(query)
         if result is None:
             return False
@@ -258,11 +255,6 @@ class StackVM:
             self.state['errors'].append("Invalid variable name for 'assign'.")
             return False
 
-        # If the value is a string, replace any variable placeholders
-        if isinstance(value, str):
-            for var, var_value in self.variables.items():
-                value = value.replace(f"{{{{{var}}}}}", str(var_value))
-
         self.variables[var_name] = value
         self.logger.info(f"Assigned value to variable '{var_name}': {value}")
         
@@ -305,10 +297,6 @@ class StackVM:
             full_prompt = f"{context}\n{prompt}"
         else:
             full_prompt = prompt
-
-        # Interpolate variables in the prompt
-        for var, value in self.variables.items():
-            full_prompt = full_prompt.replace(f"{{{{{var}}}}}", str(value))
 
         try:
             response = self.client.chat.completions.create(
@@ -361,13 +349,16 @@ class StackVM:
     # Helper Methods
     def resolve_parameter(self, param):
         """
-        Resolves a parameter that may be a direct value or a variable reference.
+        Resolves a parameter that may be a direct value, a variable reference, or a string with variable placeholders.
         """
         if isinstance(param, dict) and 'var' in param:
             var_name = param['var']
             value = self.variables.get(var_name)
             self.logger.info(f"Resolved variable '{var_name}' to value: {value}")
             return value
+        elif isinstance(param, str):
+            # Interpolate variables in the string
+            return self.interpolate_variables(param)
         else:
             return param
 
@@ -524,6 +515,8 @@ class StackVM:
         iterations = 0
 
         while not self.state['goal_completed'] and iterations < max_iterations:
+            self.logger.info(f">>>>>>>>>>>>>>>>>>>>Iteration {iterations}>>>>>>>>>>>>>>>>>>>")
+
             iterations += 1
 
             if not self.state['goal']:
@@ -624,14 +617,17 @@ class StackVM:
         import random
         return random.choice([True, False])
 
-    def interpolate_variables(self, text: str) -> str:
+    def interpolate_variables(self, text: Any) -> Any:
         """
         Replaces variable placeholders in a string with their actual values.
+        Returns the text unchanged if it's not a string.
         """
         if not isinstance(text, str):
             return text
         for var, value in self.variables.items():
-            text = text.replace(f"{{{{{var}}}}}", str(value))
+            if f"{{{{{var}}}}}" in text:
+                self.logger.info(f"Resolved variable '{var}' to value: {value}")
+                text = text.replace(f"{{{{{var}}}}}", str(value))
         return text
 
 # Example Usage
