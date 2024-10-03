@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VM Execution Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .chart-container, .step-list, #commitDetails, #vmState, #codeDiff {
+            flex: 1;
+            min-width: 300px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            min-width: 600px;
+        }
+        .step-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .step-item {
+            cursor: pointer;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .step-item:hover {
+            background-color: #f0f0f0;
+        }
+        .step-details {
+            display: none;
+            margin-left: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        #vmState pre, #codeDiff pre {
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .tab-container {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #eee;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: white;
+            border-bottom: 1px solid white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .memory-dump {
+            font-family: monospace;
+            white-space: pre-wrap;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .execute-controls {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .execute-controls input {
+            width: 50px;
+        }
+    </style>
+</head>
+<body>
+    <h1>VM Execution Visualization</h1>
+    <div class="container">
+        <div class="chart-container">
+            <canvas id="vmChart"></canvas>
+        </div>
+        <div id="stepList" class="step-list"></div>
+    </div>
+    <div class="tab-container">
+        <div class="tab active" onclick="showTab('commitDetails')">Commit Details</div>
+        <div class="tab" onclick="showTab('vmState')">VM State</div>
+        <div class="tab" onclick="showTab('codeDiff')">Code Diff</div>
+        <div class="tab" onclick="showTab('memoryDump')">Memory Dump</div>
+    </div>
+    <div id="commitDetails" class="tab-content active"></div>
+    <div id="vmState" class="tab-content"></div>
+    <div id="codeDiff" class="tab-content"></div>
+    <div id="memoryDump" class="tab-content"></div>
+
+    <script>
+        let chart;
+        let vmStates = [];
+
+        function fetchWithErrorHandling(url, options = {}) {
+            return fetch(url, options)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                    alert(`Error: ${error.message}`);
+                    throw error;
+                });
+        }
+
+        function updateChart() {
+            fetchWithErrorHandling('/vm_data')
+                .then(data => {
+                    vmStates = data;
+                    const times = data.map(state => state.time);
+                    const programCounters = data.map(state => state.vm_state && state.vm_state.program_counter !== undefined ? state.vm_state.program_counter : null);
+                    const milestones = data.map(state => state.title.includes('Save milestone') && state.vm_state ? state.vm_state.program_counter : null);
+                    const errors = data.map(state => state.vm_state && state.vm_state.errors && state.vm_state.errors.length > 0 ? state.vm_state.program_counter : null);
+
+                    if (chart) {
+                        chart.data.labels = times;
+                        chart.data.datasets[0].data = programCounters;
+                        chart.data.datasets[1].data = milestones;
+                        chart.data.datasets[2].data = errors;
+                        chart.update();
+                    } else {
+                        const ctx = document.getElementById('vmChart').getContext('2d');
+                        chart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: times,
+                                datasets: [{
+                                    label: 'Program Counter',
+                                    data: programCounters,
+                                    borderColor: 'blue',
+                                    fill: false
+                                }, {
+                                    label: 'Milestones',
+                                    data: milestones,
+                                    borderColor: 'green',
+                                    pointStyle: 'triangle',
+                                    pointRadius: 10,
+                                    fill: false
+                                }, {
+                                    label: 'Errors',
+                                    data: errors,
+                                    borderColor: 'red',
+                                    pointStyle: 'crossRot',
+                                    pointRadius: 10,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    x: {
+                                        type: 'time',
+                                        time: {
+                                            unit: 'minute'
+                                        }
+                                    },
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                },
+                                onClick: (event, elements) => {
+                                    if (elements.length > 0) {
+                                        const index = elements[0].index;
+                                        showCommitDetails(vmStates[index]);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    updateStepList(data);
+                });
+        }
+
+        function updateStepList(data) {
+            const stepList = document.getElementById('stepList');
+            stepList.innerHTML = '';
+            data.forEach((state, index) => {
+                if (state.step) {
+                    const stepItem = document.createElement('div');
+                    stepItem.className = 'step-item';
+                    stepItem.innerHTML = `
+                        <strong>${state.step.type}</strong> (${moment(state.time).format('YYYY-MM-DD HH:mm:ss')})
+                        <button onclick="executeFromStep(${index}, '${state.commit_hash}')">Execute from here</button>
+                    `;
+                    stepItem.onclick = () => toggleStepDetails(index);
+                    
+                    const stepDetails = document.createElement('div');
+                    stepDetails.className = 'step-details';
+                    stepDetails.id = `step-details-${index}`;
+                    stepDetails.innerHTML = `<pre>${JSON.stringify(state.step.details, null, 2)}</pre>`;
+                    
+                    stepItem.appendChild(stepDetails);
+                    stepList.appendChild(stepItem);
+                }
+            });
+        }
+
+        function toggleStepDetails(index) {
+            const detailsElement = document.getElementById(`step-details-${index}`);
+            if (detailsElement) {
+                detailsElement.style.display = detailsElement.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function showCommitDetails(state) {
+            const commitDetails = document.getElementById('commitDetails');
+            commitDetails.innerHTML = '<h2>Loading commit details...</h2>';
+            
+            fetchWithErrorHandling(`/commit_details/${state.commit_hash}`)
+                .then(data => {
+                    commitDetails.innerHTML = `
+                        <h2>Commit Details</h2>
+                        <p><strong>Hash:</strong> ${data.hash}</p>
+                        <p><strong>Author:</strong> ${data.author}</p>
+                        <p><strong>Date:</strong> ${moment(data.date).format('YYYY-MM-DD HH:mm:ss')}</p>
+                        <p><strong>Message:</strong> ${data.message}</p>
+                        <p><strong>Files changed:</strong></p>
+                        <ul>
+                            ${data.files_changed.map(file => `<li>${file}</li>`).join('')}
+                        </ul>
+                    `;
+                    showVMState(state.commit_hash);
+                    showCodeDiff(state.commit_hash);
+                    showMemoryDump(state.commit_hash);
+                });
+        }
+
+        function showVMState(commitHash) {
+            const vmStateElement = document.getElementById('vmState');
+            vmStateElement.innerHTML = '<h2>Loading VM State...</h2>';
+            
+            fetchWithErrorHandling(`/vm_state/${commitHash}`)
+                .then(data => {
+                    vmStateElement.innerHTML = `
+                        <h2>VM State</h2>
+                        <pre><code class="json">${JSON.stringify(data, null, 2)}</code></pre>
+                    `;
+                    hljs.highlightAll();
+                });
+        }
+
+        function showCodeDiff(commitHash) {
+            const codeDiffElement = document.getElementById('codeDiff');
+            codeDiffElement.innerHTML = '<h2>Loading Code Diff...</h2>';
+            
+            fetchWithErrorHandling(`/code_diff/${commitHash}`)
+                .then(data => {
+                    codeDiffElement.innerHTML = `
+                        <h2>Code Diff</h2>
+                        <pre><code class="diff">${data.diff}</code></pre>
+                    `;
+                    hljs.highlightAll();
+                });
+        }
+
+        function showMemoryDump(commitHash) {
+            const memoryDumpElement = document.getElementById('memoryDump');
+            memoryDumpElement.innerHTML = '<h2>Loading Memory Dump...</h2>';
+            
+            fetchWithErrorHandling(`/memory_dump/${commitHash}`)
+                .then(data => {
+                    memoryDumpElement.innerHTML = `
+                        <h2>Memory Dump</h2>
+                        <div class="memory-dump">${data.memory.join('\n')}</div>
+                        <div class="execute-controls">
+                            <input type="number" id="stepCount" value="1" min="1">
+                            <button onclick="executeVM('${commitHash}')">Execute Steps</button>
+                        </div>
+                    `;
+                });
+        }
+
+        function executeVM(commitHash) {
+            const steps = document.getElementById('stepCount').value;
+            const startFrom = 0; // You might want to add an input for this
+            fetchWithErrorHandling('/execute_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    steps: parseInt(steps),
+                    start_from: startFrom
+                }),
+            })
+            .then(data => {
+                showVMState(commitHash);
+                showMemoryDump(commitHash);
+                updateChart(); // Update the chart after execution
+            });
+        }
+
+        function executeFromStep(stepIndex, commitHash) {
+            const steps = prompt("Enter the number of steps to execute:", "1");
+            if (steps === null) return; // User cancelled the prompt
+
+            fetch('/execute_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    steps: parseInt(steps),
+                    start_from: stepIndex
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                showVMState(commitHash);
+                showMemoryDump(commitHash);
+                alert(`Executed ${steps} step(s) from step ${stepIndex}. Check VM State and Memory Dump for results.`);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`Error executing VM: ${error}`);
+            });
+        }
+
+        // Update chart every 30 seconds
+        setInterval(updateChart, 30000);
+        updateChart(); // Initial update
+    </script>
+</body>
+</html>
