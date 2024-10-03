@@ -149,7 +149,8 @@ class PlanExecutionVM:
 
 Goal: {self.state['goal']}
 
-Please provide your response as a JSON array of instruction steps, where each step has a 'type' and 'parameters'. The final step should assign the result to the 'result' variable. The 'reasoning' step should include both 'explanation' and 'dependency_analysis' parameters.
+Please provide your response as a JSON array of instruction steps, where each step has a 'type' and 'parameters'. 
+The final step should assign the result to the 'result' variable. The 'reasoning' step should include both 'explanation' and 'dependency_analysis' parameters.
 
 """
         with open('spec.md', 'r') as file:
