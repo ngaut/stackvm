@@ -84,15 +84,6 @@
         .tab-content.active {
             display: block;
         }
-        .memory-dump {
-            font-family: monospace;
-            white-space: pre-wrap;
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 4px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
         .execute-controls {
             margin-top: 20px;
             display: flex;
@@ -570,7 +561,7 @@
             .then(data => {
                 showVMState(commitHash);
                 showVMStateDetails(commitHash);
-                alert(`Executed ${steps} step(s) from step ${stepIndex}. Check VM State and Memory Dump for results.`);
+                alert(`Executed ${steps} step(s) from step ${stepIndex}. Check VM State for results.`);
             })
             .catch(error => {
                 console.error('Error executing VM:', error);
