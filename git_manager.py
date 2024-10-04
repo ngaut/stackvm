@@ -1,64 +1,45 @@
 import subprocess
 import logging
 import os
-from typing import List  # Add this import
+from typing import List, Optional  # Added Optional
 
 class GitManager:
-    def __init__(self, repo_path: str, readme_content: str = None):
+    def __init__(self, repo_path: str):
         self.repo_path = repo_path
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('git_manager')
         self.logger.setLevel(logging.INFO)
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')  # Updated formatter to include filename and line number
+        formatter = logging.Formatter('%(asctime)s - git_manager - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
-        
-        # Create the directory if it doesn't exist
+
+        # Create the repository directory if it doesn't exist
         if not os.path.exists(self.repo_path):
             os.makedirs(self.repo_path)
             self.logger.info(f"Created directory: {self.repo_path}")
-        
+
         # Initialize the repository if it's not already a Git repo
         if not os.path.exists(os.path.join(self.repo_path, '.git')):
-            self.init_repo(readme_content)
-        
-        self.bare_repo_path = repo_path + '_bare.git'
-        if not os.path.exists(self.bare_repo_path):
-            self.init_bare_repo()
+            self.init_repo()
 
-    def init_repo(self, readme_content: str = None):
-        if readme_content is None:
-            readme_content = "Initial commit."  # Set a default README content
-        
-        if self.run_command(['git', 'init']):
+    def init_repo(self) -> None:
+        # Initialize a new Git repository with 'main' as the initial branch
+        init_command = ['git', 'init', '--initial-branch=main']
+        if self.run_command(init_command):
             self.logger.info(f"Initialized new Git repository in {self.repo_path}")
-            
-            # Rename the default branch to 'main'
-            if not self.run_command(['git', 'branch', '-M', 'main']):
-                self.logger.error("Failed to rename branch to 'main'.")
-                return  # Exit if renaming fails to avoid further issues
-            
-            # Create an initial commit with the README.md
+
+            # Create a README.md file
             readme_path = os.path.join(self.repo_path, 'README.md')
-            try:
-                with open(readme_path, 'w') as f:
-                    f.write(readme_content)
-                self.logger.info(f"Created README.md at {readme_path}")
-            except Exception as e:
-                self.logger.error(f"Failed to create README.md: {e}")
-                return  # Exit if README creation fails
-            
-            if self.commit_changes("Initial commit"):
-                self.logger.info("Created initial commit on 'main' branch.")
-            else:
+            with open(readme_path, 'w') as f:
+                f.write("# Auto-generated repository\n")
+            self.logger.info(f"Created README.md at {readme_path}")
+
+            # Add and commit the README.md
+            self.run_command(['git', 'add', 'README.md'])
+            if not self.commit_changes("Initial commit"):
                 self.logger.error("Failed to create initial commit.")
         else:
             self.logger.error(f"Failed to initialize Git repository in {self.repo_path}")
-    
-    def init_bare_repo(self):
-        subprocess.run(['git', 'init', '--bare', self.bare_repo_path], check=True)
-        self.run_command(['git', 'remote', 'add', 'origin', self.bare_repo_path])
-        self.run_command(['git', 'push', '-u', 'origin', 'main'])
 
     def run_command(self, command: List[str]) -> bool:
         try:
@@ -67,26 +48,27 @@ class GitManager:
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Git command {' '.join(command)} failed: {e.output.decode()}")
             return False
-    
-    def commit_changes(self, message: str) -> bool:
-        if not self.run_command(['git', 'add', '.']):
+
+    def commit_changes(self, commit_message: str) -> bool:
+        # Add all changes, including untracked files
+        add_command = ['git', 'add', '-A']
+        add_result = self.run_command(add_command)
+        if not add_result:
+            self.logger.error("Failed to add changes to Git index.")
             return False
-        result = self.run_command(['git', 'commit', '-m', message])
-        if not result:
-            output = subprocess.check_output(['git', 'status'], cwd=self.repo_path, stderr=subprocess.STDOUT).decode()
-            if "nothing to commit, working tree clean" in output:
-                self.logger.info("No changes to commit.")
-                return True
-        return result
-    
-    def push_changes(self, message: str) -> bool:
-        if not self.commit_changes(message):
-            return False
-        return self.run_command(['git', 'push', 'origin', 'HEAD'])
-    
-    def pull_changes(self) -> bool:
-        return self.run_command(['git', 'pull', 'origin', 'main'])
-    
+
+        commit_command = ['git', 'commit', '-m', commit_message]
+        return self.run_command(commit_command)
+
+    def get_current_branch(self) -> Optional[str]:
+        try:
+            output = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=self.repo_path, stderr=subprocess.STDOUT)
+            branch = output.decode().strip()
+            return branch
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to get current branch: {e.output.decode()}")
+            return None
+
     def create_branch(self, branch_name: str) -> bool:
         if not self.run_command(['git', 'branch', branch_name]):
             self.logger.error(f"Failed to create branch '{branch_name}'.")
@@ -110,19 +92,3 @@ class GitManager:
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Failed to list branches: {e.output.decode()}")
             return []
-
-    def merge_branch(self, branch: str) -> bool:
-        """
-        Merges the specified branch into the current branch.
-
-        Args:
-            branch (str): The name of the branch to merge.
-
-        Returns:
-            bool: True if the merge was successful, False otherwise.
-        """
-        if not self.run_command(['git', 'merge', branch]):
-            self.logger.error(f"Failed to merge branch '{branch}' into '{self.repo_path}'.")
-            return False
-        self.logger.info(f"Successfully merged branch '{branch}' into '{self.repo_path}'.")
-        return True

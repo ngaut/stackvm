@@ -35,10 +35,6 @@ def parse_commit_message(message):
     title = lines[0]
     details = {}
 
-    # Remove step info extraction
-    # Previously extracted step_info based on commit message patterns
-    # Now, we only capture the title and details
-
     # Parse additional details
     for line in lines[1:]:
         if ':' in line:
@@ -205,26 +201,38 @@ def execute_vm():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-@app.route('/memory_dump/<commit_hash>')
-def memory_dump(commit_hash):
+@app.route('/vm_state_details/<commit_hash>')
+def vm_state_details(commit_hash):
     repo_name = request.args.get('repo')
     repo_path = os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
     app.logger.info(f"Using repository path: {repo_path}")
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
-        vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
-        vm_state = json.loads(vm_state_content)
-
-        memory = vm_state.get('memory', [])
-        if not memory:
-            return jsonify({'error': 'No memory data available'}), 404
-
-        formatted_memory = [f"{i:04X}: {value:02X}" for i, value in enumerate(memory)]
-
-        return jsonify({'memory': formatted_memory})
+        try:
+            # Attempt to retrieve vm_state.json from the commit
+            vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
+            vm_state = json.loads(vm_state_content)
+            
+            # Extract variables and parameters
+            variables = vm_state.get('variables', {})
+            parameters = vm_state.get('parameters', {})
+            
+            # **Removed check that returns 404 when both are empty**
+            # Now, even if variables and parameters are empty, we return them
+            return jsonify({'variables': variables, 'parameters': parameters})
+        except git.exc.GitCommandError:
+            app.logger.warning(f"vm_state.json not found for commit: {commit_hash}")
+            return jsonify({'error': 'vm_state.json not found for this commit'}), 404
+        except json.JSONDecodeError:
+            app.logger.error(f"Invalid JSON in vm_state.json for commit: {commit_hash}")
+            return jsonify({'error': 'Invalid vm_state.json content'}), 500
+    except git.exc.BadName:
+        app.logger.error(f"Invalid commit hash: {commit_hash}")
+        return jsonify({'error': 'Invalid commit hash'}), 404
     except Exception as e:
-        return jsonify({'error': str(e)}), 404
+        app.logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/get_directories')
 def get_directories():

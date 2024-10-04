@@ -8,20 +8,18 @@ from typing import Any, Dict, List, Optional
 from instruction_handlers import InstructionHandlers
 from utils import interpolate_variables, parse_plan
 from llm_interface import LLMInterface
-from config import LLM_MODEL, GIT_REPO_PATH  # Update import
-from milestones import Milestone  # Ensure this import is added
-from git_manager import GitManager  # Add this import
+from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
+from git_manager import GitManager
 
 class PlanExecutionVM:
     def __init__(self):
-        self.variables: Dict[str, Any] = {}
         self.state: Dict[str, Any] = {
-            'milestones': {},  # Change to store Milestone objects
+            'variables': {},        # Initialize variables
             'errors': [],
             'previous_plans': [],
             'goal': None,
             'current_plan': [],
-            'program_counter': 0,
+            'program_counter': 0,  # Initialized to 0
             'goal_completed': False
         }
 
@@ -29,17 +27,20 @@ class PlanExecutionVM:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')  # Updated formatter to include filename and line number
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
 
         self.instruction_handlers = InstructionHandlers(self)
         self.llm_interface = LLMInterface(LLM_MODEL)
         #add a time stamp to the git repo path
-        self.git_manager = GitManager(repo_path=GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S"))  # Use config
-        self.state_file = os.path.join(self.git_manager.repo_path, 'vm_state.json')
-        self.parameters_dir = os.path.join(self.git_manager.repo_path, 'parameters')
-        os.makedirs(self.parameters_dir, exist_ok=True)
+        self.git_manager = GitManager(repo_path=GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S"))
+
+        # Change the current working directory to the Git repo path
+        os.chdir(self.git_manager.repo_path)
+
+        # Initialize Git repository with 'main' branch
+        self.git_manager.init_repo()
 
         # Register instruction handlers
         self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
@@ -49,6 +50,8 @@ class PlanExecutionVM:
         self.register_instruction('assign', self.instruction_handlers.assign_handler)
         self.register_instruction('reasoning', self.instruction_handlers.reasoning_handler)
 
+        self.state_manager = StateManager(self)
+
     def set_goal(self, goal: str) -> None:
         if not isinstance(goal, str):
             self.logger.error("Goal must be a string.")
@@ -56,65 +59,16 @@ class PlanExecutionVM:
             return
         self.state['goal'] = goal
         self.logger.info(f"Goal set: {goal}")
-
-    def save_milestone(self, name: str, description: Optional[str] = None) -> None:
-        if name in self.state['milestones']:
-            self.logger.error(f"Milestone '{name}' already exists.")
-            self.state['errors'].append(f"Milestone '{name}' already exists.")
-            return
-        if not isinstance(name, str):
-            self.logger.error("Milestone name must be a string.")
-            self.state['errors'].append("Milestone name must be a string.")
-            return
-        milestone = Milestone(
-            name=name,
-            variables=copy.deepcopy(self.variables),
-            program_counter=self.state['program_counter'],
-            description=description
-        )
-        self.state['milestones'][name] = milestone
-        self.logger.info(f"Milestone '{name}' saved.")
-        
-        # Save milestone to file and commit the milestone to Git
-        self.save_state()
-        milestone_files = self.save_parameters("milestone", "output", {"name": name, "description": description})
-        files_info = "\n".join([f"{k}: file path: {v}" for k, v in milestone_files.items()])
-        original_message = f"Save milestone '{name}': {description or 'No description provided.'}"
-        commit_message = f"{original_message}\n\nMilestone details stored in:\n{files_info}"
-        if not self.git_manager.commit_changes(commit_message):
-            self.logger.error("Failed to commit changes to Git.")
-            # Handle the failure as needed
-
-    def load_milestone(self, name: str) -> None:
-        milestone = self.state['milestones'].get(name)
-        if milestone:
-            # Check dependencies
-            for dep in milestone.dependencies:
-                if dep not in self.state['milestones']:
-                    self.logger.error(f"Dependency '{dep}' for milestone '{name}' is missing.")
-                    self.state['errors'].append(f"Dependency '{dep}' for milestone '{name}' is missing.")
-                    return
-            self.variables = copy.deepcopy(milestone.variables)
-            self.state['program_counter'] = milestone.program_counter
-            self.logger.info(f"Milestone '{name}' loaded.")
-            
-            # Commit the load action to Git
-            commit_message = f"Load milestone '{name}'."
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-        else:
-            self.logger.error(f"Milestone '{name}' does not exist.")
-            self.state['errors'].append(f"Milestone '{name}' does not exist.")
+        self.state_manager.save_state()
 
     def resolve_parameter(self, param):
         if isinstance(param, dict) and 'var' in param:
             var_name = param['var']
-            value = self.variables.get(var_name)
+            value = self.state['variables'].get(var_name)
             self.logger.info(f"Resolved variable '{var_name}' to value: {value}")
             return value
         elif isinstance(param, str):
-            return interpolate_variables(param, self.variables)
+            return interpolate_variables(param, self.state['variables'])
         else:
             return param
 
@@ -127,26 +81,31 @@ class PlanExecutionVM:
             return False
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if handler:
-            # Save input parameters
-            input_files = self.save_parameters(step_type, "input", params)
-            
             success = handler(params)
+            if success:
+                self.state_manager.save_state()  # Save state after successful step execution
+                self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
             
-            # Save output parameters
-            output_params = {k: v for k, v in self.variables.items() if k in params.get('output_var', [])}
-            output_files = self.save_parameters(step_type, "output", output_params)
+            # Log the updated variables
+            self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
             
             # Prepare commit message
             commit_message = f"[{step_type}] - Executed step\n\n"
             commit_message += "Input Parameters:\n"
             for k, v in params.items():
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                commit_message += f"- {k}: {value_preview}, file path: {input_files[k]}\n"
+                commit_message += f"- {k}: {value_preview}\n"
             
-            commit_message += "\nOutput Parameters:\n"
-            for k, v in output_params.items():
+            commit_message += "\nOutput Variables:\n"
+            output_vars = params.get('output_var')
+            if isinstance(output_vars, str):
+                output_vars = [output_vars]
+            elif not isinstance(output_vars, list):
+                output_vars = []
+            for k in output_vars:
+                v = self.state['variables'].get(k)
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                commit_message += f"- {k}: {value_preview}, file path: {output_files[k]}\n"
+                commit_message += f"- {k}: {value_preview}\n"
             
             if success:
                 commit_message += f"\nAdditional Info:\nStep executed successfully."
@@ -163,38 +122,18 @@ class PlanExecutionVM:
 
     def execute_plan(self, plan: List[Dict[str, Any]]) -> bool:
         self.logger.info("Starting plan execution.")
-        for index, step in enumerate(plan):
-            self.state['program_counter'] = index
+        while self.state['program_counter'] < len(plan):
+            step = plan[self.state['program_counter']]
             success = self.execute_step_handler(step)
             if not success:
-                self.logger.error(f"Execution failed at step {index}.")
-                self.state['errors'].append(f"Execution failed at step {index}.")
-                
-                # Commit the failure to Git
-                commit_message = f"Execution failed at step {index}: {step.get('type')}"
-                if not self.git_manager.commit_changes(commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
-                
+                self.logger.error(f"Execution failed at step {self.state['program_counter']}.")
+                self.state['errors'].append(f"Execution failed at step {self.state['program_counter']}.")
                 return False
             if self.state['goal_completed']:
                 self.logger.info("Goal completed during plan execution.")
-                
-                # Commit goal completion to Git
-                commit_message = "Goal completed successfully."
-                if not self.git_manager.commit_changes(commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
-                
                 return True
+            self.state['program_counter'] += 1  # Increment program_counter after each step
         self.logger.info("Plan executed successfully.")
-        
-        # Commit successful plan execution to Git
-        commit_message = "Plan executed successfully."
-        if not self.git_manager.commit_changes(commit_message):
-            self.logger.error("Failed to commit changes to Git.")
-            # Handle the failure as needed
-        
         return True
 
     def execute_subplan(self, subplan: List[Dict[str, Any]]) -> bool:
@@ -244,7 +183,7 @@ Please provide your response as a JSON array of instruction steps, where each st
 The final step should assign the result to the 'result' variable. The 'reasoning' step should include both 'explanation' and 'dependency_analysis' parameters.
 
 """
-        with open('spec.md', 'r') as file:
+        with open(VM_SPEC_PATH, 'r') as file:
             prompt += "the content of spec.md is:\n\n" + file.read()
 
         plan_response = self.llm_interface.generate(prompt)
@@ -257,7 +196,6 @@ The final step should assign the result to the 'result' variable. The 'reasoning
         plan = parse_plan(plan_response)
         
         if plan:
-            # Ensure you're on the 'main' branch before creating a new branch
             if not self.git_manager.checkout_branch('main'):  
                 self.logger.error("Failed to checkout 'main' branch.")
                 return False
@@ -275,13 +213,18 @@ The final step should assign the result to the 'result' variable. The 'reasoning
             # Save the plan and commit
             self.state['current_plan'] = plan
             self.state['previous_plans'].append(plan)
-            self.save_milestone("AfterPlanGeneration")
             self.logger.info("Plan generated and parsed successfully.")
 
             # Save plan to file and commit the generated plan to Git
-            self.save_state()
-            plan_files = self.save_parameters("generated_plan", "output", {"plan": plan})
-            files_info = "\n".join([f"{k}: file path: {v}" for k, v in plan_files.items()])
+            self.state_manager.save_state()
+            plan_file_path = os.path.join(self.git_manager.repo_path, 'generated_plan.json')
+            with open(plan_file_path, 'w') as f:
+                json.dump(plan, f, indent=2)
+            
+            # Add the generated plan file to Git
+            self.git_manager.run_command(['git', 'add', 'generated_plan.json'])
+
+            files_info = f"generated_plan.json: file path: {plan_file_path}"
             original_message = f"Generated new plan on branch '{branch_name}':\n{json.dumps(plan, indent=2)}"
             commit_message = f"{original_message}\n\nPlan stored in:\n{files_info}"
             if not self.git_manager.commit_changes(commit_message):
@@ -297,7 +240,6 @@ The final step should assign the result to the 'result' variable. The 'reasoning
         self.logger.info("Adjusting plan based on errors and context.")
         context_info = {
             'errors': self.state['errors'],
-            'milestones': list(self.state['milestones'].keys()),
             'previous_plans': len(self.state['previous_plans'])
         }
         prompt = f"""You are an intelligent assistant designed to analyze and adjust plans. Given the following context and the original goal, please generate an adjusted plan:
@@ -323,7 +265,7 @@ Ensure that the plan adheres to the following guidelines from spec.md:
 Provide your response as a valid JSON array of instruction steps.
 """
 
-        with open('spec.md', 'r') as file:
+        with open(VM_SPEC_PATH, 'r') as file:
             prompt += "\n\nFor reference, here is the content of spec.md:\n\n" + file.read()
 
         plan_response = self.llm_interface.generate(prompt)
@@ -349,7 +291,6 @@ Provide your response as a valid JSON array of instruction steps.
             # Save the adjusted plan and commit
             self.state['current_plan'] = new_plan
             self.state['previous_plans'].append(new_plan)
-            self.save_milestone("AfterPlanAdjustment")
             self.state['errors'] = []
             self.logger.info("Plan adjusted successfully.")
 
@@ -372,7 +313,6 @@ Provide your response as a valid JSON array of instruction steps.
         if new_plan:
             self.state['current_plan'] = new_plan
             self.state['previous_plans'].append(new_plan)
-            self.save_milestone("AfterPlanUpdate")
             self.logger.info("Plan updated successfully.")
             
             # Commit the updated plan to Git
@@ -384,21 +324,16 @@ Provide your response as a valid JSON array of instruction steps.
             self.logger.info("No changes to the current plan.")
 
     def run(self) -> None:
-        max_iterations = 5
+        max_iterations = 1
         iterations = 0
-
-        # Example: Pull latest changes before starting
-        self.pull_changes()
 
         while not self.state['goal_completed'] and iterations < max_iterations:
             self.logger.info(f">>>>>>>>>>>>>>>>>>>>Iteration {iterations}>>>>>>>>>>>>>>>>>>>")
 
-            # Save iteration start to file and commit the start of a new iteration
-            self.save_state()
-            iteration_files = self.save_parameters("iteration_start", "output", {"iteration": iterations})
-            files_info = "\n".join([f"{k}: file path: {v}" for k, v in iteration_files.items()])
+            # Save iteration start to state and commit the start of a new iteration
+            self.state_manager.save_state()
             original_message = f"Starting iteration {iterations}."
-            commit_message = f"{original_message}\n\nIteration details stored in:\n{files_info}"
+            commit_message = f"{original_message}"
             if not self.git_manager.commit_changes(commit_message):
                 self.logger.error("Failed to commit changes to Git.")
                 # Handle the failure as needed
@@ -445,7 +380,7 @@ Provide your response as a valid JSON array of instruction steps.
                 self.logger.info("Goal achieved successfully.")
                 
                 # Commit goal achievement to Git
-                self.save_state()
+                self.state_manager.save_state()
                 commit_message = "Goal achieved successfully."
                 if not self.git_manager.commit_changes(commit_message):
                     self.logger.error("Failed to commit changes to Git.")
@@ -464,22 +399,12 @@ Provide your response as a valid JSON array of instruction steps.
                 self.logger.error("Failed to commit changes to Git.")
                 # Handle the failure as needed
 
-        result = self.variables.get('result')
+        result = self.state['variables'].get('result')
         if result:
-            result = interpolate_variables(result, self.variables)
+            result = interpolate_variables(result, self.state['variables'])
             print(f"\nFinal Result: {result}")
         else:
             print("\nNo result was generated.")
-
-        # Example: Push changes after running the plan
-        self.push_changes("Update milestones and plans after plan execution.")
-
-    def reset_state(self) -> None:
-        self.variables = {}
-        self.state['program_counter'] = 0
-        self.state['errors'] = []
-        self.state['goal_completed'] = False
-        self.logger.info("State has been reset.")
 
     def register_instruction(self, instruction_name: str, handler_method):
         """
@@ -496,49 +421,7 @@ Provide your response as a valid JSON array of instruction steps.
         """
         Returns the current state of the VM.
         """
-        return {
-            'variables': self.variables,
-            'state': self.state,
-            'program_counter': self.state['program_counter'],
-            'errors': self.state['errors'],
-            'goal': self.state['goal'],
-            'current_plan': self.state['current_plan'],
-            'goal_completed': self.state['goal_completed']
-        }
-
-    def save_milestone_to_file(self, name: str, filepath: str) -> None:
-        milestone = self.state['milestones'].get(name)
-        if milestone:
-            with open(filepath, 'w') as file:
-                json.dump(milestone.__dict__, file, default=str, indent=2)
-            self.logger.info(f"Milestone '{name}' saved to {filepath}.")
-        else:
-            self.logger.error(f"Milestone '{name}' does not exist. Cannot save to file.")
-
-    def load_milestone_from_file(self, filepath: str) -> None:
-        try:
-            with open(filepath, 'r') as file:
-                data = json.load(file)
-            milestone = Milestone(**data)
-            self.state['milestones'][milestone.name] = milestone
-            self.logger.info(f"Milestone '{milestone.name}' loaded from {filepath}.")
-        except Exception as e:
-            self.logger.error(f"Failed to load milestone from {filepath}: {e}")
-            self.state['errors'].append(f"Failed to load milestone from {filepath}: {e}")
-
-    def push_changes(self, commit_message: str) -> None:
-        success = self.git_manager.push_changes(commit_message)
-        if success:
-            self.logger.info("Changes pushed to remote repository successfully.")
-        else:
-            self.logger.error("Failed to push changes to remote repository.")
-
-    def pull_changes(self) -> None:
-        success = self.git_manager.pull_changes()
-        if success:
-            self.logger.info("Changes pulled from remote repository successfully.")
-        else:
-            self.logger.error("Failed to pull changes from remote repository.")
+        return self.state
 
     def save_plan_to_file(self, filepath: str) -> None:
         with open(filepath, 'w') as file:
@@ -595,34 +478,41 @@ Provide your response as a valid JSON array of instruction steps.
         # which plans to adjust, or whether to generate new plans
         # e.g., merge branches that led to successful goal completion
 
+    def step(self) -> None:
+        """
+        Execute a single step in the VM.
+        """
+        if self.state['program_counter'] < len(self.state['current_plan']):
+            step = self.state['current_plan'][self.state['program_counter']]
+            self.execute_step_handler(step)
+            self.state['program_counter'] += 1
+        else:
+            self.logger.info("Program execution complete.")
+
+# Add a new StateManager class to handle all state-related operations
+class StateManager:
+    def __init__(self, vm):
+        self.vm = vm
+        self.state_file = os.path.join(self.vm.git_manager.repo_path, 'vm_state.json')
+
     def save_state(self):
-        with open(self.state_file, 'w') as f:
-            json.dump(self.state, f, indent=2, default=str)
-        self.git_manager.run_command(['git', 'add', self.state_file])
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(self.vm.state, f, indent=2, default=str)
+            self.vm.logger.info(f"State saved to {self.state_file}")
+            # No need to add or commit here; it's handled in commit_changes
+        except Exception as e:
+            self.vm.logger.error(f"Error saving state: {str(e)}")
+            self.vm.state['errors'].append(f"Error saving state: {str(e)}")
 
-    def save_parameters(self, step_type: str, io_type: str, params: Dict[str, Any]) -> Dict[str, str]:
-        saved_files = {}
-        for key, value in params.items():
-            filename = f"{step_type}_{io_type}_{key}"
-            filepath = os.path.join(self.parameters_dir, filename)
-            with open(filepath, 'w') as f:
-                if isinstance(value, (dict, list)):
-                    json.dump(value, f, indent=2, default=str)
-                else:
-                    f.write(str(value))
-            saved_files[key] = filename
-        return saved_files
-
-    def load_parameters(self, filepaths: Dict[str, str]) -> Dict[str, Any]:
-        loaded_params = {}
-        for key, filepath in filepaths.items():
-            with open(filepath, 'r') as f:
-                content = f.read()
-                try:
-                    loaded_params[key] = json.loads(content)
-                except json.JSONDecodeError:
-                    loaded_params[key] = content
-        return loaded_params
+    def load_state(self):
+        try:
+            with open(self.state_file, 'r') as f:
+                self.vm.state = json.load(f)
+            self.vm.logger.info("State loaded into VM.")
+        except Exception as e:
+            self.vm.logger.error(f"Failed to load state: {e}")
+            self.vm.state['errors'].append(f"Failed to load state: {e}")
 
 if __name__ == "__main__":
     vm = PlanExecutionVM()

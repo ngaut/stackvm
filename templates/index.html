@@ -136,12 +136,12 @@
         <div class="tab active" onclick="showTab('commitDetails')">Commit Details</div>
         <div class="tab" onclick="showTab('vmState')">VM State</div>
         <div class="tab" onclick="showTab('codeDiff')">Code Diff</div>
-        <div class="tab" onclick="showTab('memoryDump')">Memory Dump</div>
+        <div class="tab" onclick="showTab('vmStateDetails')">VM State Details</div>
     </div>
     <div id="commitDetails" class="tab-content active"></div>
     <div id="vmState" class="tab-content"></div>
     <div id="codeDiff" class="tab-content"></div>
-    <div id="memoryDump" class="tab-content"></div>
+    <div id="vmStateDetails" class="tab-content"></div>
 
     <script>
         let chart;
@@ -341,14 +341,14 @@
             const commitDetailsElement = document.getElementById('commitDetails');
             const vmStateElement = document.getElementById('vmState');
             const codeDiffElement = document.getElementById('codeDiff');
-            const memoryDumpElement = document.getElementById('memoryDump');
+            const vmStateDetailsElement = document.getElementById('vmStateDetails');
 
             if (!state.vm_state) {
                 vmStateElement.innerHTML = '<h2>No VM State Available for this commit</h2>';
-                memoryDumpElement.innerHTML = '<h2>No Memory Dump Available for this commit</h2>';
+                vmStateDetailsElement.innerHTML = '<h2>No VM State Details Available for this commit</h2>';
             } else {
                 showVMState(state.commit_hash);
-                showMemoryDump(state.commit_hash);
+                showVMStateDetails(state.commit_hash);
             }
 
             if (!state || !state.commit_hash) {
@@ -433,28 +433,58 @@
                 });
         }
 
-        function showMemoryDump(commitHash) {
-            const memoryDumpElement = document.getElementById('memoryDump');
+        /**
+         * Escapes HTML special characters to prevent XSS attacks and rendering issues.
+         * @param {string} text - The text to escape.
+         * @returns {string} - The escaped text.
+         */
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        function showVMStateDetails(commitHash) {
+            const vmStateDetailsElement = document.getElementById('vmStateDetails');
             if (!commitHash) {
-                memoryDumpElement.innerHTML = '<h2>No Memory Dump Available</h2>';
+                vmStateDetailsElement.innerHTML = '<h2>No VM State Details Available</h2>';
                 return;
             }
-            memoryDumpElement.innerHTML = '<h2>Loading Memory Dump...</h2>';
+            vmStateDetailsElement.innerHTML = '<h2>Loading VM Variables and Parameters...</h2>';
             
-            fetchWithErrorHandling(`/memory_dump/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+            fetch(`/vm_state_details/${encodeURIComponent(commitHash)}?repo=${encodeURIComponent(currentRepo)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => { throw new Error(data.error || 'Error fetching data'); });
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    memoryDumpElement.innerHTML = `
-                        <h2>Memory Dump</h2>
-                        <div class="memory-dump">${data.memory.join('\n')}</div>
-                        <div class="execute-controls">
-                            <input type="number" id="stepCount" value="1" min="1">
-                            <button onclick="executeVM('${commitHash}')">Execute Steps</button>
-                        </div>
-                    `;
+                    if (data.error) {
+                        vmStateDetailsElement.innerHTML = `<h2>Error: ${escapeHtml(data.error)}</h2>`;
+                    } else {
+                        const variables = data.variables || {};
+                        const parameters = data.parameters || {};
+                        vmStateDetailsElement.innerHTML = `
+                            <h2>VM Variables</h2>
+                            <pre>${escapeHtml(JSON.stringify(variables, null, 2))}</pre>
+                            <h2>VM Parameters</h2>
+                            <pre>${escapeHtml(JSON.stringify(parameters, null, 2))}</pre>
+                            <div class="execute-controls">
+                                <input type="number" id="stepCount" value="1" min="1">
+                                <button onclick="executeVM('${escapeHtml(commitHash)}')">Execute Steps</button>
+                            </div>
+                        `;
+                    }
                 })
                 .catch(error => {
-                    console.error('Error fetching memory dump:', error);
-                    memoryDumpElement.innerHTML = '<h2>Error fetching memory dump.</h2>';
+                    console.error('Error fetching VM variables and parameters:', error);
+                    vmStateDetailsElement.innerHTML = `<h2>Error fetching VM variables and parameters: ${escapeHtml(error.message)}</h2>`;
                 });
         }
 
@@ -475,7 +505,7 @@
             })
             .then(data => {
                 showVMState(commitHash);
-                showMemoryDump(commitHash);
+                showVMStateDetails(commitHash);
                 updateChart(); // Update the chart after execution
             })
             .catch(error => {
@@ -508,7 +538,7 @@
             })
             .then(data => {
                 showVMState(commitHash);
-                showMemoryDump(commitHash);
+                showVMStateDetails(commitHash);
                 alert(`Executed ${steps} step(s) from step ${stepIndex}. Check VM State and Memory Dump for results.`);
             })
             .catch(error => {
@@ -558,7 +588,7 @@
             document.getElementById('commitDetails').innerHTML = '<h2>No Commit Details Available</h2>';
             document.getElementById('vmState').innerHTML = '<h2>No VM State Available</h2>';
             document.getElementById('codeDiff').innerHTML = '<h2>No Code Diff Available</h2>';
-            document.getElementById('memoryDump').innerHTML = '<h2>No Memory Dump Available</h2>';
+            document.getElementById('vmStateDetails').innerHTML = '<h2>No VM State Details Available</h2>';
         }
 
         function showCommitDetailsAtIndex(index) {
