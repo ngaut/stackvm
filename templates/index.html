@@ -112,6 +112,26 @@
             font-weight: bold;
             color: green;
         }
+        .resizable {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .resizable .resizer {
+            width: 10px;
+            height: 10px;
+            background: #4286f4;
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            cursor: se-resize;
+        }
+
+        .chart-container, .step-list, #commitDetails, #vmState, #codeDiff, #vmStateDetails {
+            resize: both;
+            overflow: auto;
+            min-height: 200px;
+        }
     </style>
 </head>
 <body>
@@ -127,10 +147,13 @@
     </div>
     <div id="notification" style="margin-top: 10px;"></div>
     <div class="container">
-        <div class="chart-container">
+        <div class="chart-container resizable">
             <canvas id="vmChart"></canvas>
+            <div class="resizer"></div>
         </div>
-        <div id="stepList" class="step-list"></div>
+        <div id="stepList" class="step-list resizable">
+            <div class="resizer"></div>
+        </div>
     </div>
     <div class="tab-container">
         <div class="tab active" onclick="showTab('commitDetails')">Commit Details</div>
@@ -138,10 +161,18 @@
         <div class="tab" onclick="showTab('codeDiff')">Code Diff</div>
         <div class="tab" onclick="showTab('vmStateDetails')">VM State Details</div>
     </div>
-    <div id="commitDetails" class="tab-content active"></div>
-    <div id="vmState" class="tab-content"></div>
-    <div id="codeDiff" class="tab-content"></div>
-    <div id="vmStateDetails" class="tab-content"></div>
+    <div id="commitDetails" class="tab-content active resizable">
+        <div class="resizer"></div>
+    </div>
+    <div id="vmState" class="tab-content resizable">
+        <div class="resizer"></div>
+    </div>
+    <div id="codeDiff" class="tab-content resizable">
+        <div class="resizer"></div>
+    </div>
+    <div id="vmStateDetails" class="tab-content resizable">
+        <div class="resizer"></div>
+    </div>
 
     <script>
         let chart;
@@ -595,6 +626,44 @@
             const state = vmStates[index];
             showCommitDetails(state);
         }
+
+        // Add this function to handle resizing
+        function makeResizable(element) {
+            const resizer = element.querySelector('.resizer');
+            let originalWidth, originalHeight, originalX, originalY;
+
+            function onMouseMove(e) {
+                const width = originalWidth + (e.pageX - originalX);
+                const height = originalHeight + (e.pageY - originalY);
+                element.style.width = width + 'px';
+                element.style.height = height + 'px';
+            }
+
+            function onMouseUp() {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+            }
+
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                originalWidth = parseFloat(getComputedStyle(element, null).getPropertyValue('width').replace('px', ''));
+                originalHeight = parseFloat(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''));
+                originalX = e.pageX;
+                originalY = e.pageY;
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        // Make all resizable elements actually resizable
+        document.querySelectorAll('.resizable').forEach(makeResizable);
+
+        // Update the chart when the window is resized
+        window.addEventListener('resize', function() {
+            if (chart) {
+                chart.resize();
+            }
+        });
     </script>
 </body>
 </html>

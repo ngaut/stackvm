@@ -126,7 +126,7 @@ class PlanExecutionVM:
                 detail = f"Executed step '{step_type}' with parameters {params}."
             else:
                 detail = f"Failed to execute step '{step_type}'."
-            self._commit("Execute Step", detail)
+            self._commit(detail)
             
             return success
         else:
