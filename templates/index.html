@@ -510,10 +510,13 @@
                 });
         }
 
-        function executeVM(commitHash) {
-            const steps = document.getElementById('stepCount').value;
-            const startFrom = 0; // You might want to add an input for this
-            fetchWithErrorHandling('/execute_vm', {
+        function executeVM() {
+            const commitHash = document.getElementById('commitHash').value;
+            const steps = document.getElementById('steps').value;
+            const startFrom = document.getElementById('startFrom').value;
+            const repo = currentRepo;  // Assuming you have a variable to store the current repo
+
+            fetch('/execute_vm', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -521,18 +524,64 @@
                 body: JSON.stringify({
                     commit_hash: commitHash,
                     steps: parseInt(steps),
-                    start_from: startFrom,
-                    repo: currentRepo
+                    start_from: parseInt(startFrom),
+                    repo: repo
                 }),
             })
+            .then(response => response.json())
             .then(data => {
-                showVMState(commitHash);
-                showVMStateDetails(commitHash);
-                updateChart(); // Update the chart after execution
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    alert('Error: ' + data.error);
+                } else {
+                    console.log('Execution completed:', data);
+                    // Switch to the new branch
+                    switchBranch(data.new_branch);
+                    // Refresh the visualization
+                    fetchVMStates();
+                }
             })
-            .catch(error => {
-                console.error('Error executing VM:', error);
-                alert(`Error executing VM: ${error.message}`);
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error);
+            });
+        }
+
+        function switchBranch(branchName) {
+            fetch(`/set_branch/${branchName}?repo=${currentRepo}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Switched to branch:', branchName);
+                    // Update the UI to reflect the new branch
+                    updateBranchSelector();
+                } else {
+                    console.error('Failed to switch branch:', data.error);
+                    alert('Failed to switch branch: ' + data.error);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error: ' + error);
+            });
+        }
+
+        function updateBranchSelector() {
+            fetch(`/get_branches?repo=${currentRepo}`)
+            .then(response => response.json())
+            .then(branches => {
+                const branchSelector = document.getElementById('branchSelector');
+                branchSelector.innerHTML = '';
+                branches.forEach(branch => {
+                    const option = document.createElement('option');
+                    option.value = branch.name;
+                    option.textContent = branch.name;
+                    option.selected = branch.is_active;
+                    branchSelector.appendChild(option);
+                });
+            })
+            .catch((error) => {
+                console.error('Error:', error);
             });
         }
 
@@ -554,14 +603,17 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json().then(errorData => {
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
+                    });
                 }
                 return response.json();
             })
             .then(data => {
                 showVMState(commitHash);
                 showVMStateDetails(commitHash);
-                alert(`Executed ${steps} step(s) from step ${stepIndex}. Check VM State for results.`);
+                loadBranches(); // Reload branches to show the new branch
+                alert(`Executed ${steps} step(s) from step ${stepIndex}. New branch created: ${data.new_branch}`);
             })
             .catch(error => {
                 console.error('Error executing VM:', error);

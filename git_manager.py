@@ -1,106 +1,76 @@
-import subprocess
-import logging
 import os
-from typing import List, Optional  # Added Optional
+import git
+from git import Repo
+import logging
 
 class GitManager:
-    def __init__(self, repo_path: str):
+    def __init__(self, repo_path):
         self.repo_path = repo_path
-        self.logger = logging.getLogger('git_manager')
-        self.logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - git_manager - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
+        self.logger = logging.getLogger(__name__)
+        self.repo = self._initialize_repo()
 
-        # Create the repository directory if it doesn't exist
+    def _initialize_repo(self):
         if not os.path.exists(self.repo_path):
             os.makedirs(self.repo_path)
             self.logger.info(f"Created directory: {self.repo_path}")
 
-        # Initialize the repository if it's not already a Git repo
         if not os.path.exists(os.path.join(self.repo_path, '.git')):
-            self.init_repo()
-
-    def init_repo(self) -> None:
-        # Initialize a new Git repository with 'main' as the initial branch
-        init_command = ['git', 'init', '--initial-branch=main']
-        if self.run_command(init_command):
+            repo = Repo.init(self.repo_path)
             self.logger.info(f"Initialized new Git repository in {self.repo_path}")
-
-            # Create a README.md file
+            
+            # Create and commit an initial README.md file
             readme_path = os.path.join(self.repo_path, 'README.md')
             with open(readme_path, 'w') as f:
-                f.write("# Auto-generated repository\n")
+                f.write('# VM Execution Repository\n\nThis repository contains the execution history of the VM.')
             self.logger.info(f"Created README.md at {readme_path}")
-
-            # Add and commit the README.md
-            self.run_command(['git', 'add', 'README.md'])
-            if not self.commit_changes("Initial commit"):
-                self.logger.error("Failed to create initial commit.")
+            
+            repo.index.add(['README.md'])
+            repo.index.commit("Initial commit")
         else:
-            self.logger.error(f"Failed to initialize Git repository in {self.repo_path}")
+            repo = Repo(self.repo_path)
+            self.logger.info(f"Opened existing Git repository in {self.repo_path}")
 
-    def run_command(self, command: List[str]) -> bool:
+        return repo
+
+    def commit_changes(self, message):
         try:
-            subprocess.check_output(command, cwd=self.repo_path, stderr=subprocess.STDOUT)
-            return True
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Git command {' '.join(command)} failed: {e.output.decode()}")
-            return False
-
-    def commit_changes(self, commit_message: str) -> bool:
-        # Add all changes, including untracked files
-        add_command = ['git', 'add', '-A']
-        add_result = self.run_command(add_command)
-        if not add_result:
-            self.logger.error("Failed to add changes to Git index.")
-            return False
-
-        # Check if there are changes to commit
-        status_command = ['git', 'status', '--porcelain']
-        try:
-            status_output = subprocess.check_output(status_command, cwd=self.repo_path, stderr=subprocess.STDOUT)
-            if not status_output.strip():
+            self.repo.git.add(all=True)
+            if self.repo.is_dirty():
+                self.repo.index.commit(message)
+                self.logger.info(f"Committed changes with message: {message}")
+                return True
+            else:
                 self.logger.info("No changes to commit.")
-                return True  # Return True as this is not an error condition
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to check Git status: {e.output.decode()}")
+                return False
+        except git.GitCommandError as e:
+            self.logger.error(f"Git commit failed: {str(e)}")
             return False
 
-        # Proceed with commit if there are changes
-        commit_command = ['git', 'commit', '-m', commit_message]
-        return self.run_command(commit_command)
-
-    def get_current_branch(self) -> Optional[str]:
+    def run_command(self, command):
         try:
-            output = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=self.repo_path, stderr=subprocess.STDOUT)
-            branch = output.decode().strip()
-            return branch
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to get current branch: {e.output.decode()}")
+            result = self.repo.git.execute(command)
+            return result
+        except git.GitCommandError as e:
+            self.logger.error(f"Git command failed: {str(e)}")
             return None
 
-    def create_branch(self, branch_name: str) -> bool:
-        if not self.run_command(['git', 'branch', branch_name]):
-            self.logger.error(f"Failed to create branch '{branch_name}'.")
-            return False
-        self.logger.info(f"Branch '{branch_name}' created.")
-        return True
+    def list_branches(self):
+        return [branch.name for branch in self.repo.branches]
 
-    def checkout_branch(self, branch_name: str) -> bool:
-        if not self.run_command(['git', 'checkout', branch_name]):
-            self.logger.error(f"Failed to checkout branch '{branch_name}'.")
-            return False
-        self.logger.info(f"Checked out branch '{branch_name}'.")
-        return True
-
-    def list_branches(self) -> List[str]:
+    def create_branch(self, branch_name):
         try:
-            output = subprocess.check_output(['git', 'branch'], cwd=self.repo_path, stderr=subprocess.STDOUT)
-            branches = output.decode().split('\n')
-            branches = [branch.strip('* ').strip() for branch in branches if branch]
-            return branches
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to list branches: {e.output.decode()}")
-            return []
+            self.repo.create_head(branch_name)
+            self.logger.info(f"Created new branch: {branch_name}")
+            return True
+        except git.GitCommandError as e:
+            self.logger.error(f"Failed to create branch {branch_name}: {str(e)}")
+            return False
+
+    def checkout_branch(self, branch_name):
+        try:
+            self.repo.git.checkout(branch_name)
+            self.logger.info(f"Checked out branch: {branch_name}")
+            return True
+        except git.GitCommandError as e:
+            self.logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
+            return False

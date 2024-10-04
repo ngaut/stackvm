@@ -10,16 +10,17 @@ from utils import interpolate_variables, parse_plan
 from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
+import git  # Add this import
 
 class PlanExecutionVM:
-    def __init__(self):
+    def __init__(self, repo_path=None):
         self.state: Dict[str, Any] = {
-            'variables': {},        # Initialize variables
+            'variables': {},
             'errors': [],
             'previous_plans': [],
             'goal': None,
             'current_plan': [],
-            'program_counter': 0,  # Initialized to 0
+            'program_counter': 0,
             'goal_completed': False,
             'msgs': []
         }
@@ -34,14 +35,13 @@ class PlanExecutionVM:
 
         self.instruction_handlers = InstructionHandlers(self)
         self.llm_interface = LLMInterface(LLM_MODEL)
-        #add a time stamp to the git repo path
-        self.git_manager = GitManager(repo_path=GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S"))
+        
+        # Use the provided repo_path or the default GIT_REPO_PATH
+        self.repo_path = repo_path or GIT_REPO_PATH
+        self.git_manager = GitManager(self.repo_path)
 
         # Change the current working directory to the Git repo path
-        os.chdir(self.git_manager.repo_path)
-
-        # Initialize Git repository with 'main' branch
-        self.git_manager.init_repo()
+        os.chdir(self.repo_path)
 
         # Register instruction handlers
         self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
@@ -462,6 +462,26 @@ Provide your response as a valid JSON array of instruction steps.
         """
         return self.state['variables'].get(var_name)
 
+    def show_file(self, commit_hash, file_path):
+        try:
+            return self.git_manager.repo.git.show(f'{commit_hash}:{file_path}')
+        except git.exc.GitCommandError as e:
+            self.logger.error(f"Error showing file {file_path} at commit {commit_hash}: {str(e)}")
+            raise
+
+    def load_state(self, commit_hash):
+        """
+        Load the state from a file based on the specific commit point.
+        """
+        try:
+            state_content = self.show_file(commit_hash, 'vm_state.json')
+            loaded_state = json.loads(state_content)
+            self.state.update(loaded_state)  # Update the existing state instead of replacing it
+            self.logger.info(f"State loaded from commit {commit_hash}")
+        except Exception as e:
+            self.logger.error(f"Failed to load state from commit {commit_hash}: {str(e)}")
+            self.state['errors'].append(f"Failed to load state from commit {commit_hash}: {str(e)}")
+
 class StateManager:
     def __init__(self, vm):
         self.vm = vm
@@ -486,7 +506,8 @@ class StateManager:
             self.vm.state['errors'].append(f"Failed to load state: {e}")
 
 if __name__ == "__main__":
-    vm = PlanExecutionVM()
+    repo_path = GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S")
+    vm = PlanExecutionVM(repo_path)
     vm.set_goal("summary the performance improvement of tidb from version 6.5 to newest version")
     
     if vm.generate_plan():
