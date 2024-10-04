@@ -57,6 +57,18 @@ class GitManager:
             self.logger.error("Failed to add changes to Git index.")
             return False
 
+        # Check if there are changes to commit
+        status_command = ['git', 'status', '--porcelain']
+        try:
+            status_output = subprocess.check_output(status_command, cwd=self.repo_path, stderr=subprocess.STDOUT)
+            if not status_output.strip():
+                self.logger.info("No changes to commit.")
+                return True  # Return True as this is not an error condition
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to check Git status: {e.output.decode()}")
+            return False
+
+        # Proceed with commit if there are changes
         commit_command = ['git', 'commit', '-m', commit_message]
         return self.run_command(commit_command)
 
