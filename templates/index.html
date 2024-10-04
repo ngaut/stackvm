@@ -10,159 +10,172 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/styles/default.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f0f0f0;
+            background-color: #f8f9fa;
         }
         .container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
-        .chart-container, .step-list, #commitDetails, #vmState, #codeDiff {
-            flex: 1;
-            min-width: 300px;
+        .chart-container {
             background-color: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
-        .chart-container {
-            min-width: 600px;
-        }
         .step-list {
             max-height: 600px;
             overflow-y: auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .step-item {
             cursor: pointer;
-            padding: 10px;
+            padding: 15px;
             margin: 10px 0;
-            border: 1px solid #eee;
+            border: 1px solid #e9ecef;
             border-radius: 4px;
-            transition: background-color 0.3s;
+            transition: all 0.3s ease;
         }
         .step-item:hover {
-            background-color: #f0f0f0;
+            background-color: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .step-details {
             display: none;
             margin-left: 20px;
             font-size: 0.9em;
-            color: #666;
-        }
-        #vmState pre, #codeDiff pre {
-            max-height: 400px;
-            overflow-y: auto;
-            background-color: #f5f5f5;
+            color: #6c757d;
+            background-color: #f8f9fa;
             padding: 10px;
             border-radius: 4px;
+            margin-top: 10px;
         }
-        .tab-container {
-            display: flex;
-            margin-bottom: 10px;
-        }
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            background-color: #eee;
-            border: 1px solid #ccc;
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
-        }
-        .tab.active {
-            background-color: white;
-            border-bottom: 1px solid white;
-        }
-        .tab-content {
+        #loading {
             display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
         }
-        .tab-content.active {
-            display: block;
-        }
-        .execute-controls {
-            margin-top: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .execute-controls input {
-            width: 50px;
-        }
-        #loadButton {
-            margin-bottom: 20px;
-        }
-        #branchSelect {
-            margin-bottom: 10px;
-        }
-        .active-branch {
-            font-weight: bold;
-            color: green;
-        }
-        .resizable {
+        .tooltip {
             position: relative;
-            overflow: hidden;
+            display: inline-block;
+            cursor: help;
         }
-
-        .resizable .resizer {
-            width: 10px;
-            height: 10px;
-            background: #4286f4;
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
             position: absolute;
-            right: 0;
-            bottom: 0;
-            cursor: se-resize;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
         }
-
-        .chart-container, .step-list, #commitDetails, #vmState, #codeDiff, #vmStateDetails {
-            resize: both;
-            overflow: auto;
-            min-height: 200px;
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .btn-group-sm > .btn, .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            border-radius: 0.2rem;
         }
     </style>
 </head>
 <body>
-    <h1>VM Execution Visualization</h1>
-    <div id="loadButton">
-        <button onclick="loadDirectories()">Load Directories</button>
-        <select id="directorySelect" style="display: none;"></select>
-        <button id="setRepoButton" style="display: none;" onclick="setRepo()">Set Repository</button>
-    </div>
-    <div id="branchSelect" style="display: none;">
-        <select id="branchDropdown"></select>
-        <button onclick="setBranch()">Set Branch</button>
-    </div>
-    <div id="notification" style="margin-top: 10px;"></div>
     <div class="container">
-        <div class="chart-container resizable">
-            <canvas id="vmChart"></canvas>
-            <div class="resizer"></div>
+        <h1 class="mb-4 text-center">VM Execution Visualization</h1>
+        <div id="loading" class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
         </div>
-        <div id="stepList" class="step-list resizable">
-            <div class="resizer"></div>
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Repository Selection</h5>
+                        <button onclick="loadDirectories()" class="btn btn-primary mb-2">Load Directories</button>
+                        <select id="directorySelect" style="display: none;" class="form-select mb-2"></select>
+                        <button id="setRepoButton" style="display: none;" onclick="setRepo()" class="btn btn-success">Set Repository</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Branch Selection</h5>
+                        <div id="branchSelect" style="display: none;">
+                            <select id="branchDropdown" class="form-select mb-2"></select>
+                            <button onclick="setBranch()" class="btn btn-info">Set Branch</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-    <div class="tab-container">
-        <div class="tab active" onclick="showTab('commitDetails')">Commit Details</div>
-        <div class="tab" onclick="showTab('vmState')">VM State</div>
-        <div class="tab" onclick="showTab('codeDiff')">Code Diff</div>
-        <div class="tab" onclick="showTab('vmStateDetails')">VM State Details</div>
-    </div>
-    <div id="commitDetails" class="tab-content active resizable">
-        <div class="resizer"></div>
-    </div>
-    <div id="vmState" class="tab-content resizable">
-        <div class="resizer"></div>
-    </div>
-    <div id="codeDiff" class="tab-content resizable">
-        <div class="resizer"></div>
-    </div>
-    <div id="vmStateDetails" class="tab-content resizable">
-        <div class="resizer"></div>
+        <div id="notification" class="alert alert-info" style="display: none;"></div>
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="chart-container">
+                    <canvas id="vmChart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="step-list">
+                    <input type="text" id="stepSearch" class="form-control mb-3" placeholder="Search steps...">
+                    <div id="stepList"></div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4">
+            <ul class="nav nav-tabs" id="myTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="commit-tab" data-bs-toggle="tab" data-bs-target="#commit" type="button" role="tab" aria-controls="commit" aria-selected="true">Commit Details</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="vmstate-tab" data-bs-toggle="tab" data-bs-target="#vmstate" type="button" role="tab" aria-controls="vmstate" aria-selected="false">VM State</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="codediff-tab" data-bs-toggle="tab" data-bs-target="#codediff" type="button" role="tab" aria-controls="codediff" aria-selected="false">Code Diff</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="vmstatedetails-tab" data-bs-toggle="tab" data-bs-target="#vmstatedetails" type="button" role="tab" aria-controls="vmstatedetails" aria-selected="false">VM State Details</button>
+                </li>
+            </ul>
+            <div class="tab-content mt-3" id="myTabContent">
+                <div class="tab-pane fade show active" id="commit" role="tabpanel" aria-labelledby="commit-tab">
+                    <div id="commitDetails"></div>
+                </div>
+                <div class="tab-pane fade" id="vmstate" role="tabpanel" aria-labelledby="vmstate-tab">
+                    <div id="vmState"></div>
+                </div>
+                <div class="tab-pane fade" id="codediff" role="tabpanel" aria-labelledby="codediff-tab">
+                    <div id="codeDiff"></div>
+                </div>
+                <div class="tab-pane fade" id="vmstatedetails" role="tabpanel" aria-labelledby="vmstatedetails-tab">
+                    <div id="vmStateDetails"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -241,7 +254,7 @@
                 .then(data => {
                     if (data.error) {
                         console.error('Error fetching VM data:', data.error);
-                        document.getElementById('notification').innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                        showNotification(data.error, 'danger');
                         return;
                     }
                     console.log('Received VM data:', data);
@@ -252,7 +265,6 @@
                     const errors = data.map(state => state.vm_state && state.vm_state.errors && state.vm_state.errors.length > 0 ? state.vm_state.program_counter : null);
 
                     if (chart) {
-                        // Update existing chart
                         chart.data.labels = times;
                         chart.data.datasets[0].data = programCounters;
                         chart.data.datasets[1].data = errors;
@@ -266,14 +278,17 @@
                                 datasets: [{
                                     label: 'Program Counter',
                                     data: programCounters,
-                                    borderColor: 'blue',
-                                    fill: false
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    fill: true,
+                                    tension: 0.4
                                 }, {
                                     label: 'Errors',
                                     data: errors,
-                                    borderColor: 'red',
-                                    pointStyle: 'crossRot',
-                                    pointRadius: 10,
+                                    borderColor: 'rgba(255, 99, 132, 1)',
+                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                    pointStyle: 'triangle',
+                                    pointRadius: 6,
                                     fill: false
                                 }]
                             },
@@ -283,11 +298,31 @@
                                     x: {
                                         type: 'time',
                                         time: {
-                                            unit: 'minute'
+                                            unit: 'minute',
+                                            displayFormats: {
+                                                minute: 'MMM D, HH:mm'
+                                            }
+                                        },
+                                        title: {
+                                            display: true,
+                                            text: 'Time'
                                         }
                                     },
                                     y: {
-                                        beginAtZero: true
+                                        beginAtZero: true,
+                                        title: {
+                                            display: true,
+                                            text: 'Program Counter'
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    legend: {
+                                        position: 'top',
+                                    },
+                                    tooltip: {
+                                        mode: 'index',
+                                        intersect: false,
                                     }
                                 },
                                 onClick: (event, elements) => {
@@ -303,8 +338,26 @@
                 })
                 .catch(error => {
                     console.error('Error updating chart:', error);
-                    document.getElementById('notification').innerHTML += `<p style="color: red;">Error updating chart: ${error.message}</p>`;
+                    showNotification('Error updating chart: ' + error.message, 'danger');
                 });
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `alert alert-${type}`;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
         }
 
         function updateStepList(data) {
@@ -315,30 +368,56 @@
                 const stepItem = document.createElement('div');
                 stepItem.className = 'step-item';
 
-                // Calculate the correct index (newest step should have index 0)
                 const correctIndex = data.length - 1 - displayIndex;
 
                 const commitTitle = state.title;
                 const commitTime = moment(state.time).format('YYYY-MM-DD HH:mm:ss');
 
                 stepItem.innerHTML = `
-                    <strong>${commitTitle}</strong> (${commitTime})
-                    <button onclick="showCommitDetailsAtIndex(${correctIndex})">View Details</button>
-                    <button onclick="executeFromStep(${correctIndex}, '${state.commit_hash}')">Execute from here</button>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong>${commitTitle}</strong>
+                        <small class="text-muted">${commitTime}</small>
+                    </div>
+                    <div class="mt-2">
+                        <button onclick="showCommitDetailsAtIndex(${correctIndex})" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="View commit details">
+                            <i class="bi bi-info-circle"></i> Details
+                        </button>
+                        <button onclick="executeFromStep(${correctIndex}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute VM from this step">
+                            <i class="bi bi-play-fill"></i> Execute
+                        </button>
+                    </div>
                 `;
 
                 stepItem.onclick = () => toggleStepDetails(correctIndex);
 
                 const stepDetails = document.createElement('div');
-                stepDetails.className = 'step-details';
+                stepDetails.className = 'step-details mt-2';
                 stepDetails.id = `step-details-${correctIndex}`;
-                stepDetails.style.display = 'none';  // Ensure it's hidden by default
-                stepDetails.innerHTML = `<pre>${JSON.stringify(state.details, null, 2)}</pre>`;
+                stepDetails.style.display = 'none';
+                stepDetails.innerHTML = `<pre><code class="json">${JSON.stringify(state.details, null, 2)}</code></pre>`;
 
                 stepItem.appendChild(stepDetails);
                 stepList.appendChild(stepItem);
             });
+
+            hljs.highlightAll();
+            initTooltips();
         }
+
+        function initTooltips() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            });
+        }
+
+        document.getElementById('stepSearch').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            document.querySelectorAll('.step-item').forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
 
         function toggleStepDetails(index) {
             const detailsElement = document.getElementById(`step-details-${index}`);
