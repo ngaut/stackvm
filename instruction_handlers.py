@@ -104,20 +104,12 @@ class InstructionHandlers:
         self.vm.logger.info("Reasoning step:")
         self.vm.logger.info(f"Explanation: {explanation}")
         self.vm.logger.info(f"Dependency Analysis: {dependency_analysis}")
-        return True
-
-    def retrieve_knowledge_graph(self, query: str) -> Optional[Dict[str, Any]]:
-        self.vm.logger.info(f"Retrieving knowledge graph data for query: '{query}'")
-        knowledge_graph_data = {
-            'query': query,
-            'data': f"Structured information related to '{query}'"
+        # update state
+        self.vm.state['msgs'].append({
+            'explanation': explanation,
+            'dependency_analysis': dependency_analysis
         }
-        return knowledge_graph_data
-
-    def retrieve_knowledge_embedded_chunks(self, embedding_query: str, top_k: int = 5) -> Optional[List[str]]:
-        self.vm.logger.info(f"Retrieving top {top_k} embedded chunks for query: '{embedding_query}'")
-        embedded_chunks = [f"Chunk {i+1} related to '{embedding_query}'" for i in range(top_k)]
-        return embedded_chunks
+        return True
 
     def revisit_plan(self) -> None:
         self.vm.logger.info("Revisiting the plan based on new information...")

@@ -20,7 +20,8 @@ class PlanExecutionVM:
             'goal': None,
             'current_plan': [],
             'program_counter': 0,  # Initialized to 0
-            'goal_completed': False
+            'goal_completed': False,
+            'msgs': []
         }
 
         # Initialize logger
@@ -344,7 +345,6 @@ Provide your response as a valid JSON array of instruction steps.
                 self.logger.error("No goal is set.")
                 self.state['errors'].append("No goal is set.")
                 
-                # Commit the error to Git
                 commit_message = "Error: No goal is set."
                 if not self.git_manager.commit_changes(commit_message):
                     self.logger.error("Failed to commit changes to Git.")
@@ -489,7 +489,6 @@ Provide your response as a valid JSON array of instruction steps.
         else:
             self.logger.info("Program execution complete.")
 
-# Add a new StateManager class to handle all state-related operations
 class StateManager:
     def __init__(self, vm):
         self.vm = vm
@@ -500,7 +499,6 @@ class StateManager:
             with open(self.state_file, 'w') as f:
                 json.dump(self.vm.state, f, indent=2, default=str)
             self.vm.logger.info(f"State saved to {self.state_file}")
-            # No need to add or commit here; it's handled in commit_changes
         except Exception as e:
             self.vm.logger.error(f"Error saving state: {str(e)}")
             self.vm.state['errors'].append(f"Error saving state: {str(e)}")
