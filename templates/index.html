@@ -249,15 +249,13 @@
                     console.log('Updated vmStates:', vmStates);
                     const times = data.map(state => state.time);
                     const programCounters = data.map(state => state.vm_state && state.vm_state.program_counter !== undefined ? state.vm_state.program_counter : null);
-                    const milestones = data.map(state => state.title.includes('Save milestone') && state.vm_state ? state.vm_state.program_counter : null);
                     const errors = data.map(state => state.vm_state && state.vm_state.errors && state.vm_state.errors.length > 0 ? state.vm_state.program_counter : null);
 
                     if (chart) {
                         // Update existing chart
                         chart.data.labels = times;
                         chart.data.datasets[0].data = programCounters;
-                        chart.data.datasets[1].data = milestones;
-                        chart.data.datasets[2].data = errors;
+                        chart.data.datasets[1].data = errors;
                         chart.update();
                     } else {
                         const ctx = document.getElementById('vmChart').getContext('2d');
@@ -269,13 +267,6 @@
                                     label: 'Program Counter',
                                     data: programCounters,
                                     borderColor: 'blue',
-                                    fill: false
-                                }, {
-                                    label: 'Milestones',
-                                    data: milestones,
-                                    borderColor: 'green',
-                                    pointStyle: 'triangle',
-                                    pointRadius: 10,
                                     fill: false
                                 }, {
                                     label: 'Errors',
@@ -319,24 +310,28 @@
         function updateStepList(data) {
             const stepList = document.getElementById('stepList');
             stepList.innerHTML = '';
-            data.forEach((state, index) => {
+            
+            data.forEach((state, displayIndex) => {
                 const stepItem = document.createElement('div');
                 stepItem.className = 'step-item';
+
+                // Calculate the correct index (newest step should have index 0)
+                const correctIndex = data.length - 1 - displayIndex;
 
                 const commitTitle = state.title;
                 const commitTime = moment(state.time).format('YYYY-MM-DD HH:mm:ss');
 
                 stepItem.innerHTML = `
                     <strong>${commitTitle}</strong> (${commitTime})
-                    <button onclick="showCommitDetailsAtIndex(${index})">View Details</button>
-                    <button onclick="executeFromStep(${index}, '${state.commit_hash}')">Execute from here</button>
+                    <button onclick="showCommitDetailsAtIndex(${correctIndex})">View Details</button>
+                    <button onclick="executeFromStep(${correctIndex}, '${state.commit_hash}')">Execute from here</button>
                 `;
 
-                stepItem.onclick = () => toggleStepDetails(index);
+                stepItem.onclick = () => toggleStepDetails(correctIndex);
 
                 const stepDetails = document.createElement('div');
                 stepDetails.className = 'step-details';
-                stepDetails.id = `step-details-${index}`;
+                stepDetails.id = `step-details-${correctIndex}`;
                 stepDetails.style.display = 'none';  // Ensure it's hidden by default
                 stepDetails.innerHTML = `<pre>${JSON.stringify(state.details, null, 2)}</pre>`;
 
@@ -575,17 +570,22 @@
                 if (data.error) {
                     throw new Error(data.error);
                 }
-                showVMState(commitHash);
-                showVMStateDetails(commitHash);
-                loadBranches(); // Reload branches to show the new branch
                 let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
                 if (data.steps_executed < parseInt(steps)) {
                     message += `(Reached end of plan at step ${data.plan_length}). `;
                 }
                 message += `New branch created: ${data.new_branch}`;
                 alert(message);
-                // Switch to the new branch
-                switchBranch(data.new_branch);
+                
+                // Switch to the new branch and refresh the UI
+                switchBranch(data.new_branch)
+                    .then(() => {
+                        // Refresh VM state and details
+                        showVMState(commitHash);
+                        showVMStateDetails(commitHash);
+                        // Refresh the chart and step list
+                        fetchVMStates(data.new_branch);
+                    });
             })
             .catch(error => {
                 console.error('Error executing VM:', error);
@@ -593,25 +593,28 @@
             });
         }
 
+        // Update switchBranch to return a promise
         function switchBranch(branchName) {
-            fetch(`/set_branch/${branchName}?repo=${currentRepo}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Switched to branch:', branchName);
-                    // Update the UI to reflect the new branch
-                    updateBranchSelector();
-                    // Refresh the VM data for the new branch
-                    fetchVMStates(branchName);
-                } else {
-                    console.error('Failed to switch branch:', data.error);
-                    alert('Failed to switch branch: ' + data.error);
-                }
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                alert('Error: ' + error);
-            });
+            return fetch(`/set_branch/${branchName}?repo=${currentRepo}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Switched to branch:', branchName);
+                        currentBranch = branchName;
+                        // Update the UI to reflect the new branch
+                        updateBranchSelector();
+                        return true;
+                    } else {
+                        console.error('Failed to switch branch:', data.error);
+                        alert('Failed to switch branch: ' + data.error);
+                        return false;
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    alert('Error: ' + error);
+                    return false;
+                });
         }
 
         function updateBranchSelector() {
@@ -639,7 +642,7 @@
                 .then(data => {
                     vmStates = data;
                     updateChart();
-                    updateStepList();
+                    updateStepList(data);
                 })
                 .catch(error => console.error('Error:', error));
         }

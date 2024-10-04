@@ -49,11 +49,22 @@ def parse_commit_message(message):
 
 def extract_vm_info(branch_name='main', repo_name=None):
     repo_path = os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
-    repo = Repo(repo_path)
+    app.logger.info(f"Attempting to access repository at path: {repo_path}")
+    
+    if not os.path.exists(repo_path):
+        app.logger.error(f"Repository path does not exist: {repo_path}")
+        return []
+    
+    try:
+        repo = Repo(repo_path)
+    except Exception as e:
+        app.logger.error(f"Failed to initialize repository at {repo_path}: {str(e)}")
+        return []
+    
     try:
         commits = list(repo.iter_commits(branch_name))
     except GitCommandError as e:
-        app.logger.error(f"Error fetching commits: {str(e)}")
+        app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}")
         return []
     
     vm_states = []
@@ -89,7 +100,14 @@ def get_vm_data():
     
     branch = request.args.get('branch', 'main')
     repo = request.args.get('repo')
+    
+    app.logger.info(f"Fetching VM data for branch: {branch}, repo: {repo}")
+    
     vm_states = extract_vm_info(branch, repo)
+    
+    if not vm_states:
+        app.logger.warning(f"No VM states found for branch: {branch}, repo: {repo}")
+        return jsonify({'error': 'No VM states found'}), 404
     
     return jsonify(vm_states)
 
@@ -260,8 +278,8 @@ def get_directories():
 @app.route('/set_repo/<path:repo_name>')
 def set_repo(repo_name):
     global git_manager
-    new_repo_path = os.path.join(GIT_REPO_PATH, repo_name)
-    if os.path.isdir(new_repo_path):
+    if repo_exists(repo_name):
+        new_repo_path = os.path.join(GIT_REPO_PATH, repo_name)
         git_manager = GitManager(new_repo_path)
         return jsonify({'success': True, 'message': f'Repository set to {repo_name}'})
     else:
@@ -301,6 +319,10 @@ def set_branch(branch_name):
 
 def get_repo_path(repo_name=None):
     return os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
+
+def repo_exists(repo_name):
+    repo_path = os.path.join(GIT_REPO_PATH, repo_name)
+    return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, '.git'))
 
 if __name__ == "__main__":
     if not vm_available:
