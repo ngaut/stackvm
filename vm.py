@@ -73,6 +73,20 @@ class PlanExecutionVM:
         else:
             return param
 
+    def _commit(self, action: str, detail: str = "") -> None:
+        """
+        Helper method to create and commit meaningful commit messages.
+        
+        Parameters:
+            action (str): A brief description of the action performed.
+            detail (str): Additional details about the action.
+        """
+        if detail:
+            commit_message = f"{action}: {detail}"
+        else:
+            commit_message = action
+        self.git_manager.commit_changes(commit_message)
+
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         step_type = step.get('type')
         params = step.get('parameters', {})
@@ -109,12 +123,10 @@ class PlanExecutionVM:
                 commit_message += f"- {k}: {value_preview}\n"
             
             if success:
-                commit_message += f"\nAdditional Info:\nStep executed successfully."
+                detail = f"Executed step '{step_type}' with parameters {params}."
             else:
-                commit_message += f"\nAdditional Info:\nStep execution failed."
-            
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
+                detail = f"Failed to execute step '{step_type}'."
+            self._commit("Execute Step", detail)
             
             return success
         else:
@@ -211,26 +223,14 @@ The final step should assign the result to the 'result' variable. The 'reasoning
                 self.logger.error(f"Failed to checkout branch '{branch_name}'.")
                 return False
 
-            # Save the plan and commit
+            # Save the plan in the state and commit
             self.state['current_plan'] = plan
             self.state['previous_plans'].append(plan)
             self.logger.info("Plan generated and parsed successfully.")
 
-            # Save plan to file and commit the generated plan to Git
+            # Save state and commit the generated plan to Git
             self.state_manager.save_state()
-            plan_file_path = os.path.join(self.git_manager.repo_path, 'generated_plan.json')
-            with open(plan_file_path, 'w') as f:
-                json.dump(plan, f, indent=2)
-            
-            # Add the generated plan file to Git
-            self.git_manager.run_command(['git', 'add', 'generated_plan.json'])
-
-            files_info = f"generated_plan.json: file path: {plan_file_path}"
-            original_message = f"Generated new plan on branch '{branch_name}':\n{json.dumps(plan, indent=2)}"
-            commit_message = f"{original_message}\n\nPlan stored in:\n{files_info}"
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-
+            self._commit("Generate Plan", f"Generated new plan on branch '{branch_name}'")
             return True
         else:
             self.logger.error("Failed to parse the generated plan.")
@@ -281,26 +281,21 @@ Provide your response as a valid JSON array of instruction steps.
             branch_name = f"adjusted_plan_{len(self.state['previous_plans'])}"
             if not self.git_manager.create_branch(branch_name):
                 self.logger.error(f"Failed to create branch '{branch_name}'.")
-                # Handle the failure as needed
                 return False
 
             if not self.git_manager.checkout_branch(branch_name):
                 self.logger.error(f"Failed to checkout branch '{branch_name}'.")
-                # Handle the failure as needed
                 return False
 
-            # Save the adjusted plan and commit
+            # Save the adjusted plan in the state and commit
             self.state['current_plan'] = new_plan
             self.state['previous_plans'].append(new_plan)
             self.state['errors'] = []
             self.logger.info("Plan adjusted successfully.")
 
-            # Commit the adjusted plan to Git
-            commit_message = f"Adjusted plan on branch '{branch_name}':\n{json.dumps(new_plan, indent=2)}"
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-
+            # Save state and commit the adjusted plan to Git
+            self.state_manager.save_state()
+            self._commit("Adjust Plan", f"Adjusted plan on branch '{branch_name}'")
             return True
         else:
             self.logger.error("Failed to parse the adjusted plan.")
@@ -333,12 +328,7 @@ Provide your response as a valid JSON array of instruction steps.
 
             # Save iteration start to state and commit the start of a new iteration
             self.state_manager.save_state()
-            original_message = f"Starting iteration {iterations}."
-            commit_message = f"{original_message}"
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-
+            self._commit("Start Iteration", f"Iteration {iterations} started.")
             iterations += 1
 
             if not self.state['goal']:
@@ -358,10 +348,7 @@ Provide your response as a valid JSON array of instruction steps.
                 self.state['errors'].append("Execution failed. Adjusting plan based on errors.")
                 
                 # Commit the execution failure before adjustment
-                commit_message = "Execution failed. Initiating plan adjustment."
-                if not self.git_manager.commit_changes(commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
+                self._commit("Execution Failed", "Initiating plan adjustment due to execution failure.")
                 
                 adjust_success = self.adjust_plan()
                 if not adjust_success:
@@ -369,10 +356,7 @@ Provide your response as a valid JSON array of instruction steps.
                     self.state['errors'].append("Failed to adjust the plan. Stopping execution.")
                     
                     # Commit the adjustment failure to Git
-                    commit_message = "Failed to adjust the plan. Stopping execution."
-                    if not self.git_manager.commit_changes(commit_message):
-                        self.logger.error("Failed to commit changes to Git.")
-                        # Handle the failure as needed
+                    self._commit("Plan Adjustment Failed", "Stopping execution due to failed plan adjustment.")
                     
                     break
                 
@@ -381,10 +365,7 @@ Provide your response as a valid JSON array of instruction steps.
                 
                 # Commit goal achievement to Git
                 self.state_manager.save_state()
-                commit_message = "Goal achieved successfully."
-                if not self.git_manager.commit_changes(commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
+                self._commit("Goal Achieved", "Goal achieved successfully.")
                 break
 
             self.evolve()
@@ -422,33 +403,6 @@ Provide your response as a valid JSON array of instruction steps.
         Returns the current state of the VM.
         """
         return self.state
-
-    def save_plan_to_file(self, filepath: str) -> None:
-        with open(filepath, 'w') as file:
-            json.dump(self.state['current_plan'], file, indent=2)
-        self.logger.info(f"Plan saved to {filepath}.")
-        
-        # Commit the plan file to Git
-        commit_message = f"Saved current plan to {filepath}."
-        if not self.git_manager.commit_changes(commit_message):
-            self.logger.error("Failed to commit changes to Git.")
-            # Handle the failure as needed
-
-    def load_plan_from_file(self, filepath: str) -> None:
-        try:
-            with open(filepath, 'r') as file:
-                plan = json.load(file)
-            self.state['current_plan'] = plan
-            self.logger.info(f"Plan loaded from {filepath}.")
-            
-            # Commit the plan load action to Git
-            commit_message = f"Loaded plan from {filepath}."
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-        except Exception as e:
-            self.logger.error(f"Failed to load plan from {filepath}: {e}")
-            self.state['errors'].append(f"Failed to load plan from {filepath}: {e}")
 
     def tag_plan_version(self, version_label: str) -> None:
         commit_message = f"Tagging plan version: {version_label}"
@@ -488,6 +442,25 @@ Provide your response as a valid JSON array of instruction steps.
             self.state['program_counter'] += 1
         else:
             self.logger.info("Program execution complete.")
+
+    def set_variable(self, var_name: str, value: Any) -> None:
+        """
+        Centralized method to set a variable in the VM's state.
+        Logs the assignment and handles goal completion if needed.
+        """
+        self.state['variables'][var_name] = value
+        self.logger.info(f"Variable '{var_name}' set to '{value}'.")
+        
+        # Mark goal as completed if 'result' is assigned
+        if var_name == 'result':
+            self.state['goal_completed'] = True
+            self.logger.info("Goal has been marked as completed.")
+
+    def get_variable(self, var_name: str) -> Any:
+        """
+        Centralized method to retrieve a variable's value from the VM's state.
+        """
+        return self.state['variables'].get(var_name)
 
 class StateManager:
     def __init__(self, vm):

@@ -15,8 +15,7 @@ class InstructionHandlers:
 
         # Simulate retrieval of data from knowledge graph
         result = f"Simulated knowledge graph data for query '{query}'"
-        self.vm.state['variables'][output_var] = result  # Correctly store variable
-        self.vm.logger.info(f"Retrieved data for query '{query}' and stored in variable '{output_var}'.")
+        self.vm.set_variable(output_var, result)  # Use helper method
         return True
 
     def retrieve_knowledge_embedded_chunks_handler(self, params: Dict[str, Any]) -> bool:
@@ -29,10 +28,10 @@ class InstructionHandlers:
             self.vm.state['errors'].append("Invalid parameters for 'retrieve_knowledge_embedded_chunks'.")
             return False
 
-        result = self.vm.instruction_handlers.retrieve_knowledge_embedded_chunks(embedding_query, top_k)
+        # Correct method call to avoid recursion
+        result = self.vm.retrieve_knowledge_embedded_chunks(embedding_query, top_k)
         if result is not None:
-            self.vm.variables[output_var] = result
-            self.vm.logger.info(f"Retrieved top {top_k} embedded chunks for query '{embedding_query}' and stored in '{output_var}'.")
+            self.vm.set_variable(output_var, result)  # Use helper method
             return True
         else:
             self.vm.logger.error(f"Failed to retrieve embedded chunks for query '{embedding_query}'.")
@@ -47,12 +46,11 @@ class InstructionHandlers:
             self.vm.state['errors'].append("Missing 'prompt' or 'output_var' in parameters.")
             return False
 
-        prompt = interpolate_variables(prompt, self.vm.state['variables'])  # Updated line
+        prompt = interpolate_variables(prompt, self.vm.state['variables'])  # You might also want to use get_variable here
 
         response = self.vm.llm_interface.generate(prompt)
         if response:
-            self.vm.state['variables'][output_var] = response  # Updated line
-            self.vm.logger.info(f"LLM response stored in variable '{output_var}'.")
+            self.vm.set_variable(output_var, response)  # Use helper method
             return True
         else:
             self.vm.logger.error("LLM failed to generate a response.")
@@ -88,8 +86,8 @@ class InstructionHandlers:
             return False
 
         value_resolved = self.vm.resolve_parameter(value)
-        self.vm.state['variables'][var_name] = value_resolved  # Updated line
-        self.vm.logger.info(f"Assigned value to variable '{var_name}'.")
+        self.vm.set_variable(var_name, value_resolved)  # Use helper method
+
         return True
 
     def reasoning_handler(self, params: Dict[str, Any]) -> bool:
@@ -108,7 +106,7 @@ class InstructionHandlers:
         self.vm.state['msgs'].append({
             'explanation': explanation,
             'dependency_analysis': dependency_analysis
-        }
+        })
         return True
 
     def revisit_plan(self) -> None:
