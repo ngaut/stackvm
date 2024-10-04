@@ -33,7 +33,6 @@ class PlanExecutionVM:
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
 
-        self.instruction_handlers = InstructionHandlers(self)
         self.llm_interface = LLMInterface(LLM_MODEL)
         
         # Use the provided repo_path or the default GIT_REPO_PATH
@@ -43,15 +42,32 @@ class PlanExecutionVM:
         # Change the current working directory to the Git repo path
         os.chdir(self.repo_path)
 
-        # Register instruction handlers
-        self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
-        self.register_instruction('retrieve_knowledge_embedded_chunks', self.instruction_handlers.retrieve_knowledge_embedded_chunks_handler)
-        self.register_instruction('llm_generate', self.instruction_handlers.llm_generate_handler)
-        self.register_instruction('condition', self.instruction_handlers.condition_handler)
-        self.register_instruction('assign', self.instruction_handlers.assign_handler)
-        self.register_instruction('reasoning', self.instruction_handlers.reasoning_handler)
+        self.handlers_registered = False
+        self.register_handlers()
 
         self.state_manager = StateManager(self)
+
+    def register_handlers(self):
+        if not self.handlers_registered:
+            self.instruction_handlers = InstructionHandlers(self)
+            self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
+            self.register_instruction('retrieve_knowledge_embedded_chunks', self.instruction_handlers.retrieve_knowledge_embedded_chunks_handler)
+            self.register_instruction('llm_generate', self.instruction_handlers.llm_generate_handler)
+            self.register_instruction('condition', self.instruction_handlers.condition_handler)
+            self.register_instruction('assign', self.instruction_handlers.assign_handler)
+            self.register_instruction('reasoning', self.instruction_handlers.reasoning_handler)
+            self.handlers_registered = True
+
+    def register_instruction(self, instruction_name: str, handler_method):
+        """
+        Registers an instruction handler.
+        """
+        if not isinstance(instruction_name, str) or not callable(handler_method):
+            self.logger.error("Invalid instruction registration.")
+            self.state['errors'].append("Invalid instruction registration.")
+            return
+        setattr(self.instruction_handlers, f"{instruction_name}_handler", handler_method)
+        self.logger.info(f"Registered handler for instruction: {instruction_name}")
 
     def set_goal(self, goal: str) -> None:
         if not isinstance(goal, str):
@@ -209,18 +225,18 @@ The final step should assign the result to the 'result' variable. The 'reasoning
         plan = parse_plan(plan_response)
         
         if plan:
-            if not self.git_manager.checkout_branch('main'):  
-                self.logger.error("Failed to checkout 'main' branch.")
-                return False
-
-            # Create a new branch off 'main'
+            # Create a new branch for the plan
             branch_name = f"plan_{len(self.state['previous_plans'])}"
-            if not self.git_manager.create_branch(branch_name):
-                self.logger.error(f"Failed to create branch '{branch_name}'.")
-                return False
+            try:
+                if not self.git_manager.create_branch(branch_name):
+                    self.logger.error(f"Failed to create branch '{branch_name}'.")
+                    return False
 
-            if not self.git_manager.checkout_branch(branch_name):
-                self.logger.error(f"Failed to checkout branch '{branch_name}'.")
+                if not self.git_manager.checkout_branch(branch_name):
+                    self.logger.error(f"Failed to checkout branch '{branch_name}'.")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error in Git operations: {str(e)}")
                 return False
 
             # Save the plan in the state and commit
@@ -387,17 +403,6 @@ Provide your response as a valid JSON array of instruction steps.
         else:
             print("\nNo result was generated.")
 
-    def register_instruction(self, instruction_name: str, handler_method):
-        """
-        Registers an instruction handler.
-        """
-        if not isinstance(instruction_name, str) or not callable(handler_method):
-            self.logger.error("Invalid instruction registration.")
-            self.state['errors'].append("Invalid instruction registration.")
-            return
-        setattr(self.instruction_handlers, f"{instruction_name}_handler", handler_method)
-        self.logger.info(f"Registered handler for instruction: {instruction_name}")
-
     def get_current_state(self) -> Dict[str, Any]:
         """
         Returns the current state of the VM.
@@ -432,16 +437,25 @@ Provide your response as a valid JSON array of instruction steps.
         # which plans to adjust, or whether to generate new plans
         # e.g., merge branches that led to successful goal completion
 
-    def step(self) -> None:
-        """
-        Execute a single step in the VM.
-        """
+    def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):
             step = self.state['current_plan'][self.state['program_counter']]
-            self.execute_step_handler(step)
+            self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}")
+            try:
+                success = self.execute_step_handler(step)
+                if not success:
+                    self.logger.error(f"Failed to execute step {self.state['program_counter']}: {step['type']}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"Error executing step {self.state['program_counter']}: {str(e)}")
+                self.state['errors'].append(f"Error in step {self.state['program_counter']}: {str(e)}")
+                return False
             self.state['program_counter'] += 1
+            self.state_manager.save_state()  # Save state after each step
+            return True
         else:
             self.logger.info("Program execution complete.")
+            return False
 
     def set_variable(self, var_name: str, value: Any) -> None:
         """

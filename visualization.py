@@ -58,22 +58,14 @@ def extract_vm_info(branch_name='main', repo_name=None):
     
     vm_states = []
     
-    app.logger.info(f"Total commits found in branch {branch_name}: {len(commits)}")
-    
     for commit in commits:
         commit_time = datetime.fromtimestamp(commit.committed_date)
-        title, details = parse_commit_message(commit.message)  # Updated to match new parse_commit_message
+        title, details = parse_commit_message(commit.message)
         
-        app.logger.info(f"Processing commit: {commit.hexsha}")
-        app.logger.info(f"Commit message: {commit.message}")
-        
-        # Try to load VM state from the commit
         try:
             vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
             vm_state = json.loads(vm_state_content)
-            app.logger.info(f"VM state found for commit {commit.hexsha}")
-        except GitCommandError as e:
-            app.logger.info(f"No VM state found for commit {commit.hexsha}")
+        except GitCommandError:
             vm_state = None
         
         vm_states.append({
@@ -82,10 +74,8 @@ def extract_vm_info(branch_name='main', repo_name=None):
             'details': details,
             'commit_hash': commit.hexsha,
             'vm_state': vm_state
-            # Removed 'step' field
         })
 
-    app.logger.info(f"Extracted VM states: {vm_states}")
     return vm_states
 
 @app.route('/')
@@ -100,8 +90,6 @@ def get_vm_data():
     branch = request.args.get('branch', 'main')
     repo = request.args.get('repo')
     vm_states = extract_vm_info(branch, repo)
-    
-    app.logger.info(f"Extracted VM states for branch {branch} in repo {repo}: {vm_states}")
     
     return jsonify(vm_states)
 
@@ -169,52 +157,69 @@ def execute_vm():
         app.logger.info(f"Received execute_vm request with data: {data}")
 
         if not vm_available:
-            app.logger.error("VM module not available")
             return jsonify({'error': 'VM module not available'}), 500
 
         commit_hash = data.get('commit_hash')
-        steps = data.get('steps', 1)
-        start_from = data.get('start_from', 0)
+        steps = int(data.get('steps', 1))
+        start_from = int(data.get('start_from', 0))
         repo_name = data.get('repo')
 
         if not all([commit_hash, steps, repo_name]):
-            app.logger.error(f"Missing required parameters: {data}")
             return jsonify({'error': 'Missing required parameters'}), 400
 
         repo_path = get_repo_path(repo_name)
         repo = git.Repo(repo_path)
 
-        # Create a new branch with "derived_branch" prefix
         new_branch_name = f"derived_branch_execution_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         current_branch = repo.active_branch.name
         repo.git.checkout(commit_hash, b=new_branch_name)
-        app.logger.info(f"Created new branch: {new_branch_name} from commit {commit_hash}")
+        app.logger.info(f"Created new branch: {new_branch_name}")
 
-        vm = VM(repo_path)  # Pass the repo_path to the VM constructor
+        vm = VM(repo_path)
         vm.load_state(commit_hash)
-
-        # Set the program counter to the specified starting point
+        
+        plan_length = len(vm.state['current_plan'])
+        
+        if start_from >= plan_length:
+            app.logger.info(f"Start index {start_from} is beyond the current plan length {plan_length}")
+            return jsonify({
+                'error': 'Start index is beyond the current plan length',
+                'start_from': start_from,
+                'plan_length': plan_length
+            }), 400
+        
+        # Adjust steps if it would exceed the plan length
+        steps_to_execute = min(steps, plan_length - start_from)
+        
         vm.state['program_counter'] = start_from
 
-        app.logger.info(f"Executing {steps} steps from index {start_from}")
-        for _ in range(steps):
-            vm.step()
+        app.logger.info(f"Executing {steps_to_execute} steps from index {start_from}")
+        steps_executed = 0
+        for _ in range(steps_to_execute):
+            if vm.step():
+                steps_executed += 1
+            else:
+                app.logger.info("Reached end of current plan")
+                break
 
         new_state = vm.get_current_state()
-        app.logger.info(f"Execution completed. New state: {new_state}")
+        app.logger.info(f"Execution completed, executed {steps_executed} steps. New state: {new_state}")
 
-        # Save the new state back to the repository
         new_state_json = json.dumps(new_state, indent=2)
         with open(os.path.join(repo_path, 'vm_state.json'), 'w') as f:
             f.write(new_state_json)
         repo.index.add(['vm_state.json'])
-        repo.index.commit(f"Updated VM state after executing {steps} steps from index {start_from}")
+        repo.index.commit(f"Updated VM state after executing {steps_executed} steps from index {start_from}")
 
-        # Return the new branch name along with the new state
-        return jsonify({'new_state': new_state, 'new_branch': new_branch_name})
+        return jsonify({
+            'new_state': new_state, 
+            'new_branch': new_branch_name, 
+            'steps_executed': steps_executed,
+            'plan_length': plan_length
+        })
     except Exception as e:
-        app.logger.error(f"Unexpected error in execute_vm: {str(e)}")
-        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+        app.logger.error(f"Error in execute_vm: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/vm_state_details/<commit_hash>')
 def vm_state_details(commit_hash):
@@ -295,13 +300,7 @@ def set_branch(branch_name):
         return jsonify({'error': str(e)}), 400
 
 def get_repo_path(repo_name=None):
-    repo_path = os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
-    if not hasattr(get_repo_path, 'logged_paths'):
-        get_repo_path.logged_paths = set()
-    if repo_path not in get_repo_path.logged_paths:
-        app.logger.info(f"Using repository path: {repo_path}")
-        get_repo_path.logged_paths.add(repo_path)
-    return repo_path
+    return os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
 
 if __name__ == "__main__":
     if not vm_available:

@@ -547,6 +547,52 @@
             });
         }
 
+        function executeFromStep(stepIndex, commitHash) {
+            const steps = prompt("Enter the number of steps to execute:", "1");
+            if (steps === null) return; // User cancelled the prompt
+
+            fetch('/execute_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    steps: parseInt(steps),
+                    start_from: stepIndex,
+                    repo: currentRepo
+                }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(errorData => {
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                showVMState(commitHash);
+                showVMStateDetails(commitHash);
+                loadBranches(); // Reload branches to show the new branch
+                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
+                if (data.steps_executed < parseInt(steps)) {
+                    message += `(Reached end of plan at step ${data.plan_length}). `;
+                }
+                message += `New branch created: ${data.new_branch}`;
+                alert(message);
+                // Switch to the new branch
+                switchBranch(data.new_branch);
+            })
+            .catch(error => {
+                console.error('Error executing VM:', error);
+                alert(`Error executing VM: ${error.message}`);
+            });
+        }
+
         function switchBranch(branchName) {
             fetch(`/set_branch/${branchName}?repo=${currentRepo}`)
             .then(response => response.json())
@@ -555,6 +601,8 @@
                     console.log('Switched to branch:', branchName);
                     // Update the UI to reflect the new branch
                     updateBranchSelector();
+                    // Refresh the VM data for the new branch
+                    fetchVMStates(branchName);
                 } else {
                     console.error('Failed to switch branch:', data.error);
                     alert('Failed to switch branch: ' + data.error);
@@ -585,40 +633,15 @@
             });
         }
 
-        function executeFromStep(stepIndex, commitHash) {
-            const steps = prompt("Enter the number of steps to execute:", "1");
-            if (steps === null) return; // User cancelled the prompt
-
-            fetch('/execute_vm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    steps: parseInt(steps),
-                    start_from: stepIndex,
-                    repo: currentRepo
-                }),
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(errorData => {
-                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                showVMState(commitHash);
-                showVMStateDetails(commitHash);
-                loadBranches(); // Reload branches to show the new branch
-                alert(`Executed ${steps} step(s) from step ${stepIndex}. New branch created: ${data.new_branch}`);
-            })
-            .catch(error => {
-                console.error('Error executing VM:', error);
-                alert(`Error executing VM: ${error.message}`);
-            });
+        function fetchVMStates(branch = currentBranch) {
+            fetch(`/vm_data?branch=${branch}&repo=${currentRepo}`)
+                .then(response => response.json())
+                .then(data => {
+                    vmStates = data;
+                    updateChart();
+                    updateStepList();
+                })
+                .catch(error => console.error('Error:', error));
         }
 
         // Update chart every 30 seconds
