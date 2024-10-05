@@ -14,99 +14,96 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
     <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --card-bg: #ffffff;
+            --border-color: #dee2e6;
+        }
+        .dark-mode {
+            --bg-color: #212529;
+            --text-color: #f8f9fa;
+            --card-bg: #343a40;
+            --border-color: #495057;
+        }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f8f9fa;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
         }
         .container {
             max-width: 1400px;
             margin: 0 auto;
         }
-        .chart-container {
-            background-color: white;
-            padding: 20px;
+        .chart-container, .step-list, .card {
+            background-color: var(--card-bg);
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+        .chart-container {
+            padding: 20px;
+            height: 400px;
         }
         .step-list {
             max-height: 600px;
             overflow-y: auto;
-            background-color: white;
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .step-item {
             cursor: pointer;
             padding: 15px;
             margin: 10px 0;
-            border: 1px solid #e9ecef;
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             transition: all 0.3s ease;
         }
         .step-item:hover {
-            background-color: #f8f9fa;
             transform: translateY(-2px);
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .step-details {
             display: none;
-            margin-left: 20px;
-            font-size: 0.9em;
-            color: #6c757d;
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
             margin-top: 10px;
+            padding: 10px;
+            background-color: rgba(0,0,0,0.05);
+            border-radius: 4px;
         }
         #loading {
-            display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 9999;
         }
-        .tooltip {
-            position: relative;
-            display: inline-block;
-            cursor: help;
-        }
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 200px;
-            background-color: #555;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
-        }
         .btn-group-sm > .btn, .btn-sm {
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
-            line-height: 1.5;
-            border-radius: 0.2rem;
+        }
+        .dark-mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="mb-4 text-center">VM Execution Visualization</h1>
-        <div id="loading" class="spinner-border text-primary" role="status">
+        <button id="darkModeToggle" class="btn btn-outline-secondary dark-mode-toggle">
+            <i class="bi bi-moon"></i> Toggle Dark Mode
+        </button>
+        <div id="loading" class="spinner-border text-primary" role="status" style="display: none;">
             <span class="visually-hidden">Loading...</span>
         </div>
         <div class="row mb-4">
@@ -132,7 +129,7 @@
                 </div>
             </div>
         </div>
-        <div id="notification" class="alert alert-info" style="display: none;"></div>
+        <div id="notification" class="alert" style="display: none;"></div>
         <div class="row">
             <div class="col-lg-8">
                 <div class="chart-container">
@@ -182,9 +179,28 @@
         let chart;
         let vmStates = [];
         let currentBranch = 'main';
-        let currentRepo = '';  // Store the current repository
+        let currentRepo = '';
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `alert alert-${type}`;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 5000);
+        }
 
         function fetchWithErrorHandling(url, options = {}) {
+            showLoading();
             return fetch(url, options)
                 .then(response => {
                     if (!response.ok) {
@@ -194,8 +210,40 @@
                 })
                 .catch(error => {
                     console.error('Fetch error:', error);
-                    alert(`Error: ${error.message}`);
+                    showNotification(`Error: ${error.message}`, 'danger');
                     throw error;
+                })
+                .finally(hideLoading);
+        }
+
+        function loadDirectories() {
+            fetchWithErrorHandling('/get_directories')
+                .then(data => {
+                    const select = document.getElementById('directorySelect');
+                    select.innerHTML = '';
+                    data.forEach(dir => {
+                        const option = document.createElement('option');
+                        option.value = dir;
+                        option.textContent = dir;
+                        select.appendChild(option);
+                    });
+                    select.style.display = 'block';
+                    document.getElementById('setRepoButton').style.display = 'block';
+                });
+        }
+
+        function setRepo() {
+            const selectedRepo = document.getElementById('directorySelect').value;
+            fetchWithErrorHandling(`/set_repo/${selectedRepo}`)
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.message, 'success');
+                        currentRepo = selectedRepo;
+                        loadBranches();
+                        clearDetails();
+                    } else {
+                        showNotification(data.message, 'danger');
+                    }
                 });
         }
 
@@ -209,7 +257,6 @@
                         option.value = branch.name;
                         option.textContent = `${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})`;
                         if (branch.is_active) {
-                            option.classList.add('active-branch');
                             option.selected = true;
                             currentBranch = branch.name;
                         }
@@ -217,10 +264,6 @@
                     });
                     document.getElementById('branchSelect').style.display = 'block';
                     return updateChart();
-                })
-                .catch(error => {
-                    console.error('Error loading branches:', error);
-                    document.getElementById('notification').innerHTML = `<p style="color: red;">Error loading branches: ${error.message}</p>`;
                 });
         }
 
@@ -230,36 +273,24 @@
                 .then(data => {
                     if (data.success) {
                         currentBranch = branchName;
-                        document.getElementById('notification').innerHTML = `<p style="color: green;">${data.message}</p>`;
+                        showNotification(data.message, 'success');
                         loadBranches().then(() => {
                             if (vmStates.length > 0) {
-                                const latestState = vmStates[0];  // Latest commit
-                                showCommitDetails(latestState);
+                                showCommitDetails(vmStates[0]);
                             } else {
                                 clearDetails();
                             }
                         });
                     } else {
-                        document.getElementById('notification').innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                        showNotification(data.error, 'danger');
                     }
-                })
-                .catch(error => {
-                    console.error('Error setting branch:', error);
-                    document.getElementById('notification').innerHTML = `<p style="color: red;">Error setting branch: ${error.message}</p>`;
                 });
         }
 
         function updateChart() {
             return fetchWithErrorHandling(`/vm_data?branch=${currentBranch}&repo=${encodeURIComponent(currentRepo)}`)
                 .then(data => {
-                    if (data.error) {
-                        console.error('Error fetching VM data:', data.error);
-                        showNotification(data.error, 'danger');
-                        return;
-                    }
-                    console.log('Received VM data:', data);
                     vmStates = data;
-                    console.log('Updated vmStates:', vmStates);
                     const times = data.map(state => state.time);
                     const programCounters = data.map(state => state.vm_state && state.vm_state.program_counter !== undefined ? state.vm_state.program_counter : null);
                     const errors = data.map(state => state.vm_state && state.vm_state.errors && state.vm_state.errors.length > 0 ? state.vm_state.program_counter : null);
@@ -294,6 +325,7 @@
                             },
                             options: {
                                 responsive: true,
+                                maintainAspectRatio: false,
                                 scales: {
                                     x: {
                                         type: 'time',
@@ -335,29 +367,7 @@
                         });
                     }
                     updateStepList(data);
-                })
-                .catch(error => {
-                    console.error('Error updating chart:', error);
-                    showNotification('Error updating chart: ' + error.message, 'danger');
                 });
-        }
-
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
-
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
-
-        function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.className = `alert alert-${type}`;
-            notification.style.display = 'block';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 5000);
         }
 
         function updateStepList(data) {
@@ -386,22 +396,186 @@
                             <i class="bi bi-play-fill"></i> Execute
                         </button>
                     </div>
+                    <div class="step-details mt-2" id="step-details-${correctIndex}">
+                        <pre><code class="json">${JSON.stringify(state.details, null, 2)}</code></pre>
+                    </div>
                 `;
 
-                stepItem.onclick = () => toggleStepDetails(correctIndex);
-
-                const stepDetails = document.createElement('div');
-                stepDetails.className = 'step-details mt-2';
-                stepDetails.id = `step-details-${correctIndex}`;
-                stepDetails.style.display = 'none';
-                stepDetails.innerHTML = `<pre><code class="json">${JSON.stringify(state.details, null, 2)}</code></pre>`;
-
-                stepItem.appendChild(stepDetails);
+                stepItem.querySelector('.d-flex').addEventListener('click', () => toggleStepDetails(correctIndex));
                 stepList.appendChild(stepItem);
             });
 
             hljs.highlightAll();
             initTooltips();
+        }
+
+        function toggleStepDetails(index) {
+            const detailsElement = document.getElementById(`step-details-${index}`);
+            if (detailsElement) {
+                $(detailsElement).slideToggle();
+            }
+        }
+
+        function showCommitDetails(state) {
+            if (!state || !state.commit_hash) {
+                clearDetails();
+                return;
+            }
+
+            fetchWithErrorHandling(`/commit_details/${state.commit_hash}?repo=${encodeURIComponent(currentRepo)}`)
+                .then(data => {
+                    document.getElementById('commitDetails').innerHTML = `
+                        <h2>Commit Details</h2>
+                        <p><strong>Hash:</strong> ${data.hash}</p>
+                        <p><strong>Author:</strong> ${data.author}</p>
+                        <p><strong>Date:</strong> ${moment(data.date).format('YYYY-MM-DD HH:mm:ss')}</p>
+                        <p><strong>Message:</strong> ${data.message}</p>
+                        <p><strong>Files changed:</strong></p>
+                        <ul>
+                            ${data.files_changed.map(file => `<li>${file}</li>`).join('')}
+                        </ul>
+                    `;
+                    showVMState(state.commit_hash);
+                    showCodeDiff(state.commit_hash);
+                    showVMStateDetails(state.commit_hash);
+                });
+        }
+
+        function showVMState(commitHash) {
+            fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+                .then(data => {
+                    document.getElementById('vmState').innerHTML = `
+                        <h2>VM State</h2>
+                        <pre><code class="json">${JSON.stringify(data, null, 2)}</code></pre>
+                    `;
+                    hljs.highlightAll();
+                });
+        }
+
+        function showCodeDiff(commitHash) {
+            fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+                .then(data => {
+                    document.getElementById('codeDiff').innerHTML = `
+                        <h2>Code Diff</h2>
+                        <pre><code class="diff">${data.diff}</code></pre>
+                    `;
+                    hljs.highlightAll();
+                });
+        }
+
+        function showVMStateDetails(commitHash) {
+            fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+                .then(data => {
+                    const variables = data.variables || {};
+                    const parameters = data.parameters || {};
+                    document.getElementById('vmStateDetails').innerHTML = `
+                        <h2>VM Variables</h2>
+                        <pre><code class="json">${JSON.stringify(variables, null, 2)}</code></pre>
+                        <h2>VM Parameters</h2>
+                        <pre><code class="json">${JSON.stringify(parameters, null, 2)}</code></pre>
+                        <div class="execute-controls mt-3">
+                            <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
+                            <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
+                        </div>
+                    `;
+                    hljs.highlightAll();
+                });
+        }
+
+        function executeVM(commitHash) {
+            const steps = document.getElementById('stepCount').value;
+            fetchWithErrorHandling('/execute_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    steps: parseInt(steps),
+                    repo: currentRepo
+                }),
+            })
+            .then(data => {
+                showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
+                switchBranch(data.new_branch)
+                    .then(() => {
+                        showVMState(commitHash);
+                        showVMStateDetails(commitHash);
+                        updateChart();
+                    });
+            });
+        }
+
+        function executeFromStep(stepIndex, commitHash) {
+            const steps = prompt("Enter the number of steps to execute:", "1");
+            if (steps === null) return;
+
+            fetchWithErrorHandling('/execute_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    steps: parseInt(steps),
+                    start_from: stepIndex,
+                    repo: currentRepo
+                }),
+            })
+            .then(data => {
+                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
+                if (data.steps_executed < parseInt(steps)) {
+                    message += `(Reached end of plan at step ${data.plan_length}). `;
+                }
+                message += `New branch created: ${data.new_branch}`;
+                showNotification(message, 'success');
+                
+                switchBranch(data.new_branch)
+                    .then(() => {
+                        showVMState(commitHash);
+                        showVMStateDetails(commitHash);
+                        updateChart();
+                    });
+            });
+        }
+
+        function switchBranch(branchName) {
+            return fetchWithErrorHandling(`/set_branch/${branchName}?repo=${currentRepo}`)
+                .then(data => {
+                    if (data.success) {
+                        currentBranch = branchName;
+                        updateBranchSelector();
+                        return true;
+                    } else {
+                        showNotification('Failed to switch branch: ' + data.error, 'danger');
+                        return false;
+                    }
+                });
+        }
+
+        function updateBranchSelector() {
+            fetchWithErrorHandling(`/get_branches?repo=${currentRepo}`)
+                .then(branches => {
+                    const branchSelector = document.getElementById('branchDropdown');
+                    branchSelector.innerHTML = '';
+                    branches.forEach(branch => {
+                        const option = document.createElement('option');
+                        option.value = branch.name;
+                        option.textContent = branch.name;
+                        option.selected = branch.is_active;
+                        branchSelector.appendChild(option);
+                    });
+                });
+        }
+
+        function clearDetails() {
+            ['commitDetails', 'vmState', 'codeDiff', 'vmStateDetails'].forEach(id => {
+                document.getElementById(id).innerHTML = `<h2>No ${id.replace('Details', '').replace('vm', 'VM')} Available</h2>`;
+            });
+        }
+
+        function showCommitDetailsAtIndex(index) {
+            showCommitDetails(vmStates[index]);
         }
 
         function initTooltips() {
@@ -419,392 +593,26 @@
             });
         });
 
-        function toggleStepDetails(index) {
-            const detailsElement = document.getElementById(`step-details-${index}`);
-            if (detailsElement) {
-                detailsElement.style.display = detailsElement.style.display === 'none' ? 'block' : 'none';
-            }
-        }
-
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.querySelector(`.tab[onclick="showTab('${tabName}')"]`).classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        }
-
-        function showCommitDetails(state) {
-            const commitDetailsElement = document.getElementById('commitDetails');
-            const vmStateElement = document.getElementById('vmState');
-            const codeDiffElement = document.getElementById('codeDiff');
-            const vmStateDetailsElement = document.getElementById('vmStateDetails');
-
-            if (!state.vm_state) {
-                vmStateElement.innerHTML = '<h2>No VM State Available for this commit</h2>';
-                vmStateDetailsElement.innerHTML = '<h2>No VM State Details Available for this commit</h2>';
+        document.getElementById('darkModeToggle').addEventListener('click', function() {
+            document.body.classList.toggle('dark-mode');
+            const icon = this.querySelector('i');
+            if (document.body.classList.contains('dark-mode')) {
+                icon.classList.remove('bi-moon');
+                icon.classList.add('bi-sun');
             } else {
-                showVMState(state.commit_hash);
-                showVMStateDetails(state.commit_hash);
+                icon.classList.remove('bi-sun');
+                icon.classList.add('bi-moon');
             }
-
-            if (!state || !state.commit_hash) {
-                commitDetailsElement.innerHTML = '<h2>No Commit Details Available</h2>';
-                return;
+            if (chart) {
+                chart.update();
             }
-            commitDetailsElement.innerHTML = '<h2>Loading commit details...</h2>';
-            
-            fetch(`/commit_details/${state.commit_hash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log('Received commit details:', data);  // Debugging line
-                    if (data.error) {
-                        commitDetailsElement.innerHTML = `<h2>Error: ${data.error}</h2>`;
-                        return;
-                    }
-                    commitDetailsElement.innerHTML = `
-                        <h2>Commit Details</h2>
-                        <p><strong>Hash:</strong> ${data.hash}</p>
-                        <p><strong>Author:</strong> ${data.author}</p>
-                        <p><strong>Date:</strong> ${moment(data.date).format('YYYY-MM-DD HH:mm:ss')}</p>
-                        <p><strong>Message:</strong> ${data.message}</p>
-                        <p><strong>Files changed:</strong></p>
-                        <ul>
-                            ${data.files_changed.map(file => `<li>${file}</li>`).join('')}
-                        </ul>
-                    `;
-                    showCodeDiff(state.commit_hash);
-                })
-                .catch(error => {
-                    console.error('Error fetching commit details:', error);
-                    commitDetailsElement.innerHTML = '<h2>Error fetching commit details. Please try again.</h2>';
-                });
-        }
-
-        function showVMState(commitHash) {
-            const vmStateElement = document.getElementById('vmState');
-            if (!commitHash) {
-                vmStateElement.innerHTML = '<h2>No VM State Available</h2>';
-                return;
-            }
-            vmStateElement.innerHTML = '<h2>Loading VM State...</h2>';
-            
-            fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    vmStateElement.innerHTML = `
-                        <h2>VM State</h2>
-                        <pre><code class="json">${JSON.stringify(data, null, 2)}</code></pre>
-                    `;
-                    hljs.highlightAll();
-                })
-                .catch(error => {
-                    console.error('Error fetching VM state:', error);
-                    vmStateElement.innerHTML = '<h2>Error fetching VM state.</h2>';
-                });
-        }
-
-        function showCodeDiff(commitHash) {
-            const codeDiffElement = document.getElementById('codeDiff');
-            if (!commitHash) {
-                codeDiffElement.innerHTML = '<h2>No Code Diff Available</h2>';
-                return;
-            }
-            codeDiffElement.innerHTML = '<h2>Loading Code Diff...</h2>';
-            
-            fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    codeDiffElement.innerHTML = `
-                        <h2>Code Diff</h2>
-                        <pre><code class="diff">${data.diff}</code></pre>
-                    `;
-                    hljs.highlightAll();
-                })
-                .catch(error => {
-                    console.error('Error fetching code diff:', error);
-                    codeDiffElement.innerHTML = '<h2>Error fetching code diff.</h2>';
-                });
-        }
-
-        /**
-         * Escapes HTML special characters to prevent XSS attacks and rendering issues.
-         * @param {string} text - The text to escape.
-         * @returns {string} - The escaped text.
-         */
-        function escapeHtml(text) {
-            const map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-        }
-
-        function showVMStateDetails(commitHash) {
-            const vmStateDetailsElement = document.getElementById('vmStateDetails');
-            if (!commitHash) {
-                vmStateDetailsElement.innerHTML = '<h2>No VM State Details Available</h2>';
-                return;
-            }
-            vmStateDetailsElement.innerHTML = '<h2>Loading VM Variables and Parameters...</h2>';
-            
-            fetch(`/vm_state_details/${encodeURIComponent(commitHash)}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(data => { throw new Error(data.error || 'Error fetching data'); });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.error) {
-                        vmStateDetailsElement.innerHTML = `<h2>Error: ${escapeHtml(data.error)}</h2>`;
-                    } else {
-                        const variables = data.variables || {};
-                        const parameters = data.parameters || {};
-                        vmStateDetailsElement.innerHTML = `
-                            <h2>VM Variables</h2>
-                            <pre>${escapeHtml(JSON.stringify(variables, null, 2))}</pre>
-                            <h2>VM Parameters</h2>
-                            <pre>${escapeHtml(JSON.stringify(parameters, null, 2))}</pre>
-                            <div class="execute-controls">
-                                <input type="number" id="stepCount" value="1" min="1">
-                                <button onclick="executeVM('${escapeHtml(commitHash)}')">Execute Steps</button>
-                            </div>
-                        `;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching VM variables and parameters:', error);
-                    vmStateDetailsElement.innerHTML = `<h2>Error fetching VM variables and parameters: ${escapeHtml(error.message)}</h2>`;
-                });
-        }
-
-        function executeVM() {
-            const commitHash = document.getElementById('commitHash').value;
-            const steps = document.getElementById('steps').value;
-            const startFrom = document.getElementById('startFrom').value;
-            const repo = currentRepo;  // Assuming you have a variable to store the current repo
-
-            fetch('/execute_vm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    steps: parseInt(steps),
-                    start_from: parseInt(startFrom),
-                    repo: repo
-                }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    console.error('Error:', data.error);
-                    alert('Error: ' + data.error);
-                } else {
-                    console.log('Execution completed:', data);
-                    // Switch to the new branch
-                    switchBranch(data.new_branch);
-                    // Refresh the visualization
-                    fetchVMStates();
-                }
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                alert('Error: ' + error);
-            });
-        }
-
-        function executeFromStep(stepIndex, commitHash) {
-            const steps = prompt("Enter the number of steps to execute:", "1");
-            if (steps === null) return; // User cancelled the prompt
-
-            fetch('/execute_vm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    steps: parseInt(steps),
-                    start_from: stepIndex,
-                    repo: currentRepo
-                }),
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(errorData => {
-                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
-                if (data.steps_executed < parseInt(steps)) {
-                    message += `(Reached end of plan at step ${data.plan_length}). `;
-                }
-                message += `New branch created: ${data.new_branch}`;
-                alert(message);
-                
-                // Switch to the new branch and refresh the UI
-                switchBranch(data.new_branch)
-                    .then(() => {
-                        // Refresh VM state and details
-                        showVMState(commitHash);
-                        showVMStateDetails(commitHash);
-                        // Refresh the chart and step list
-                        fetchVMStates(data.new_branch);
-                    });
-            })
-            .catch(error => {
-                console.error('Error executing VM:', error);
-                alert(`Error executing VM: ${error.message}`);
-            });
-        }
-
-        // Update switchBranch to return a promise
-        function switchBranch(branchName) {
-            return fetch(`/set_branch/${branchName}?repo=${currentRepo}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        console.log('Switched to branch:', branchName);
-                        currentBranch = branchName;
-                        // Update the UI to reflect the new branch
-                        updateBranchSelector();
-                        return true;
-                    } else {
-                        console.error('Failed to switch branch:', data.error);
-                        alert('Failed to switch branch: ' + data.error);
-                        return false;
-                    }
-                })
-                .catch((error) => {
-                    console.error('Error:', error);
-                    alert('Error: ' + error);
-                    return false;
-                });
-        }
-
-        function updateBranchSelector() {
-            fetch(`/get_branches?repo=${currentRepo}`)
-            .then(response => response.json())
-            .then(branches => {
-                const branchSelector = document.getElementById('branchSelector');
-                branchSelector.innerHTML = '';
-                branches.forEach(branch => {
-                    const option = document.createElement('option');
-                    option.value = branch.name;
-                    option.textContent = branch.name;
-                    option.selected = branch.is_active;
-                    branchSelector.appendChild(option);
-                });
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-            });
-        }
-
-        function fetchVMStates(branch = currentBranch) {
-            fetch(`/vm_data?branch=${branch}&repo=${currentRepo}`)
-                .then(response => response.json())
-                .then(data => {
-                    vmStates = data;
-                    updateChart();
-                    updateStepList(data);
-                })
-                .catch(error => console.error('Error:', error));
-        }
+        });
 
         // Update chart every 30 seconds
         setInterval(updateChart, 30000);
-        // Don't call updateChart() here anymore, as it will be called after setting the branch
 
-        function loadDirectories() {
-            $.get('/get_directories', function(data) {
-                const select = $('#directorySelect');
-                select.empty();
-                data.forEach(dir => {
-                    select.append($('<option></option>').val(dir).text(dir));
-                });
-                select.show();
-                $('#setRepoButton').show();
-            });
-        }
-
-        function setRepo() {
-            $('#setRepoButton').prop('disabled', true).text('Setting Repository...');
-            $('#notification').html('<p>Setting repository, please wait...</p>');
-            
-            const selectedRepo = $('#directorySelect').val();
-            $.get(`/set_repo/${selectedRepo}`, function(data) {
-                if (data.success) {
-                    $('#notification').html(`<p style="color: green;">${data.message}</p>`);
-                    currentRepo = selectedRepo;  // Update the current repository
-                    loadBranches();
-                    clearDetails();
-                } else {
-                    $('#notification').html(`<p style="color: red;">Error: ${data.message}</p>`);
-                }
-                $('#setRepoButton').prop('disabled', false).text('Set Repository');
-            }).fail(function() {
-                $('#notification').html('<p style="color: red;">Failed to set repository. Please try again.</p>');
-                $('#setRepoButton').prop('disabled', false).text('Set Repository');
-            });
-        }
-
-        function clearDetails() {
-            document.getElementById('commitDetails').innerHTML = '<h2>No Commit Details Available</h2>';
-            document.getElementById('vmState').innerHTML = '<h2>No VM State Available</h2>';
-            document.getElementById('codeDiff').innerHTML = '<h2>No Code Diff Available</h2>';
-            document.getElementById('vmStateDetails').innerHTML = '<h2>No VM State Details Available</h2>';
-        }
-
-        function showCommitDetailsAtIndex(index) {
-            const state = vmStates[index];
-            showCommitDetails(state);
-        }
-
-        // Add this function to handle resizing
-        function makeResizable(element) {
-            const resizer = element.querySelector('.resizer');
-            let originalWidth, originalHeight, originalX, originalY;
-
-            function onMouseMove(e) {
-                const width = originalWidth + (e.pageX - originalX);
-                const height = originalHeight + (e.pageY - originalY);
-                element.style.width = width + 'px';
-                element.style.height = height + 'px';
-            }
-
-            function onMouseUp() {
-                window.removeEventListener('mousemove', onMouseMove);
-                window.removeEventListener('mouseup', onMouseUp);
-            }
-
-            resizer.addEventListener('mousedown', function(e) {
-                e.preventDefault();
-                originalWidth = parseFloat(getComputedStyle(element, null).getPropertyValue('width').replace('px', ''));
-                originalHeight = parseFloat(getComputedStyle(element, null).getPropertyValue('height').replace('px', ''));
-                originalX = e.pageX;
-                originalY = e.pageY;
-                window.addEventListener('mousemove', onMouseMove);
-                window.addEventListener('mouseup', onMouseUp);
-            });
-        }
-
-        // Make all resizable elements actually resizable
-        document.querySelectorAll('.resizable').forEach(makeResizable);
+        // Initial load
+        loadDirectories();
 
         // Update the chart when the window is resized
         window.addEventListener('resize', function() {
