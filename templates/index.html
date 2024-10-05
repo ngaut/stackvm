@@ -316,11 +316,10 @@
                                 currentBranch = branch;
                                 document.getElementById('branchDropdown').value = branch;
                                 updateStepList(branchesData[datasetIndex]);
-                                highlightStep(commitHash);
                                 showCommitDetailsAndHighlight(commitHash);
                                 showNotification(`Switched to branch: ${branch}`, 'info');
                             }
-                        }
+                        },
                     }
                 });
             }
@@ -374,57 +373,71 @@
                     fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
                 ]);
 
-                // Update chart to reflect the selected commit
-                if (chart) {
-                    chart.data.datasets.forEach(dataset => {
-                        const pointIndex = dataset.data.findIndex(point => point.commit_hash === commitHash);
-                        if (pointIndex !== -1) {
-                            currentBranch = dataset.label.split(' - ')[0];
-                            document.getElementById('branchDropdown').value = currentBranch;
-                            chart.setActiveElements([{ datasetIndex: chart.data.datasets.indexOf(dataset), index: pointIndex }]);
-                            chart.update();
-                        }
-                    });
-                }
-
-                // Update commit details, VM state, code diff, and VM state details
-                document.getElementById('commitDetails').innerHTML = `
-                    <h2>Commit Details</h2>
-                    <p><strong>Branch:</strong> ${currentBranch}</p>
-                    <p><strong>Hash:</strong> ${commitDetails.hash}</p>
-                    <p><strong>Author:</strong> ${commitDetails.author}</p>
-                    <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
-                    <p><strong>Message:</strong> ${commitDetails.message}</p>
-                    <p><strong>Files changed:</strong></p>
-                    <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
-                `;
-
-                document.getElementById('vmState').innerHTML = `
-                    <h2>VM State</h2>
-                    <pre><code class="json">${JSON.stringify(vmState, null, 2)}</code></pre>
-                `;
-
-                document.getElementById('codeDiff').innerHTML = `
-                    <h2>Code Diff</h2>
-                    <pre><code class="diff">${codeDiff.diff}</code></pre>
-                `;
-
-                document.getElementById('vmStateDetails').innerHTML = `
-                    <h2>VM Variables</h2>
-                    <pre><code class="json">${JSON.stringify(vmStateDetails.variables || {}, null, 2)}</code></pre>
-                    <h2>VM Parameters</h2>
-                    <pre><code class="json">${JSON.stringify(vmStateDetails.parameters || {}, null, 2)}</code></pre>
-                    <div class="execute-controls mt-3">
-                        <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
-                        <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
-                    </div>
-                `;
+                updateChartForCommit(commitHash);
+                updateCommitDetails(commitDetails);
+                updateVMState(vmState);
+                updateCodeDiff(codeDiff);
+                updateVMStateDetails(vmStateDetails, commitHash);
 
                 hljs.highlightAll();
             } catch (error) {
                 console.error('Error fetching details:', error);
-                showNotification('Error fetching commit details', 'danger');
+                showNotification('Error fetching commit details: ' + error.message, 'danger');
             }
+        }
+
+        function updateChartForCommit(commitHash) {
+            if (chart) {
+                chart.data.datasets.forEach(dataset => {
+                    const pointIndex = dataset.data.findIndex(point => point.commit_hash === commitHash);
+                    if (pointIndex !== -1) {
+                        currentBranch = dataset.label.split(' - ')[0];
+                        document.getElementById('branchDropdown').value = currentBranch;
+                        chart.setActiveElements([{ datasetIndex: chart.data.datasets.indexOf(dataset), index: pointIndex }]);
+                        chart.update('none');
+                    }
+                });
+            }
+        }
+
+        function updateCommitDetails(commitDetails) {
+            document.getElementById('commitDetails').innerHTML = `
+                <h2>Commit Details</h2>
+                <p><strong>Branch:</strong> ${currentBranch}</p>
+                <p><strong>Hash:</strong> ${commitDetails.hash}</p>
+                <p><strong>Author:</strong> ${commitDetails.author}</p>
+                <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
+                <p><strong>Message:</strong> ${commitDetails.message}</p>
+                <p><strong>Files changed:</strong></p>
+                <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
+            `;
+        }
+
+        function updateVMState(vmState) {
+            document.getElementById('vmState').innerHTML = `
+                <h2>VM State</h2>
+                <pre><code class="json">${JSON.stringify(vmState, null, 2)}</code></pre>
+            `;
+        }
+
+        function updateCodeDiff(codeDiff) {
+            document.getElementById('codeDiff').innerHTML = `
+                <h2>Code Diff</h2>
+                <pre><code class="diff">${codeDiff.diff}</code></pre>
+            `;
+        }
+
+        function updateVMStateDetails(vmStateDetails, commitHash) {
+            document.getElementById('vmStateDetails').innerHTML = `
+                <h2>VM Variables</h2>
+                <pre><code class="json">${JSON.stringify(vmStateDetails.variables || {}, null, 2)}</code></pre>
+                <h2>VM Parameters</h2>
+                <pre><code class="json">${JSON.stringify(vmStateDetails.parameters || {}, null, 2)}</code></pre>
+                <div class="execute-controls mt-3">
+                    <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
+                    <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
+                </div>
+            `;
         }
 
         function highlightStep(commitHash) {
@@ -444,8 +457,23 @@
                     if (pointIndex !== -1) {
                         foundPoint = true;
                         chart.setActiveElements([{ datasetIndex, index: pointIndex }]);
+                        
+                        // Center the chart on the selected point
+                        const xScale = chart.scales.x;
+                        const yScale = chart.scales.y;
+                        const dataPoint = dataset.data[pointIndex];
+                        
+                        const xMin = moment(dataPoint.x).subtract(15, 'minutes');
+                        const xMax = moment(dataPoint.x).add(15, 'minutes');
+                        const yMin = Math.max(0, dataPoint.y - 5);
+                        const yMax = dataPoint.y + 5;
+                        
+                        chart.options.scales.x.min = xMin;
+                        chart.options.scales.x.max = xMax;
+                        chart.options.scales.y.min = yMin;
+                        chart.options.scales.y.max = yMax;
+                        
                         chart.update();
-                        chart.scales.x.scrollToIndex(pointIndex);
                     }
                 });
 
