@@ -71,6 +71,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 9999;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 10px;
         }
         .btn-group-sm > .btn, .btn-sm {
             padding: 0.25rem 0.5rem;
@@ -488,59 +491,92 @@
 
         async function executeVM(commitHash) {
             const steps = document.getElementById('stepCount').value;
-            const data = await fetchWithErrorHandling('/execute_vm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), repo: currentRepo }),
-            });
-            showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
-            await switchBranch(data.new_branch);
-            showVMState(commitHash);
-            showVMStateDetails(commitHash);
-            updateChart();
+            showLoading(true);
+            try {
+                const data = await fetchWithErrorHandling('/execute_vm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), repo: currentRepo }),
+                });
+                showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
+                await switchBranch(data.new_branch);
+                // Use the last_commit_hash from the response, or fall back to the original commitHash
+                await updateUIAfterExecution(data.new_branch, data.last_commit_hash || commitHash);
+            } catch (error) {
+                showNotification(`Error executing VM: ${error.message}`, 'danger');
+            } finally {
+                showLoading(false);
+            }
         }
 
         async function executeFromStep(stepIndex, commitHash) {
             const steps = prompt("Enter the number of steps to execute:", "1");
             if (steps === null) return;
 
-            const data = await fetchWithErrorHandling('/execute_vm', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), start_from: stepIndex, repo: currentRepo }),
-            });
+            showLoading(true);
+            try {
+                const data = await fetchWithErrorHandling('/execute_vm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), start_from: stepIndex, repo: currentRepo }),
+                });
 
-            let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
-            if (data.steps_executed < parseInt(steps)) {
-                message += `(Reached end of plan at step ${data.plan_length}). `;
+                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
+                if (data.steps_executed < parseInt(steps)) {
+                    message += `(Reached end of plan at step ${data.plan_length}). `;
+                }
+                message += `New branch created: ${data.new_branch}`;
+                showNotification(message, 'success');
+                
+                await switchBranch(data.new_branch);
+                // Use the last_commit_hash from the response, or fall back to the original commitHash
+                await updateUIAfterExecution(data.new_branch, data.last_commit_hash || commitHash);
+            } catch (error) {
+                showNotification(`Error executing VM: ${error.message}`, 'danger');
+            } finally {
+                showLoading(false);
             }
-            message += `New branch created: ${data.new_branch}`;
-            showNotification(message, 'success');
-            
-            await switchBranch(data.new_branch);
-            showVMState(commitHash);
-            showVMStateDetails(commitHash);
-            updateChart();
         }
 
+        async function updateUIAfterExecution(newBranch, lastCommitHash) {
+            try {
+                // Update chart
+                await updateChart([newBranch]);
+                
+                // Update step list
+                const branchData = await fetchWithErrorHandling(`/vm_data?branch=${newBranch}&repo=${encodeURIComponent(currentRepo)}`);
+                updateStepList(branchData);
+                
+                // Show details for the last commit
+                if (lastCommitHash && lastCommitHash !== 'undefined') {
+                    await showCommitDetailsAndHighlight(lastCommitHash);
+                } else if (branchData.length > 0) {
+                    // If no valid lastCommitHash, use the latest commit from branchData
+                    await showCommitDetailsAndHighlight(branchData[branchData.length - 1].commit_hash);
+                } else {
+                    clearDetails();
+                }
+                
+                // Update branch selector
+                await updateBranchSelector();
+                document.getElementById('branchDropdown').value = newBranch;
+            } catch (error) {
+                console.error('Error updating UI after execution:', error);
+                showNotification('Error updating UI after execution', 'danger');
+            }
+        }
+
+        // Modify the switchBranch function to update the UI
         async function switchBranch(branchName) {
             const data = await fetchWithErrorHandling(`/set_branch/${branchName}?repo=${currentRepo}`);
             if (data.success) {
                 currentBranch = branchName;
-                updateBranchSelector();
+                await updateUIAfterExecution(branchName, data.last_commit_hash);
                 return true;
             } else {
                 showNotification('Failed to switch branch: ' + data.error, 'danger');
                 return false;
             }
-        }
-
-        async function updateBranchSelector() {
-            const branches = await fetchWithErrorHandling(`/get_branches?repo=${currentRepo}`);
-            const branchSelector = document.getElementById('branchDropdown');
-            branchSelector.innerHTML = branches.map(branch => `
-                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>${branch.name}</option>
-            `).join('');
         }
 
         function clearDetails() {
