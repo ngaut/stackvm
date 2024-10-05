@@ -76,11 +76,6 @@
             padding: 0.25rem 0.5rem;
             font-size: 0.875rem;
         }
-        .dark-mode-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-        }
         .nav-tabs .nav-link {
             color: #6c757d;
         }
@@ -97,9 +92,6 @@
 <body>
     <div class="container">
         <h1 class="mb-4">VM Execution Visualization</h1>
-        <button id="darkModeToggle" class="btn btn-outline-secondary dark-mode-toggle">
-            <i class="bi bi-moon"></i> Toggle Dark Mode
-        </button>
         <button id="refreshButton" class="btn btn-outline-primary me-2">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
@@ -261,6 +253,7 @@
                 fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`)
             ));
 
+            const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
             const datasets = branchesData.map((data, index) => ({
                 label: `${branches[index]} - Program Counter`,
                 data: data.map(state => ({
@@ -268,8 +261,8 @@
                     y: state.vm_state?.program_counter,
                     commit_hash: state.commit_hash
                 })),
-                borderColor: getColorForBranch(branches[index], 1),
-                backgroundColor: getColorForBranch(branches[index], 0.2),
+                borderColor: colors[index % colors.length],
+                backgroundColor: `${colors[index % colors.length]}33`, // 33 is 20% opacity in hex
                 fill: false,
                 tension: 0.4,
                 borderWidth: branches[index] === currentBranch ? 3 : 1,
@@ -292,11 +285,23 @@
                             x: {
                                 type: 'time',
                                 time: { unit: 'minute', displayFormats: { minute: 'MMM D, HH:mm' } },
-                                title: { display: true, text: 'Time' }
+                                title: { display: true, text: 'Time' },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)',
+                                },
+                                ticks: {
+                                    color: '#666',
+                                },
                             },
                             y: {
                                 beginAtZero: true,
-                                title: { display: true, text: 'Program Counter' }
+                                title: { display: true, text: 'Program Counter' },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)',
+                                },
+                                ticks: {
+                                    color: '#666',
+                                },
                             }
                         },
                         plugins: {
@@ -327,14 +332,6 @@
                 highlightChartPoint(currentHighlightedCommit, false);
                 highlightStep(currentHighlightedCommit);
             }
-        }
-
-        function getColorForBranch(branch, alpha) {
-            let hash = 0;
-            for (let i = 0; i < branch.length; i++) {
-                hash = branch.charCodeAt(i) + ((hash << 5) - hash);
-            }
-            return `hsla(${hash % 360}, 70%, 60%, ${alpha})`;
         }
 
         function updateStepList(data) {
@@ -533,14 +530,6 @@
             document.querySelectorAll('.step-item').forEach(item => {
                 item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
             });
-        });
-
-        document.getElementById('darkModeToggle').addEventListener('click', function() {
-            document.body.classList.toggle('dark-mode');
-            const icon = this.querySelector('i');
-            icon.classList.toggle('bi-moon');
-            icon.classList.toggle('bi-sun');
-            if (chart) chart.update();
         });
 
         // Add this new function to handle manual refresh
