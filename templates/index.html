@@ -66,6 +66,7 @@
             border-radius: 4px;
         }
         #loading {
+            display: none;
             position: fixed;
             top: 50%;
             left: 50%;
@@ -74,6 +75,7 @@
             background-color: rgba(255, 255, 255, 0.8);
             padding: 20px;
             border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
         .btn-group-sm > .btn, .btn-sm {
             padding: 0.25rem 0.5rem;
@@ -98,8 +100,11 @@
         <button id="refreshButton" class="btn btn-outline-primary me-2">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
-        <div id="loading" class="spinner-border text-primary" role="status" style="display: none;">
-            <span class="visually-hidden">Loading...</span>
+        <div id="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-2">Please wait...</div>
         </div>
         <div class="row mb-4">
             <div class="col-md-6">
@@ -117,8 +122,11 @@
                     <div class="card-body">
                         <h5 class="card-title">Branch Selection</h5>
                         <div id="branchSelect" style="display: none;">
-                            <select id="branchDropdown" class="form-select mb-2"></select>
-                            <button onclick="setBranch()" class="btn btn-info">Set Branch</button>
+                            <div class="input-group mb-2">
+                                <select id="branchDropdown" class="form-select"></select>
+                                <button onclick="setBranch()" class="btn btn-info">Set Branch</button>
+                                <button onclick="deleteBranch()" class="btn btn-danger">Delete Branch</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -187,10 +195,13 @@
         }
 
         async function fetchWithErrorHandling(url, options = {}) {
-            showLoading();
+            showLoading(true);
             try {
                 const response = await fetch(url, options);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
                 return await response.json();
             } catch (error) {
                 console.error('Fetch error:', error);
@@ -244,7 +255,7 @@
                 await loadBranches();
                 const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`);
                 updateStepList(branchData);
-                if (branchData.length > 0) showCommitDetails(branchData[0], branchName);
+                if (branchData.length > 0) showCommitDetailsAndHighlight(branchData[0].commit_hash);
                 else clearDetails();
             } else {
                 showNotification(data.error, 'danger');
@@ -386,6 +397,7 @@
             } catch (error) {
                 console.error('Error fetching details:', error);
                 showNotification('Error fetching commit details: ' + error.message, 'danger');
+                clearDetails();
             }
         }
 
@@ -489,20 +501,24 @@
             }
         }
 
-        async function executeVM(commitHash) {
-            const steps = document.getElementById('stepCount').value;
-            showLoading(true);
+        async function executeVM() {
+            // ... existing code ...
+
             try {
-                const data = await fetchWithErrorHandling('/execute_vm', {
+                const response = await fetch('/execute_vm', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), repo: currentRepo }),
+                    body: JSON.stringify(data)
                 });
-                showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
-                await switchBranch(data.new_branch);
-                // Use the last_commit_hash from the response, or fall back to the original commitHash
-                await updateUIAfterExecution(data.new_branch, data.last_commit_hash || commitHash);
+                const result = await response.json();
+                if (response.ok) {
+                    showNotification(`Execution completed. ${result.steps_executed} steps executed.`, 'success');
+                    await updateUIAfterExecution(result.new_branch, result.new_state.commit_hash);
+                } else {
+                    showNotification(`Error: ${result.error}`, 'danger');
+                }
             } catch (error) {
+                console.error('Error:', error);
                 showNotification(`Error executing VM: ${error.message}`, 'danger');
             } finally {
                 showLoading(false);
@@ -529,7 +545,6 @@
                 showNotification(message, 'success');
                 
                 await switchBranch(data.new_branch);
-                // Use the last_commit_hash from the response, or fall back to the original commitHash
                 await updateUIAfterExecution(data.new_branch, data.last_commit_hash || commitHash);
             } catch (error) {
                 showNotification(`Error executing VM: ${error.message}`, 'danger');
@@ -540,6 +555,7 @@
 
         async function updateUIAfterExecution(newBranch, lastCommitHash) {
             try {
+                showLoading(true);
                 // Update chart
                 await updateChart([newBranch]);
                 
@@ -555,6 +571,7 @@
                     await showCommitDetailsAndHighlight(branchData[branchData.length - 1].commit_hash);
                 } else {
                     clearDetails();
+                    showNotification('No commit data available for this branch', 'warning');
                 }
                 
                 // Update branch selector
@@ -562,7 +579,9 @@
                 document.getElementById('branchDropdown').value = newBranch;
             } catch (error) {
                 console.error('Error updating UI after execution:', error);
-                showNotification('Error updating UI after execution', 'danger');
+                showNotification(`Error updating UI after execution: ${error.message}`, 'danger');
+            } finally {
+                showLoading(false);
             }
         }
 
@@ -607,6 +626,44 @@
 
         // Add event listener for the refresh button
         document.getElementById('refreshButton').addEventListener('click', manualRefresh);
+
+        // Add this function to your JavaScript code
+        async function updateBranchSelector() {
+            const data = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+            const select = document.getElementById('branchDropdown');
+            select.innerHTML = data.map(branch => `
+                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
+                    ${branch.name} ${branch.is_active ? '(active)' : ''} (${new Date(branch.last_commit_date).toLocaleString()})
+                </option>
+            `).join('');
+        }
+
+        async function deleteBranch() {
+            const branchName = document.getElementById('branchDropdown').value;
+            if (!confirm(`Are you sure you want to delete the branch "${branchName}"?`)) {
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const response = await fetch(`/delete_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showNotification(data.message, 'success');
+                    await updateBranchSelector();
+                    await updateChart([currentBranch]);
+                } else {
+                    showNotification(`Error: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                showNotification(`Error deleting branch: ${error.message}`, 'danger');
+            } finally {
+                showLoading(false);
+            }
+        }
 
         loadDirectories();
         window.addEventListener('resize', () => { if (chart) chart.resize(); });

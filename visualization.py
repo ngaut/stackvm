@@ -317,6 +317,27 @@ def set_branch(branch_name):
     except GitCommandError as e:
         return jsonify({'error': str(e)}), 400
 
+@app.route('/delete_branch/<branch_name>', methods=['POST'])
+def delete_branch(branch_name):
+    repo_name = request.args.get('repo')
+    repo_path = get_repo_path(repo_name)
+    try:
+        repo = Repo(repo_path)
+        if branch_name == repo.active_branch.name:
+            # If trying to delete the active branch, switch to 'main' or another available branch first
+            available_branches = [b.name for b in repo.branches if b.name != branch_name]
+            if not available_branches:
+                return jsonify({'error': 'Cannot delete the only branch in the repository'}), 400
+            
+            switch_to = 'main' if 'main' in available_branches else available_branches[0]
+            repo.git.checkout(switch_to)
+            app.logger.info(f"Switched to branch {switch_to} before deleting {branch_name}")
+        
+        repo.git.branch('-D', branch_name)
+        return jsonify({'success': True, 'message': f'Branch {branch_name} deleted successfully', 'new_active_branch': repo.active_branch.name})
+    except GitCommandError as e:
+        return jsonify({'error': str(e)}), 400
+
 def get_repo_path(repo_name=None):
     return os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
 

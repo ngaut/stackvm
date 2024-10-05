@@ -25,6 +25,11 @@ class GitManager:
             self.logger.info(f"Created README.md at {readme_path}")
             
             repo.index.add(['README.md'])
+            # add a empty vm_state.json
+            vm_state_path = os.path.join(self.repo_path, 'vm_state.json')
+            with open(vm_state_path, 'w') as f:
+                f.write('{}')
+            repo.index.add(['vm_state.json'])
             repo.index.commit("Initial commit")
         else:
             repo = Repo(self.repo_path)
