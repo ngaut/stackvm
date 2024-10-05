@@ -100,6 +100,9 @@
         <button id="darkModeToggle" class="btn btn-outline-secondary dark-mode-toggle">
             <i class="bi bi-moon"></i> Toggle Dark Mode
         </button>
+        <button id="refreshButton" class="btn btn-outline-primary me-2">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
         <div id="loading" class="spinner-border text-primary" role="status" style="display: none;">
             <span class="visually-hidden">Loading...</span>
         </div>
@@ -174,18 +177,10 @@
     </div>
 
     <script>
-        let chart;
-        let vmStates = [];
-        let currentBranch = 'main';
-        let currentRepo = '';
-        let currentHighlightedCommit = null;
+        let chart, currentBranch = 'main', currentRepo = '', currentHighlightedCommit = null;
 
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-        }
-
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
+        function showLoading(show = true) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
 
         function showNotification(message, type = 'info') {
@@ -193,275 +188,209 @@
             notification.textContent = message;
             notification.className = `alert alert-${type}`;
             notification.style.display = 'block';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 5000);
+            setTimeout(() => notification.style.display = 'none', 5000);
         }
 
-        function fetchWithErrorHandling(url, options = {}) {
+        async function fetchWithErrorHandling(url, options = {}) {
             showLoading();
-            return fetch(url, options)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .catch(error => {
-                    console.error('Fetch error:', error);
-                    showNotification(`Error: ${error.message}`, 'danger');
-                    throw error;
-                })
-                .finally(hideLoading);
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error('Fetch error:', error);
+                showNotification(`Error: ${error.message}`, 'danger');
+                throw error;
+            } finally {
+                showLoading(false);
+            }
         }
 
-        function loadDirectories() {
-            fetchWithErrorHandling('/get_directories')
-                .then(data => {
-                    const select = document.getElementById('directorySelect');
-                    select.innerHTML = '';
-                    data.forEach(dir => {
-                        const option = document.createElement('option');
-                        option.value = dir;
-                        option.textContent = dir;
-                        select.appendChild(option);
-                    });
-                    select.style.display = 'block';
-                    document.getElementById('setRepoButton').style.display = 'block';
-                });
+        async function loadDirectories() {
+            const data = await fetchWithErrorHandling('/get_directories');
+            const select = document.getElementById('directorySelect');
+            select.innerHTML = data.map(dir => `<option value="${dir}">${dir}</option>`).join('');
+            select.style.display = 'block';
+            document.getElementById('setRepoButton').style.display = 'block';
         }
 
-        function setRepo() {
+        async function setRepo() {
             const selectedRepo = document.getElementById('directorySelect').value;
-            fetchWithErrorHandling(`/set_repo/${selectedRepo}`)
-                .then(data => {
-                    if (data.success) {
-                        showNotification(data.message, 'success');
-                        currentRepo = selectedRepo;
-                        loadBranches();
-                        clearDetails();
-                    } else {
-                        showNotification(data.message, 'danger');
-                    }
-                });
+            const data = await fetchWithErrorHandling(`/set_repo/${selectedRepo}`);
+            if (data.success) {
+                showNotification(data.message, 'success');
+                currentRepo = selectedRepo;
+                await loadBranches();
+                clearDetails();
+            } else {
+                showNotification(data.message, 'danger');
+            }
         }
 
-        function loadBranches() {
-            return fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    const select = document.getElementById('branchDropdown');
-                    select.innerHTML = '';
-                    data.forEach(branch => {
-                        const option = document.createElement('option');
-                        option.value = branch.name;
-                        option.textContent = `${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})`;
-                        if (branch.is_active) {
-                            option.selected = true;
-                            currentBranch = branch.name;
-                        }
-                        select.appendChild(option);
-                    });
-                    document.getElementById('branchSelect').style.display = 'block';
-                    return updateChart(data.map(branch => branch.name));
-                });
+        async function loadBranches() {
+            const data = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+            const select = document.getElementById('branchDropdown');
+            select.innerHTML = data.map(branch => `
+                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
+                    ${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})
+                </option>
+            `).join('');
+            document.getElementById('branchSelect').style.display = 'block';
+            currentBranch = data.find(branch => branch.is_active)?.name || data[0]?.name;
+            return updateChart(data.map(branch => branch.name));
         }
 
-        function setBranch() {
+        async function setBranch() {
             const branchName = document.getElementById('branchDropdown').value;
-            fetchWithErrorHandling(`/set_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    if (data.success) {
-                        currentBranch = branchName;
-                        showNotification(data.message, 'success');
-                        loadBranches().then(() => {
-                            // Update step list for the new branch
-                            fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`)
-                                .then(branchData => {
-                                    updateStepList(branchData);
-                                    if (branchData.length > 0) {
-                                        showCommitDetails(branchData[0], branchName);
-                                    } else {
-                                        clearDetails();
-                                    }
-                                });
-                        });
-                    } else {
-                        showNotification(data.error, 'danger');
-                    }
-                });
+            const data = await fetchWithErrorHandling(`/set_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`);
+            if (data.success) {
+                currentBranch = branchName;
+                showNotification(data.message, 'success');
+                await loadBranches();
+                const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`);
+                updateStepList(branchData);
+                if (branchData.length > 0) showCommitDetails(branchData[0], branchName);
+                else clearDetails();
+            } else {
+                showNotification(data.error, 'danger');
+            }
         }
 
-        function updateChart(branches) {
-            return Promise.all(branches.map(branch => 
+        async function updateChart(branches) {
+            const branchesData = await Promise.all(branches.map(branch => 
                 fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`)
-            )).then(branchesData => {
-                const datasets = branchesData.map((data, index) => {
-                    const branch = branches[index];
-                    const times = data.map(state => state.time);
-                    const programCounters = data.map(state => state.vm_state && state.vm_state.program_counter !== undefined ? state.vm_state.program_counter : null);
+            ));
 
-                    return {
-                        label: `${branch} - Program Counter`,
-                        data: programCounters.map((pc, i) => ({x: times[i], y: pc, commit_hash: data[i].commit_hash})),
-                        borderColor: getColorForBranch(branch, 1),
-                        backgroundColor: getColorForBranch(branch, 0.2),
-                        fill: false,
-                        tension: 0.4,
-                        borderWidth: branch === currentBranch ? 3 : 1,
-                        pointRadius: (context) => {
-                            const point = context.dataset.data[context.dataIndex];
-                            return point.commit_hash === currentHighlightedCommit ? 8 : 3;
+            const datasets = branchesData.map((data, index) => ({
+                label: `${branches[index]} - Program Counter`,
+                data: data.map(state => ({
+                    x: state.time,
+                    y: state.vm_state?.program_counter,
+                    commit_hash: state.commit_hash
+                })),
+                borderColor: getColorForBranch(branches[index], 1),
+                backgroundColor: getColorForBranch(branches[index], 0.2),
+                fill: false,
+                tension: 0.4,
+                borderWidth: branches[index] === currentBranch ? 3 : 1,
+                pointRadius: context => context.dataset.data[context.dataIndex].commit_hash === currentHighlightedCommit ? 6 : 3,
+                pointHoverRadius: 8
+            }));
+
+            if (chart) {
+                chart.data.datasets = datasets;
+                chart.update();
+            } else {
+                const ctx = document.getElementById('vmChart').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { unit: 'minute', displayFormats: { minute: 'MMM D, HH:mm' } },
+                                title: { display: true, text: 'Time' }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Program Counter' }
+                            }
                         },
-                        pointHoverRadius: 5
-                    };
-                });
-
-                if (chart) {
-                    chart.data.datasets = datasets;
-                    chart.update();
-                } else {
-                    const ctx = document.getElementById('vmChart').getContext('2d');
-                    chart = new Chart(ctx, {
-                        type: 'line',
-                        data: { datasets },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'minute',
-                                        displayFormats: {
-                                            minute: 'MMM D, HH:mm'
-                                        }
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: 'Time'
-                                    }
-                                },
-                                y: {
-                                    beginAtZero: true,
-                                    title: {
-                                        display: true,
-                                        text: 'Program Counter'
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: {
-                                    position: 'top',
-                                },
-                                tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
-                                }
-                            },
-                            onClick: (event, elements) => {
-                                if (elements.length > 0) {
-                                    const index = elements[0].index;
-                                    const datasetIndex = elements[0].datasetIndex;
-                                    const branch = branches[datasetIndex];
-                                    const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
-                                    
-                                    // Update current branch
-                                    currentBranch = branch;
-                                    
-                                    // Update branch selector
-                                    const branchSelector = document.getElementById('branchDropdown');
-                                    if (branchSelector) {
-                                        branchSelector.value = branch;
-                                    }
-                                    
-                                    // Update step list for the new branch
-                                    updateStepList(branchesData[datasetIndex]);
-                                    
-                                    // Highlight the step and show commit details
-                                    highlightStep(commitHash);
-                                    showCommitDetailsAndHighlight(commitHash);
-                                    
-                                    // Notify user of branch change
-                                    showNotification(`Switched to branch: ${branch}`, 'info');
-                                }
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: { mode: 'index', intersect: false }
+                        },
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const { index, datasetIndex } = elements[0];
+                                const branch = branches[datasetIndex];
+                                const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
+                                currentBranch = branch;
+                                document.getElementById('branchDropdown').value = branch;
+                                updateStepList(branchesData[datasetIndex]);
+                                highlightStep(commitHash);
+                                showCommitDetailsAndHighlight(commitHash);
+                                showNotification(`Switched to branch: ${branch}`, 'info');
                             }
                         }
-                    });
-                }
+                    }
+                });
+            }
 
-                // Update step list for the current branch
-                const currentBranchIndex = branches.indexOf(currentBranch);
-                if (currentBranchIndex !== -1) {
-                    updateStepList(branchesData[currentBranchIndex]);
-                }
+            const currentBranchIndex = branches.indexOf(currentBranch);
+            if (currentBranchIndex !== -1) updateStepList(branchesData[currentBranchIndex]);
 
-                // Reapply highlight if there was a highlighted commit
-                if (currentHighlightedCommit) {
-                    highlightChartPoint(currentHighlightedCommit, false);
-                    highlightStep(currentHighlightedCommit);
-                }
-            });
+            if (currentHighlightedCommit) {
+                highlightChartPoint(currentHighlightedCommit, false);
+                highlightStep(currentHighlightedCommit);
+            }
         }
 
         function getColorForBranch(branch, alpha) {
-            // Generate a color based on the branch name
             let hash = 0;
             for (let i = 0; i < branch.length; i++) {
                 hash = branch.charCodeAt(i) + ((hash << 5) - hash);
             }
-            const h = hash % 360;
-            return `hsla(${h}, 70%, 60%, ${alpha})`;
+            return `hsla(${hash % 360}, 70%, 60%, ${alpha})`;
         }
 
         function updateStepList(data) {
             const stepList = document.getElementById('stepList');
-            stepList.innerHTML = '';
-            
-            data.forEach((state, displayIndex) => {
-                const stepItem = document.createElement('div');
-                stepItem.className = 'step-item';
-                stepItem.id = `step-${state.commit_hash}`;
-
-                const correctIndex = data.length - 1 - displayIndex;
-
-                const commitTitle = state.title || 'Untitled Step';
-                const commitTime = moment(state.time).format('YYYY-MM-DD HH:mm:ss');
-
-                stepItem.innerHTML = `
+            stepList.innerHTML = data.map((state, displayIndex) => `
+                <div class="step-item" id="step-${state.commit_hash}">
                     <div class="d-flex justify-content-between align-items-center">
-                        <strong>${commitTitle}</strong>
-                        <small class="text-muted">${commitTime}</small>
+                        <strong>${state.title || 'Untitled Step'}</strong>
+                        <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
                     </div>
                     <div class="mt-2">
-                        <button onclick="executeFromStep(${correctIndex}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute">
+                        <button onclick="executeFromStep(${data.length - 1 - displayIndex}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute">
                             <i class="bi bi-play-fill"></i> Execute
                         </button>
                     </div>
-                `;
+                </div>
+            `).join('');
 
-                stepItem.addEventListener('click', (event) => {
+            stepList.querySelectorAll('.step-item').forEach(item => {
+                item.addEventListener('click', event => {
                     if (!event.target.closest('.btn')) {
-                        showCommitDetailsAndHighlight(state.commit_hash);
+                        showCommitDetailsAndHighlight(item.id.split('-')[1]);
                     }
                 });
-                stepList.appendChild(stepItem);
             });
 
             initTooltips();
         }
 
-        function showCommitDetailsAndHighlight(commitHash) {
+        async function showCommitDetailsAndHighlight(commitHash) {
             currentHighlightedCommit = commitHash;
             highlightChartPoint(commitHash);
             highlightStep(commitHash);
             
-            Promise.all([
-                fetchWithErrorHandling(`/commit_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-                fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-                fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-                fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-            ]).then(([commitDetails, vmState, codeDiff, vmStateDetails]) => {
-                // Update Commit Details
+            try {
+                const [commitDetails, vmState, codeDiff, vmStateDetails] = await Promise.all([
+                    fetchWithErrorHandling(`/commit_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
+                    fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
+                    fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
+                    fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+                ]);
+
+                // Update chart to reflect the selected commit
+                if (chart) {
+                    chart.data.datasets.forEach(dataset => {
+                        const pointIndex = dataset.data.findIndex(point => point.commit_hash === commitHash);
+                        if (pointIndex !== -1) {
+                            currentBranch = dataset.label.split(' - ')[0];
+                            document.getElementById('branchDropdown').value = currentBranch;
+                            chart.setActiveElements([{ datasetIndex: chart.data.datasets.indexOf(dataset), index: pointIndex }]);
+                            chart.update();
+                        }
+                    });
+                }
+
+                // Update commit details, VM state, code diff, and VM state details
                 document.getElementById('commitDetails').innerHTML = `
                     <h2>Commit Details</h2>
                     <p><strong>Branch:</strong> ${currentBranch}</p>
@@ -470,31 +399,24 @@
                     <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
                     <p><strong>Message:</strong> ${commitDetails.message}</p>
                     <p><strong>Files changed:</strong></p>
-                    <ul>
-                        ${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}
-                    </ul>
+                    <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
                 `;
 
-                // Update VM State
                 document.getElementById('vmState').innerHTML = `
                     <h2>VM State</h2>
                     <pre><code class="json">${JSON.stringify(vmState, null, 2)}</code></pre>
                 `;
 
-                // Update Code Diff
                 document.getElementById('codeDiff').innerHTML = `
                     <h2>Code Diff</h2>
                     <pre><code class="diff">${codeDiff.diff}</code></pre>
                 `;
 
-                // Update VM State Details
-                const variables = vmStateDetails.variables || {};
-                const parameters = vmStateDetails.parameters || {};
                 document.getElementById('vmStateDetails').innerHTML = `
                     <h2>VM Variables</h2>
-                    <pre><code class="json">${JSON.stringify(variables, null, 2)}</code></pre>
+                    <pre><code class="json">${JSON.stringify(vmStateDetails.variables || {}, null, 2)}</code></pre>
                     <h2>VM Parameters</h2>
-                    <pre><code class="json">${JSON.stringify(parameters, null, 2)}</code></pre>
+                    <pre><code class="json">${JSON.stringify(vmStateDetails.parameters || {}, null, 2)}</code></pre>
                     <div class="execute-controls mt-3">
                         <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
                         <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
@@ -502,19 +424,14 @@
                 `;
 
                 hljs.highlightAll();
-            }).catch(error => {
+            } catch (error) {
                 console.error('Error fetching details:', error);
                 showNotification('Error fetching commit details', 'danger');
-            });
+            }
         }
 
         function highlightStep(commitHash) {
-            // Remove highlight from all steps
-            document.querySelectorAll('.step-item').forEach(item => {
-                item.classList.remove('highlighted-step');
-            });
-
-            // Highlight the selected step
+            document.querySelectorAll('.step-item').forEach(item => item.classList.remove('highlighted-step'));
             const stepItem = document.getElementById(`step-${commitHash}`);
             if (stepItem) {
                 stepItem.classList.add('highlighted-step');
@@ -529,187 +446,76 @@
                     const pointIndex = dataset.data.findIndex(point => point.commit_hash === commitHash);
                     if (pointIndex !== -1) {
                         foundPoint = true;
-                        chart.setActiveElements([{
-                            datasetIndex: datasetIndex,
-                            index: pointIndex,
-                        }]);
-                        
+                        chart.setActiveElements([{ datasetIndex, index: pointIndex }]);
                         chart.update();
-
-                        // Scroll to the highlighted point
                         chart.scales.x.scrollToIndex(pointIndex);
                     }
                 });
 
                 if (foundPoint && updateCurrentHighlight) {
                     currentHighlightedCommit = commitHash;
-                } else if (!foundPoint) {
+                } else if (!foundPoint && updateCurrentHighlight) {
                     console.warn(`No point found for commit hash: ${commitHash}`);
-                    if (updateCurrentHighlight) {
-                        currentHighlightedCommit = null;
-                    }
+                    currentHighlightedCommit = null;
                 }
             }
         }
 
-        function toggleStepDetails(index) {
-            const detailsElement = document.getElementById(`step-details-${index}`);
-            if (detailsElement) {
-                $(detailsElement).slideToggle();
-            }
-        }
-
-        function showCommitDetails(state, branch) {
-            if (!state || !state.commit_hash) {
-                clearDetails();
-                return;
-            }
-
-            fetchWithErrorHandling(`/commit_details/${state.commit_hash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    document.getElementById('commitDetails').innerHTML = `
-                        <h2>Commit Details</h2>
-                        <p><strong>Branch:</strong> ${branch}</p>
-                        <p><strong>Hash:</strong> ${data.hash}</p>
-                        <p><strong>Author:</strong> ${data.author}</p>
-                        <p><strong>Date:</strong> ${moment(data.date).format('YYYY-MM-DD HH:mm:ss')}</p>
-                        <p><strong>Message:</strong> ${data.message}</p>
-                        <p><strong>Files changed:</strong></p>
-                        <ul>
-                            ${data.files_changed.map(file => `<li>${file}</li>`).join('')}
-                        </ul>
-                    `;
-                    showVMState(state.commit_hash);
-                    showCodeDiff(state.commit_hash);
-                    showVMStateDetails(state.commit_hash);
-                });
-        }
-
-        function showVMState(commitHash) {
-            fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    document.getElementById('vmState').innerHTML = `
-                        <h2>VM State</h2>
-                        <pre><code class="json">${JSON.stringify(data, null, 2)}</code></pre>
-                    `;
-                    hljs.highlightAll();
-                });
-        }
-
-        function showCodeDiff(commitHash) {
-            fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    document.getElementById('codeDiff').innerHTML = `
-                        <h2>Code Diff</h2>
-                        <pre><code class="diff">${data.diff}</code></pre>
-                    `;
-                    hljs.highlightAll();
-                });
-        }
-
-        function showVMStateDetails(commitHash) {
-            fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
-                .then(data => {
-                    const variables = data.variables || {};
-                    const parameters = data.parameters || {};
-                    document.getElementById('vmStateDetails').innerHTML = `
-                        <h2>VM Variables</h2>
-                        <pre><code class="json">${JSON.stringify(variables, null, 2)}</code></pre>
-                        <h2>VM Parameters</h2>
-                        <pre><code class="json">${JSON.stringify(parameters, null, 2)}</code></pre>
-                        <div class="execute-controls mt-3">
-                            <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
-                            <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
-                        </div>
-                    `;
-                    hljs.highlightAll();
-                });
-        }
-
-        function executeVM(commitHash) {
+        async function executeVM(commitHash) {
             const steps = document.getElementById('stepCount').value;
-            fetchWithErrorHandling('/execute_vm', {
+            const data = await fetchWithErrorHandling('/execute_vm', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    steps: parseInt(steps),
-                    repo: currentRepo
-                }),
-            })
-            .then(data => {
-                showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
-                switchBranch(data.new_branch)
-                    .then(() => {
-                        showVMState(commitHash);
-                        showVMStateDetails(commitHash);
-                        updateChart();
-                    });
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), repo: currentRepo }),
             });
+            showNotification(`Executed ${data.steps_executed} step(s). New branch: ${data.new_branch}`, 'success');
+            await switchBranch(data.new_branch);
+            showVMState(commitHash);
+            showVMStateDetails(commitHash);
+            updateChart();
         }
 
-        function executeFromStep(stepIndex, commitHash) {
+        async function executeFromStep(stepIndex, commitHash) {
             const steps = prompt("Enter the number of steps to execute:", "1");
             if (steps === null) return;
 
-            fetchWithErrorHandling('/execute_vm', {
+            const data = await fetchWithErrorHandling('/execute_vm', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    steps: parseInt(steps),
-                    start_from: stepIndex,
-                    repo: currentRepo
-                }),
-            })
-            .then(data => {
-                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
-                if (data.steps_executed < parseInt(steps)) {
-                    message += `(Reached end of plan at step ${data.plan_length}). `;
-                }
-                message += `New branch created: ${data.new_branch}`;
-                showNotification(message, 'success');
-                
-                switchBranch(data.new_branch)
-                    .then(() => {
-                        showVMState(commitHash);
-                        showVMStateDetails(commitHash);
-                        updateChart();
-                    });
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), start_from: stepIndex, repo: currentRepo }),
             });
+
+            let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
+            if (data.steps_executed < parseInt(steps)) {
+                message += `(Reached end of plan at step ${data.plan_length}). `;
+            }
+            message += `New branch created: ${data.new_branch}`;
+            showNotification(message, 'success');
+            
+            await switchBranch(data.new_branch);
+            showVMState(commitHash);
+            showVMStateDetails(commitHash);
+            updateChart();
         }
 
-        function switchBranch(branchName) {
-            return fetchWithErrorHandling(`/set_branch/${branchName}?repo=${currentRepo}`)
-                .then(data => {
-                    if (data.success) {
-                        currentBranch = branchName;
-                        updateBranchSelector();
-                        return true;
-                    } else {
-                        showNotification('Failed to switch branch: ' + data.error, 'danger');
-                        return false;
-                    }
-                });
+        async function switchBranch(branchName) {
+            const data = await fetchWithErrorHandling(`/set_branch/${branchName}?repo=${currentRepo}`);
+            if (data.success) {
+                currentBranch = branchName;
+                updateBranchSelector();
+                return true;
+            } else {
+                showNotification('Failed to switch branch: ' + data.error, 'danger');
+                return false;
+            }
         }
 
-        function updateBranchSelector() {
-            fetchWithErrorHandling(`/get_branches?repo=${currentRepo}`)
-                .then(branches => {
-                    const branchSelector = document.getElementById('branchDropdown');
-                    branchSelector.innerHTML = '';
-                    branches.forEach(branch => {
-                        const option = document.createElement('option');
-                        option.value = branch.name;
-                        option.textContent = branch.name;
-                        option.selected = branch.is_active;
-                        branchSelector.appendChild(option);
-                    });
-                });
+        async function updateBranchSelector() {
+            const branches = await fetchWithErrorHandling(`/get_branches?repo=${currentRepo}`);
+            const branchSelector = document.getElementById('branchDropdown');
+            branchSelector.innerHTML = branches.map(branch => `
+                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>${branch.name}</option>
+            `).join('');
         }
 
         function clearDetails() {
@@ -718,62 +524,39 @@
             });
         }
 
-        function showCommitDetailsAtIndex(index) {
-            showCommitDetails(vmStates[index]);
-        }
-
         function initTooltips() {
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            });
+            [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].map(el => new bootstrap.Tooltip(el));
         }
 
-        document.getElementById('stepSearch').addEventListener('input', function(e) {
+        document.getElementById('stepSearch').addEventListener('input', e => {
             const searchTerm = e.target.value.toLowerCase();
             document.querySelectorAll('.step-item').forEach(item => {
-                const text = item.textContent.toLowerCase();
-                item.style.display = text.includes(searchTerm) ? '' : 'none';
+                item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
             });
         });
 
         document.getElementById('darkModeToggle').addEventListener('click', function() {
             document.body.classList.toggle('dark-mode');
             const icon = this.querySelector('i');
-            if (document.body.classList.contains('dark-mode')) {
-                icon.classList.remove('bi-moon');
-                icon.classList.add('bi-sun');
-            } else {
-                icon.classList.remove('bi-sun');
-                icon.classList.add('bi-moon');
-            }
-            if (chart) {
-                chart.update();
-            }
+            icon.classList.toggle('bi-moon');
+            icon.classList.toggle('bi-sun');
+            if (chart) chart.update();
         });
 
-        // Modify the refreshChart function
-        function refreshChart() {
-            if (chart && chart.data && chart.data.datasets) {
+        // Add this new function to handle manual refresh
+        async function manualRefresh() {
+            if (chart?.data?.datasets) {
                 const branches = chart.data.datasets.map(dataset => dataset.label.split(' - ')[0]);
-                updateChart(branches).then(() => {
-                    if (currentHighlightedCommit) {
-                        highlightChartPoint(currentHighlightedCommit, false);
-                    }
-                });
+                await updateChart(branches);
+                if (currentHighlightedCommit) highlightChartPoint(currentHighlightedCommit, false);
             }
         }
-        setInterval(refreshChart, 30000);
 
-        // Initial load
+        // Add event listener for the refresh button
+        document.getElementById('refreshButton').addEventListener('click', manualRefresh);
+
         loadDirectories();
-
-        // Update the chart when the window is resized
-        window.addEventListener('resize', function() {
-            if (chart) {
-                chart.resize();
-            }
-        });
+        window.addEventListener('resize', () => { if (chart) chart.resize(); });
     </script>
 </body>
 </html>
