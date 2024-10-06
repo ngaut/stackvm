@@ -259,10 +259,9 @@ def execute_vm():
         repo_path = get_repo_path(repo_name)
         repo = git.Repo(repo_path)
 
-        new_branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        # Use the current branch instead of creating a new one
         current_branch = repo.active_branch.name
-        repo.git.checkout(commit_hash, b=new_branch_name)
-        app.logger.info(f"Created new branch: {new_branch_name}")
+        app.logger.info(f"Using current branch: {current_branch}")
 
         vm = VM(repo_path)
         vm.load_state(commit_hash)
@@ -303,7 +302,7 @@ def execute_vm():
         return jsonify({
             'success': True,
             'new_state': new_state, 
-            'new_branch': new_branch_name, 
+            'new_branch': current_branch,  # Return the current branch name
             'steps_executed': steps_executed,
             'plan_length': plan_length,
             'last_commit_hash': repo.head.commit.hexsha

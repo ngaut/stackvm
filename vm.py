@@ -106,6 +106,7 @@ class PlanExecutionVM:
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         step_type = step.get('type')
         params = step.get('parameters', {})
+        seq_no = step.get('seq_no', 'Unknown')  # Get seq_no, default to 'Unknown' if not present
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state['errors'].append("Invalid step type.")
@@ -121,7 +122,7 @@ class PlanExecutionVM:
             self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
             
             # Prepare commit message
-            commit_message = f"[{step_type}] - Executed step\n\n"
+            commit_message = f"[Step {seq_no}][{step_type}] - Executed step\n\n"
             commit_message += "Input Parameters:\n"
             for k, v in params.items():
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
@@ -139,9 +140,9 @@ class PlanExecutionVM:
                 commit_message += f"- {k}: {value_preview}\n"
             
             if success:
-                detail = f"Executed step '{step_type}' with parameters {params}."
+                detail = f"Executed step '{step_type}' (seq_no: {seq_no}) with parameters {params}."
             else:
-                detail = f"Failed to execute step '{step_type}'."
+                detail = f"Failed to execute step '{step_type}' (seq_no: {seq_no})."
             self._commit(detail)
             
             return success
@@ -409,12 +410,6 @@ Provide your response as a valid JSON array of instruction steps.
         """
         return self.state
 
-    def tag_plan_version(self, version_label: str) -> None:
-        commit_message = f"Tagging plan version: {version_label}"
-        if self.git_manager.run_command(['git', 'tag', version_label]):
-            self.git_manager.commit_changes(commit_message)
-        else:
-            self.logger.error(f"Failed to tag plan version {version_label}.")
 
     def analyze_branches(self) -> None:
         """

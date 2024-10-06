@@ -179,21 +179,19 @@
         </div>
     </div>
 
-    <div class="modal fade" id="editParamsModal" tabindex="-1" aria-labelledby="editParamsModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
+    <div class="modal fade" id="editPlanModal" tabindex="-1" aria-labelledby="editPlanModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="editParamsModalLabel">Edit Parameters</h5>
+            <h5 class="modal-title" id="editPlanModalLabel">Edit Plan</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <form id="editParamsForm">
-              <!-- Form fields will be dynamically added here -->
-            </form>
+            <textarea id="planEditor" class="form-control" rows="15"></textarea>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary" id="saveParamsButton">Save changes</button>
+            <button type="button" class="btn btn-primary" id="savePlanButton">Save changes</button>
           </div>
         </div>
       </div>
@@ -272,40 +270,82 @@
             if (data.success) {
                 currentBranch = branchName;
                 showNotification(data.message, 'success');
-                await loadBranches();
+                
+                // Update the chart to highlight the new current branch
+                highlightCurrentBranch();
+                
+                // Update the step list for the new branch
                 const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`);
                 updateStepList(branchData);
-                if (branchData.length > 0) showCommitDetailsAndHighlight(branchData[0].commit_hash);
-                else clearDetails();
+                
+                if (branchData.length > 0) {
+                    showCommitDetailsAndHighlight(branchData[0].commit_hash);
+                } else {
+                    clearDetails();
+                }
             } else {
                 showNotification(data.error, 'danger');
             }
         }
 
         async function updateChart(branches) {
-            const branchesData = await Promise.all(branches.map(branch => 
-                fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`)
-            ));
+            const branchesData = await Promise.all(branches.map(async branch => {
+                try {
+                    return await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+                } catch (error) {
+                    console.warn(`Failed to fetch data for branch ${branch}:`, error);
+                    return []; // Return empty array for branches with no data
+                }
+            }));
+
+            // Filter out branches with no data
+            const validBranches = branches.filter((_, index) => branchesData[index].length > 0);
+            const validBranchesData = branchesData.filter(data => data.length > 0);
+
+            console.log('Valid Branches:', validBranches);
+            console.log('Valid Branches data:', validBranchesData);
 
             const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
-            const datasets = branchesData.map((data, index) => ({
-                label: `${branches[index]} - Program Counter`,
-                data: data.map(state => ({
-                    x: state.time,
+            const pointStyles = ['circle', 'triangle', 'rect', 'rectRounded', 'rectRot', 'star', 'cross'];
+
+            const datasets = validBranchesData.map((data, index) => {
+                console.log(`Processing branch: ${validBranches[index]}, data length: ${data.length}`);
+                const branchData = data.map(state => ({
+                    x: new Date(state.time),
                     y: state.vm_state?.program_counter,
-                    commit_hash: state.commit_hash
-                })),
-                borderColor: colors[index % colors.length],
-                backgroundColor: `${colors[index % colors.length]}33`, // 33 is 20% opacity in hex
-                fill: false,
-                tension: 0.4,
-                borderWidth: branches[index] === currentBranch ? 3 : 1,
-                pointRadius: context => context.dataset.data[context.dataIndex].commit_hash === currentHighlightedCommit ? 6 : 3,
-                pointHoverRadius: 8
-            }));
+                    commit_hash: state.commit_hash,
+                    branch: validBranches[index]
+                }));
+                console.log(`Branch ${validBranches[index]} data:`, branchData);
+                return {
+                    label: `${validBranches[index]} - Program Counter`,
+                    data: branchData,
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: `${colors[index % colors.length]}33`,
+                    fill: false,
+                    tension: 0.4,
+                    borderWidth: 1,
+                    pointRadius: 3,
+                    pointHoverRadius: 8,
+                    pointStyle: pointStyles[index % pointStyles.length]
+                };
+            });
+
+            console.log('Datasets:', datasets);
+
+            // Calculate the min and max dates across all datasets
+            const allDates = datasets.flatMap(dataset => dataset.data.map(d => d.x));
+            const minDate = new Date(Math.min(...allDates));
+            const maxDate = new Date(Math.max(...allDates));
+
+            // Add some padding to the date range
+            minDate.setHours(minDate.getHours() - 1);
+            maxDate.setHours(maxDate.getHours() + 1);
 
             if (chart) {
                 chart.data.datasets = datasets;
+                chart.options.scales.x.min = minDate;
+                chart.options.scales.x.max = maxDate;
                 chart.update();
             } else {
                 const ctx = document.getElementById('executionChart').getContext('2d');
@@ -318,38 +358,64 @@
                         scales: {
                             x: {
                                 type: 'time',
-                                time: { unit: 'minute', displayFormats: { minute: 'MMM D, HH:mm' } },
+                                time: { 
+                                    unit: 'hour',
+                                    displayFormats: { 
+                                        hour: 'MMM D, HH:mm'
+                                    },
+                                    tooltipFormat: 'MMM D, YYYY, HH:mm:ss'
+                                },
                                 title: { display: true, text: 'Time' },
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.1)',
-                                },
-                                ticks: {
+                                grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                                ticks: { 
                                     color: '#666',
+                                    maxRotation: 0,
+                                    autoSkip: true,
+                                    maxTicksLimit: 12
                                 },
+                                min: minDate,
+                                max: maxDate
                             },
                             y: {
                                 beginAtZero: true,
                                 title: { display: true, text: 'Program Counter' },
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.1)',
-                                },
-                                ticks: {
-                                    color: '#666',
-                                },
+                                grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                                ticks: { color: '#666' },
                             }
                         },
                         plugins: {
                             legend: { position: 'top' },
-                            tooltip: { mode: 'index', intersect: false }
+                            tooltip: { 
+                                mode: 'index', 
+                                intersect: false,
+                                callbacks: {
+                                    title: function(tooltipItems) {
+                                        return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY, HH:mm:ss');
+                                    },
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y.toFixed(2);
+                                        }
+                                        return `${label} (${context.raw.branch})`;
+                                    },
+                                    afterBody: function(tooltipItems) {
+                                        return `Commit: ${tooltipItems[0].raw.commit_hash}`;
+                                    }
+                                }
+                            }
                         },
                         onClick: (event, elements) => {
                             if (elements.length > 0) {
                                 const { index, datasetIndex } = elements[0];
-                                const branch = branches[datasetIndex];
+                                const branch = validBranches[datasetIndex];
                                 const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
                                 currentBranch = branch;
                                 document.getElementById('branchDropdown').value = branch;
-                                updateStepList(branchesData[datasetIndex]);
+                                updateStepList(validBranchesData[datasetIndex]);
                                 showCommitDetailsAndHighlight(commitHash);
                                 showNotification(`Switched to branch: ${branch}`, 'info');
                             }
@@ -358,12 +424,21 @@
                 });
             }
 
-            const currentBranchIndex = branches.indexOf(currentBranch);
-            if (currentBranchIndex !== -1) updateStepList(branchesData[currentBranchIndex]);
+            highlightCurrentBranch();
+        }
 
-            if (currentHighlightedCommit) {
-                highlightChartPoint(currentHighlightedCommit, false);
-                highlightStep(currentHighlightedCommit);
+        function highlightCurrentBranch() {
+            if (chart) {
+                chart.data.datasets.forEach(dataset => {
+                    if (dataset.label.startsWith(currentBranch)) {
+                        dataset.borderWidth = 3;
+                        dataset.pointRadius = 5;
+                    } else {
+                        dataset.borderWidth = 1;
+                        dataset.pointRadius = 3;
+                    }
+                });
+                chart.update();
             }
         }
 
@@ -376,7 +451,7 @@
                         <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
                     </div>
                     <div class="mt-2">
-                        <button onclick="executeFromStep(${index_within_plan}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute">
+                        <button onclick="executeFromStep(${index_within_plan}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
                             <i class="bi bi-play-fill"></i> Execute
                         </button>
                     </div>
@@ -486,22 +561,6 @@
                     if (pointIndex !== -1) {
                         foundPoint = true;
                         chart.setActiveElements([{ datasetIndex, index: pointIndex }]);
-                        
-                        // Center the chart on the selected point
-                        const xScale = chart.scales.x;
-                        const yScale = chart.scales.y;
-                        const dataPoint = dataset.data[pointIndex];
-                        
-                        const xMin = moment(dataPoint.x).subtract(15, 'minutes');
-                        const xMax = moment(dataPoint.x).add(15, 'minutes');
-                        const yMin = Math.max(0, dataPoint.y - 5);
-                        const yMax = dataPoint.y + 5;
-                        
-                        chart.options.scales.x.min = xMin;
-                        chart.options.scales.x.max = xMax;
-                        chart.options.scales.y.min = yMin;
-                        chart.options.scales.y.max = yMax;
-                        
                         chart.update();
                     }
                 });
@@ -516,7 +575,6 @@
         }
 
         async function executeFromStep(index_within_plan, commitHash) {
-            showLoading(true);
             try {
                 const response = await fetch(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
                 const data = await response.json();
@@ -539,10 +597,13 @@
 
                 const currentPlan = data.current_plan;
 
-                // Open modal to edit parameters
-                const updatedPlan = await openEditParamsModal(currentPlan, index_within_plan);
+                // Open modal to edit plan
+                const updatedPlan = await openEditPlanModal(currentPlan, index_within_plan);
 
                 if (updatedPlan) {
+                    // Show loading indicator after user confirms the plan
+                    showLoading(true);
+
                     // Update the plan
                     const updateResponse = await fetch('/update_plan', {
                         method: 'POST',
@@ -559,9 +620,6 @@
                     const updateData = await updateResponse.json();
 
                     if (updateData.success) {
-                        // Switch to the new branch
-                        await switchBranch(updateData.new_branch);
-
                         // Execute the VM with the updated plan
                         const executeResponse = await fetch('/execute_vm', {
                             method: 'POST',
@@ -595,75 +653,30 @@
             }
         }
 
-        async function openEditParamsModal(currentPlan, index_within_plan) {
+        async function openEditPlanModal(currentPlan, index_within_plan) {
             return new Promise((resolve, reject) => {
-                const modalElement = document.getElementById('editParamsModal');
+                const modalElement = document.getElementById('editPlanModal');
                 if (!modalElement) {
                     console.error('Modal element not found');
                     reject(new Error('Modal element not found'));
                     return;
                 }
 
-                let modal;
-                try {
-                    modal = new bootstrap.Modal(modalElement);
-                } catch (error) {
-                    console.error('Error initializing modal:', error);
-                    reject(error);
-                    return;
-                }
+                const modal = new bootstrap.Modal(modalElement);
+                const planEditor = document.getElementById('planEditor');
+                const savePlanButton = document.getElementById('savePlanButton');
 
-                const form = document.getElementById('editParamsForm');
-                if (!form) {
-                    console.error('Edit params form not found');
-                    reject(new Error('Edit params form not found'));
-                    return;
-                }
+                // Set the initial content of the plan editor
+                planEditor.value = JSON.stringify(currentPlan, null, 2);
 
-                form.innerHTML = '';
-
-                if (!Array.isArray(currentPlan) || index_within_plan < 0 || index_within_plan >= currentPlan.length) {
-                    console.error('Invalid currentPlan or index_within_plan');
-                    reject(new Error('Invalid currentPlan or index_within_plan'));
-                    return;
-                }
-
-                const currentStep = currentPlan[index_within_plan];
-                if (!currentStep || typeof currentStep !== 'object') {
-                    console.error('Invalid step data');
-                    reject(new Error('Invalid step data'));
-                    return;
-                }
-
-                const parameters = currentStep.parameters || {};
-                for (const [key, value] of Object.entries(parameters)) {
-                    const formGroup = document.createElement('div');
-                    formGroup.className = 'mb-3';
-                    formGroup.innerHTML = `
-                        <label for="${key}" class="form-label">${key}</label>
-                        <input type="text" class="form-control" id="${key}" name="${key}" value="${value}">
-                    `;
-                    form.appendChild(formGroup);
-                }
-
-                const saveButton = document.getElementById('saveParamsButton');
-                if (!saveButton) {
-                    console.error('Save button not found');
-                    reject(new Error('Save button not found'));
-                    return;
-                }
-
-                saveButton.onclick = () => {
-                    const updatedParams = {};
-                    for (const input of form.elements) {
-                        if (input.name) {
-                            updatedParams[input.name] = input.value;
-                        }
+                savePlanButton.onclick = () => {
+                    try {
+                        const updatedPlan = JSON.parse(planEditor.value);
+                        modal.hide();
+                        resolve(updatedPlan);
+                    } catch (error) {
+                        showNotification('Invalid JSON: ' + error.message, 'danger');
                     }
-                    const updatedPlan = [...currentPlan];
-                    updatedPlan[index_within_plan] = { ...currentStep, parameters: updatedParams };
-                    modal.hide();
-                    resolve(updatedPlan);
                 };
 
                 modal.show();
@@ -671,34 +684,11 @@
         }
 
         async function updateUIAfterExecution(newBranch, lastCommitHash) {
-            try {
-                showLoading(true);
-                // Update chart
-                await updateChart([newBranch]);
-                
-                // Update step list
-                const branchData = await fetchWithErrorHandling(`/vm_data?branch=${newBranch}&repo=${encodeURIComponent(currentRepo)}`);
-                updateStepList(branchData);
-                
-                // Show details for the last commit
-                if (lastCommitHash && lastCommitHash !== 'undefined') {
-                    await showCommitDetailsAndHighlight(lastCommitHash);
-                } else if (branchData.length > 0) {
-                    // If no valid lastCommitHash, use the latest commit from branchData
-                    await showCommitDetailsAndHighlight(branchData[branchData.length - 1].commit_hash);
-                } else {
-                    clearDetails();
-                    showNotification('No commit data available for this branch', 'warning');
-                }
-                
-                // Update branch selector
-                await updateBranchSelector();
-                document.getElementById('branchDropdown').value = newBranch;
-            } catch (error) {
-                console.error('Error updating UI after execution:', error);
-                showNotification(`Error updating UI after execution: ${error.message}`, 'danger');
-            } finally {
-                showLoading(false);
+            currentBranch = newBranch;
+            await loadBranches(); // This will update the chart with all branches
+            highlightCurrentBranch();
+            if (lastCommitHash) {
+                showCommitDetailsAndHighlight(lastCommitHash);
             }
         }
 
@@ -770,8 +760,8 @@
                 
                 if (response.ok) {
                     showNotification(data.message, 'success');
-                    await updateBranchSelector();
-                    await updateChart([currentBranch]);
+                    // Update the branch list and chart
+                    await updateBranchesAndChart();
                 } else {
                     showNotification(`Error: ${data.error}`, 'danger');
                 }
@@ -780,6 +770,22 @@
             } finally {
                 showLoading(false);
             }
+        }
+
+        async function updateBranchesAndChart() {
+            const branches = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+            updateBranchSelector(branches);
+            await updateChart(branches.map(branch => branch.name));
+        }
+
+        function updateBranchSelector(branches) {
+            const select = document.getElementById('branchDropdown');
+            select.innerHTML = branches.map(branch => `
+                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
+                    ${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})
+                </option>
+            `).join('');
+            currentBranch = branches.find(branch => branch.is_active)?.name || branches[0]?.name;
         }
 
         loadDirectories();
