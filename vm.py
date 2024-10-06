@@ -129,7 +129,7 @@ class PlanExecutionVM:
             self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
             
             # Prepare commit message
-            commit_message = f"[Step {seq_no}][{step_type}] - Executed step\n\n"
+            commit_message = f"[seq_no: {seq_no}][{step_type}] - Executed step\n\n"
             commit_message += "Input Parameters:\n"
             for k, v in params.items():
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
@@ -146,11 +146,8 @@ class PlanExecutionVM:
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
                 commit_message += f"- {k}: {value_preview}\n"
             
-            if success:
-                detail = f"Executed step '{step_type}' (seq_no: {seq_no}) with parameters {params}."
-            else:
-                detail = f"Failed to execute step '{step_type}' (seq_no: {seq_no})."
-            self._commit(detail)
+            # Use the prepared commit_message
+            self._commit("Execute Step", commit_message)
             
             return success
         else:
