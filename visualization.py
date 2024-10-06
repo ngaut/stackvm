@@ -77,6 +77,10 @@ def extract_vm_info(branch_name='main', repo_name=None):
             vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
             vm_state = json.loads(vm_state_content)
         except GitCommandError:
+            app.logger.warning(f"vm_state.json not found in commit {commit.hexsha}")
+            vm_state = None
+        except json.JSONDecodeError:
+            app.logger.error(f"Invalid JSON in vm_state.json for commit {commit.hexsha}")
             vm_state = None
         
         vm_states.append({
@@ -124,8 +128,15 @@ def get_vm_state(commit_hash):
         vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
         vm_state = json.loads(vm_state_content)
         return jsonify(vm_state)
+    except GitCommandError as e:
+        app.logger.warning(f"Error fetching vm_state.json for commit {commit_hash}: {str(e)}")
+        return jsonify({'error': 'VM state not found for this commit'}), 404
+    except json.JSONDecodeError as e:
+        app.logger.error(f"Invalid JSON in vm_state.json for commit {commit_hash}: {str(e)}")
+        return jsonify({'error': 'Invalid VM state data'}), 500
     except Exception as e:
-        abort(404, description=str(e))
+        app.logger.error(f"Unexpected error fetching VM state for commit {commit_hash}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/code_diff/<commit_hash>')
 def code_diff(commit_hash):
@@ -134,10 +145,16 @@ def code_diff(commit_hash):
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
-        parent = commit.parents[0] if commit.parents else None
-        diff = repo.git.diff(parent, commit, '--unified=3')
+        if commit.parents:
+            # If the commit has a parent, diff against the parent
+            parent = commit.parents[0]
+            diff = repo.git.diff(parent, commit, '--unified=3')
+        else:
+            # If it's the initial commit, show the full content of the commit
+            diff = repo.git.show(commit, '--pretty=format:', '--no-commit-id', '-p')
         return jsonify({'diff': diff})
     except Exception as e:
+        app.logger.error(f"Error generating diff for commit {commit_hash}: {str(e)}")
         abort(404, description=str(e))
 
 @app.route('/commit_details/<commit_hash>')
