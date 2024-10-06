@@ -6,11 +6,18 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from instruction_handlers import InstructionHandlers
-from utils import interpolate_variables, parse_plan
+from utils import interpolate_variables, parse_plan, load_state, save_state
 from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
-import git  # Add this import
+import git  # Make sure this import is at the top of the file
+
+def show_file(repo, commit_hash, file_path):
+    try:
+        return repo.git.show(f'{commit_hash}:{file_path}')
+    except git.exc.GitCommandError as e:
+        logging.error(f"Error showing file {file_path} at commit {commit_hash}: {str(e)}")
+        raise
 
 class PlanExecutionVM:
     def __init__(self, repo_path=None):
@@ -45,7 +52,7 @@ class PlanExecutionVM:
         self.handlers_registered = False
         self.register_handlers()
 
-        self.state_manager = StateManager(self)
+        self.load_state = self.load_state  # This line ensures the method is available
 
     def register_handlers(self):
         if not self.handlers_registered:
@@ -76,7 +83,7 @@ class PlanExecutionVM:
             return
         self.state['goal'] = goal
         self.logger.info(f"Goal set: {goal}")
-        self.state_manager.save_state()
+        save_state(self.state, self.repo_path)
 
     def resolve_parameter(self, param):
         if isinstance(param, dict) and 'var' in param:
@@ -115,7 +122,7 @@ class PlanExecutionVM:
         if handler:
             success = handler(params)
             if success:
-                self.state_manager.save_state()  # Save state after successful step execution
+                save_state(self.state, self.repo_path)  # Save state after successful step execution
                 self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
             
             # Log the updated variables
@@ -246,7 +253,7 @@ The final step should assign the result to the 'result' variable. The 'reasoning
             self.logger.info("Plan generated and parsed successfully.")
 
             # Save state and commit the generated plan to Git
-            self.state_manager.save_state()
+            save_state(self.state, self.repo_path)
             self._commit("Generate Plan", f"Generated new plan on branch '{branch_name}'")
             return True
         else:
@@ -311,7 +318,7 @@ Provide your response as a valid JSON array of instruction steps.
             self.logger.info("Plan adjusted successfully.")
 
             # Save state and commit the adjusted plan to Git
-            self.state_manager.save_state()
+            save_state(self.state, self.repo_path)
             self._commit("Adjust Plan", f"Adjusted plan on branch '{branch_name}'")
             return True
         else:
@@ -344,7 +351,7 @@ Provide your response as a valid JSON array of instruction steps.
             self.logger.info(f">>>>>>>>>>>>>>>>>>>>Iteration {iterations}>>>>>>>>>>>>>>>>>>>")
 
             # Save iteration start to state and commit the start of a new iteration
-            self.state_manager.save_state()
+            save_state(self.state, self.repo_path)
             self._commit("Start Iteration", f"Iteration {iterations} started.")
             iterations += 1
 
@@ -381,7 +388,7 @@ Provide your response as a valid JSON array of instruction steps.
                 self.logger.info("Goal achieved successfully.")
                 
                 # Commit goal achievement to Git
-                self.state_manager.save_state()
+                save_state(self.state, self.repo_path)
                 self._commit("Goal Achieved", "Goal achieved successfully.")
                 break
 
@@ -446,7 +453,7 @@ Provide your response as a valid JSON array of instruction steps.
                 self.state['errors'].append(f"Error in step {self.state['program_counter']}: {str(e)}")
                 return False
             self.state['program_counter'] += 1
-            self.state_manager.save_state()  # Save state after each step
+            save_state(self.state, self.repo_path)  # Save state after each step
             return True
         else:
             self.logger.info("Program execution complete.")
@@ -471,48 +478,16 @@ Provide your response as a valid JSON array of instruction steps.
         """
         return self.state['variables'].get(var_name)
 
-    def show_file(self, commit_hash, file_path):
-        try:
-            return self.git_manager.repo.git.show(f'{commit_hash}:{file_path}')
-        except git.exc.GitCommandError as e:
-            self.logger.error(f"Error showing file {file_path} at commit {commit_hash}: {str(e)}")
-            raise
-
     def load_state(self, commit_hash):
         """
         Load the state from a file based on the specific commit point.
         """
-        try:
-            state_content = self.show_file(commit_hash, 'vm_state.json')
-            loaded_state = json.loads(state_content)
-            self.state.update(loaded_state)  # Update the existing state instead of replacing it
+        loaded_state = load_state(commit_hash, self.repo_path)
+        if loaded_state:
+            self.state = loaded_state
             self.logger.info(f"State loaded from commit {commit_hash}")
-        except Exception as e:
-            self.logger.error(f"Failed to load state from commit {commit_hash}: {str(e)}")
-            self.state['errors'].append(f"Failed to load state from commit {commit_hash}: {str(e)}")
-
-class StateManager:
-    def __init__(self, vm):
-        self.vm = vm
-        self.state_file = os.path.join(self.vm.git_manager.repo_path, 'vm_state.json')
-
-    def save_state(self):
-        try:
-            with open(self.state_file, 'w') as f:
-                json.dump(self.vm.state, f, indent=2, default=str)
-            self.vm.logger.info(f"State saved to {self.state_file}")
-        except Exception as e:
-            self.vm.logger.error(f"Error saving state: {str(e)}")
-            self.vm.state['errors'].append(f"Error saving state: {str(e)}")
-
-    def load_state(self):
-        try:
-            with open(self.state_file, 'r') as f:
-                self.vm.state = json.load(f)
-            self.vm.logger.info("State loaded into VM.")
-        except Exception as e:
-            self.vm.logger.error(f"Failed to load state: {e}")
-            self.vm.state['errors'].append(f"Failed to load state: {e}")
+        else:
+            self.logger.error(f"Failed to load state from commit {commit_hash}")
 
 if __name__ == "__main__":
     repo_path = GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S")

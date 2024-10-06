@@ -8,24 +8,22 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request, abort, send_from_directory
 from config import GIT_REPO_PATH
 from git_manager import GitManager
+from utils import load_state, save_state
 
 # Conditional imports to handle potential missing packages
 try:
     import git
+    from git import Repo, NULL_TREE
+    from git.exc import GitCommandError
+    git_available = True
 except ImportError:
     print("GitPython is not installed. Please install it using: pip install GitPython")
-    git = None
+    git_available = False
 
 try:
     from vm import PlanExecutionVM as VM  # Aliased PlanExecutionVM to VM
-    vm_available = True
 except ImportError:
-    print("VM module not found. Make sure vm.py is in the same directory and exports a VM class.")
-    vm_available = False
-
-# Add these imports if not already present
-from git import Repo, NULL_TREE  # Added NULL_TREE to handle initial commits
-from git.exc import GitCommandError
+    abort(500, description="VM module not found. Make sure vm.py is in the same directory and exports a VM class.")
 
 app = Flask(__name__)
 git_manager = GitManager(GIT_REPO_PATH)
@@ -57,14 +55,16 @@ def extract_vm_info(branch_name='main', repo_name=None):
     
     try:
         repo = Repo(repo_path)
+        app.logger.info(f"Successfully initialized repository at {repo_path}")
     except Exception as e:
-        app.logger.error(f"Failed to initialize repository at {repo_path}: {str(e)}")
+        app.logger.error(f"Failed to initialize repository at {repo_path}: {str(e)}", exc_info=True)
         return []
     
     try:
         commits = list(repo.iter_commits(branch_name))
+        app.logger.info(f"Successfully retrieved {len(commits)} commits for branch {branch_name}")
     except GitCommandError as e:
-        app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}")
+        app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}", exc_info=True)
         return []
     
     vm_states = []
@@ -99,27 +99,32 @@ def index():
 
 @app.route('/vm_data')
 def get_vm_data():
-    if not vm_available:
-        return jsonify({'error': 'VM module not available'}), 500
-    
     branch = request.args.get('branch', 'main')
     repo = request.args.get('repo')
     
+    app.logger.info(f"get_vm_data called with branch: '{branch}', repo: '{repo}'")
+    
+    if not branch or branch == 'undefined':
+        app.logger.warning(f"Invalid branch name received: '{branch}'")
+        return jsonify({'error': 'Invalid branch name'}), 400
+    
     app.logger.info(f"Fetching VM data for branch: {branch}, repo: {repo}")
     
-    vm_states = extract_vm_info(branch, repo)
-    
-    if not vm_states:
-        app.logger.warning(f"No VM states found for branch: {branch}, repo: {repo}")
-        return jsonify({'error': 'No VM states found'}), 404
-    
-    return jsonify(vm_states)
+    try:
+        vm_states = extract_vm_info(branch, repo)
+        
+        if not vm_states:
+            app.logger.warning(f"No VM states found for branch: {branch}, repo: {repo}")
+            return jsonify([]), 200  # Return an empty array instead of a 404
+        
+        app.logger.info(f"Successfully retrieved {len(vm_states)} VM states for branch: {branch}, repo: {repo}")
+        return jsonify(vm_states)
+    except Exception as e:
+        app.logger.error(f"Error fetching VM data: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/vm_state/<commit_hash>')
 def get_vm_state(commit_hash):
-    if not vm_available:
-        return jsonify({'error': 'VM module not available'}), 500
-
     repo_name = request.args.get('repo')
     repo_path = get_repo_path(repo_name)
     repo = git.Repo(repo_path)
@@ -197,47 +202,47 @@ def update_plan():
         return jsonify({'error': 'Missing required parameters'}), 400
 
     repo_path = get_repo_path(repo_name)
-    vm = VM(repo_path)
-
+    
     try:
-        # Load the state from the specified commit
-        vm.load_state(commit_hash)
-        
-        # Validate index_within_plan
-        if index_within_plan < 0 or index_within_plan >= len(vm.state['current_plan']):
-            return jsonify({'error': f'Invalid index_within_plan: {index_within_plan}. Valid range is 0 to {len(vm.state["current_plan"]) - 1}.'}), 400
+        # Initialize repo
+        repo = git.Repo(repo_path)
 
         # Create a new branch
         new_branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        repo = git.Repo(repo_path)
         new_branch = repo.create_head(new_branch_name, commit_hash)
         repo.head.reference = new_branch
         repo.head.reset(index=True, working_tree=True)
 
-        # Update the plan
-        vm.state['current_plan'] = updated_plan
-        vm.state['program_counter'] = index_within_plan
-        
-        # Save the updated state
-        vm.state_manager.save_state()
-        
-        # Commit the changes with a meaningful message
-        commit_message = f"Updated plan to execute from step {index_within_plan}"
-        commit_result = vm.git_manager.commit_changes(commit_message)
-        new_commit_hash = commit_result.hexsha if commit_result else None
+        # Load the current vm_state.json
+        vm_state_path = os.path.join(repo_path, 'vm_state.json')
+        with open(vm_state_path, 'r') as f:
+            vm_state = json.load(f)
 
-        if new_commit_hash:
-            return jsonify({
-                'success': True,
-                'message': 'Plan updated successfully',
-                'new_commit_hash': new_commit_hash,
-                'new_branch': new_branch_name
-            })
-        else:
-            return jsonify({'error': 'Failed to commit changes'}), 500
+        # Update the plan and program counter
+        vm_state['current_plan'] = updated_plan
+        vm_state['program_counter'] = index_within_plan
+
+        # Save the updated state
+        with open(vm_state_path, 'w') as f:
+            json.dump(vm_state, f, indent=2)
+
+        # Commit the changes
+        repo.index.add([vm_state_path])
+        commit_message = f"Updated plan to execute from step {index_within_plan}"
+        new_commit = repo.index.commit(commit_message)
+
+        return jsonify({
+            'success': True,
+            'message': 'Plan updated successfully',
+            'new_commit_hash': new_commit.hexsha,
+            'new_branch': new_branch_name
+        })
     except Exception as e:
         app.logger.error(f"Error updating plan: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+def get_vm_instance(repo_path):
+    return VM(repo_path)
 
 @app.route('/execute_vm', methods=['POST'])
 def execute_vm():
@@ -245,27 +250,34 @@ def execute_vm():
         data = request.json
         app.logger.info(f"Received execute_vm request with data: {data}")
 
-        if not vm_available:
-            return jsonify({'error': 'VM module not available'}), 500
-
         commit_hash = data.get('commit_hash')
         steps = int(data.get('steps', 1))
         index_within_plan = int(data.get('start_from', 0))
         repo_name = data.get('repo')
+        new_branch = data.get('new_branch')
 
         if not all([commit_hash, steps, repo_name]):
             return jsonify({'error': 'Missing required parameters'}), 400
 
         repo_path = get_repo_path(repo_name)
-        repo = git.Repo(repo_path)
+        
+        try:
+            vm = get_vm_instance(repo_path)
+        except ImportError as e:
+            return jsonify({'error': str(e)}), 500
 
-        # Use the current branch instead of creating a new one
-        current_branch = repo.active_branch.name
-        app.logger.info(f"Using current branch: {current_branch}")
-
-        vm = VM(repo_path)
         vm.load_state(commit_hash)
         
+        # Get the repo instance
+        repo = git.Repo(repo_path)
+
+        # Use the new_branch if provided, otherwise use the current active branch
+        if new_branch:
+            app.logger.info(f"Switching to new branch: {new_branch}")
+            repo.git.checkout(new_branch)
+        current_branch = repo.active_branch.name
+        app.logger.info(f"Using branch: {current_branch}")
+
         plan_length = len(vm.state['current_plan'])
         
         if index_within_plan >= plan_length:
@@ -276,7 +288,6 @@ def execute_vm():
                 'plan_length': plan_length
             }), 400
         
-        # Adjust steps if it would exceed the plan length
         steps_to_execute = min(steps, plan_length - index_within_plan)
         
         vm.state['program_counter'] = index_within_plan
@@ -294,18 +305,21 @@ def execute_vm():
         app.logger.info(f"Execution completed, executed {steps_executed} steps. New state: {new_state}")
 
         new_state_json = json.dumps(new_state, indent=2)
-        with open(os.path.join(repo_path, 'vm_state.json'), 'w') as f:
+        vm_state_path = os.path.join(repo_path, 'vm_state.json')
+        with open(vm_state_path, 'w') as f:
             f.write(new_state_json)
-        repo.index.add(['vm_state.json'])
-        repo.index.commit(f"Updated VM state after executing {steps_executed} steps from index {index_within_plan}")
+        
+        repo.index.add([vm_state_path])
+        commit_message = f"Updated VM state after executing {steps_executed} steps from index {index_within_plan}"
+        new_commit = repo.index.commit(commit_message)
 
         return jsonify({
             'success': True,
             'new_state': new_state, 
-            'new_branch': current_branch,  # Return the current branch name
+            'current_branch': current_branch,
             'steps_executed': steps_executed,
             'plan_length': plan_length,
-            'last_commit_hash': repo.head.commit.hexsha
+            'last_commit_hash': new_commit.hexsha
         })
     except Exception as e:
         app.logger.error(f"Error in execute_vm: {str(e)}")
@@ -418,6 +432,4 @@ def repo_exists(repo_name):
     return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, '.git'))
 
 if __name__ == "__main__":
-    if not vm_available:
-        print("Warning: VM module is missing. Some features will not be available.")
     app.run(debug=True)

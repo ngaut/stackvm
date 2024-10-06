@@ -279,15 +279,16 @@
         async function updateChart(branches) {
             const branchesData = await Promise.all(branches.map(async branch => {
                 try {
-                    return await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+                    const data = await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+                    return data.length > 0 ? data : null;
                 } catch (error) {
                     console.warn(`Failed to fetch data for branch ${branch}:`, error);
-                    return [];
+                    return null;
                 }
             }));
 
-            const validBranches = branches.filter((_, index) => branchesData[index].length > 0);
-            const validBranchesData = branchesData.filter(data => data.length > 0);
+            const validBranches = branches.filter((_, index) => branchesData[index] !== null);
+            const validBranchesData = branchesData.filter(data => data !== null);
 
             const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
             const pointStyles = ['circle', 'triangle', 'rect', 'rectRounded', 'rectRot', 'star', 'cross'];
@@ -381,16 +382,28 @@
                                 }
                             }
                         },
-                        onClick: (event, elements) => {
+                        onClick: async (event, elements) => {
                             if (elements.length > 0) {
                                 const { index, datasetIndex } = elements[0];
                                 const branch = validBranches[datasetIndex];
                                 const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
                                 currentBranch = branch;
                                 document.getElementById('branchDropdown').value = branch;
-                                updateStepList(validBranchesData[datasetIndex]);
-                                showCommitDetailsAndHighlight(commitHash);
-                                showNotification(`Switched to branch: ${branch}`, 'info');
+                                try {
+                                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+                                    if (branchData.length === 0) {
+                                        showNotification(`No VM states found for branch: ${branch}`, 'warning');
+                                        updateStepList([]);
+                                    } else {
+                                        updateStepList(branchData);
+                                        showCommitDetailsAndHighlight(commitHash);
+                                    }
+                                    showNotification(`Switched to branch: ${branch}`, 'info');
+                                } catch (error) {
+                                    console.error('Error fetching branch data:', error);
+                                    showNotification(`Error fetching data for branch: ${branch}`, 'danger');
+                                    updateStepList([]);
+                                }
                             }
                         },
                     }
@@ -417,6 +430,10 @@
 
         function updateStepList(data) {
             const stepList = document.getElementById('stepList');
+            if (!Array.isArray(data) || data.length === 0) {
+                stepList.innerHTML = '<p>No steps available for this selection.</p>';
+                return;
+            }
             stepList.innerHTML = data.map((state, index_within_plan) => `
                 <div class="step-item" id="step-${state.commit_hash}">
                     <div class="d-flex justify-content-between align-items-center">
@@ -566,11 +583,13 @@
                     });
 
                     if (updateData.success) {
+                        console.log(updateData);
                         const executeData = await fetchWithErrorHandling('/execute_vm', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 repo: currentRepo,
+                                new_branch: updateData.new_branch,
                                 commit_hash: updateData.new_commit_hash,
                                 start_from: index_within_plan,
                                 steps: updatedPlan.length - index_within_plan
@@ -578,7 +597,8 @@
                         });
 
                         if (executeData.success) {
-                            await updateUIAfterExecution(executeData.new_branch, executeData.last_commit_hash);
+                            console.log(executeData.current_branch);
+                            await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
                             showNotification('Execution completed successfully', 'success');
                         } else {
                             showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
@@ -628,8 +648,26 @@
             currentBranch = newBranch;
             await loadBranches();
             highlightCurrentBranch();
-            if (lastCommitHash) {
-                showCommitDetailsAndHighlight(lastCommitHash);
+            
+            try {
+                // Fetch the updated data for the new branch
+                const branchData = await fetchWithErrorHandling(`/vm_data?branch=${newBranch}&repo=${encodeURIComponent(currentRepo)}`);
+                
+                if (branchData.length === 0) {
+                    showNotification(`No VM states found for branch: ${newBranch}`, 'warning');
+                    updateStepList([]);
+                } else {
+                    // Update the step list with the new branch data
+                    updateStepList(branchData);
+                    
+                    if (lastCommitHash) {
+                        showCommitDetailsAndHighlight(lastCommitHash);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching branch data:', error);
+                showNotification(`Error fetching data for branch: ${newBranch}`, 'danger');
+                updateStepList([]);
             }
         }
 
