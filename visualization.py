@@ -174,7 +174,7 @@ def update_plan():
     repo_name = data.get('repo')
     commit_hash = data.get('commit_hash')
     updated_plan = data.get('updated_plan')
-    index_within_plan = data.get('program_counter')  # Changed from program_counter to index_within_plan
+    index_within_plan = data.get('program_counter')
     
     if not all([repo_name, commit_hash, updated_plan, index_within_plan is not None]):
         return jsonify({'error': 'Missing required parameters'}), 400
@@ -190,9 +190,16 @@ def update_plan():
         if index_within_plan < 0 or index_within_plan >= len(vm.state['current_plan']):
             return jsonify({'error': f'Invalid index_within_plan: {index_within_plan}. Valid range is 0 to {len(vm.state["current_plan"]) - 1}.'}), 400
 
+        # Create a new branch
+        new_branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        repo = git.Repo(repo_path)
+        new_branch = repo.create_head(new_branch_name, commit_hash)
+        repo.head.reference = new_branch
+        repo.head.reset(index=True, working_tree=True)
+
         # Update the plan
         vm.state['current_plan'] = updated_plan
-        vm.state['program_counter'] = index_within_plan  # Set program_counter to index_within_plan
+        vm.state['program_counter'] = index_within_plan
         
         # Save the updated state
         vm.state_manager.save_state()
@@ -206,7 +213,8 @@ def update_plan():
             return jsonify({
                 'success': True,
                 'message': 'Plan updated successfully',
-                'new_commit_hash': new_commit_hash
+                'new_commit_hash': new_commit_hash,
+                'new_branch': new_branch_name
             })
         else:
             return jsonify({'error': 'Failed to commit changes'}), 500
@@ -225,7 +233,7 @@ def execute_vm():
 
         commit_hash = data.get('commit_hash')
         steps = int(data.get('steps', 1))
-        index_within_plan = int(data.get('start_from', 0))  # Changed from start_from to index_within_plan
+        index_within_plan = int(data.get('start_from', 0))
         repo_name = data.get('repo')
 
         if not all([commit_hash, steps, repo_name]):
@@ -234,7 +242,7 @@ def execute_vm():
         repo_path = get_repo_path(repo_name)
         repo = git.Repo(repo_path)
 
-        new_branch_name = f"derived_branch_execution_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        new_branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d%H%M%S')}"
         current_branch = repo.active_branch.name
         repo.git.checkout(commit_hash, b=new_branch_name)
         app.logger.info(f"Created new branch: {new_branch_name}")

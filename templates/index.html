@@ -531,8 +531,6 @@
                     throw new Error('Current plan is empty or not an array. Please ensure a plan is loaded.');
                 }
 
-                console.log('current_plan:', data.current_plan);
-
                 // Convert index_within_plan to a number and ensure it's within bounds
                 index_within_plan = Number(index_within_plan);
                 if (isNaN(index_within_plan) || index_within_plan < 0 || index_within_plan >= data.current_plan.length) {
@@ -561,6 +559,9 @@
                     const updateData = await updateResponse.json();
 
                     if (updateData.success) {
+                        // Switch to the new branch
+                        await switchBranch(updateData.new_branch);
+
                         // Execute the VM with the updated plan
                         const executeResponse = await fetch('/execute_vm', {
                             method: 'POST',
