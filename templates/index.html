@@ -134,46 +134,46 @@
         </div>
         <div id="notification" class="alert" style="display: none;"></div>
         <div class="row">
-            <div class="col-lg-4">
+            <div class="col-md-3">
                 <div class="step-list">
                     <h2 class="step-list-title">Execution Steps</h2>
                     <input type="text" id="stepSearch" class="form-control mb-3" placeholder="Search steps...">
                     <div id="stepList"></div>
                 </div>
             </div>
-            <div class="col-lg-8">
+            <div class="col-md-9">
                 <div class="chart-container">
-                    <canvas id="vmChart"></canvas>
+                    <canvas id="executionChart"></canvas>
                 </div>
-            </div>
-        </div>
-        <div class="mt-4">
-            <ul class="nav nav-tabs" id="myTab" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="commit-tab" data-bs-toggle="tab" data-bs-target="#commit" type="button" role="tab" aria-controls="commit" aria-selected="true">Commit Details</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="vmstate-tab" data-bs-toggle="tab" data-bs-target="#vmstate" type="button" role="tab" aria-controls="vmstate" aria-selected="false">VM State</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="codediff-tab" data-bs-toggle="tab" data-bs-target="#codediff" type="button" role="tab" aria-controls="codediff" aria-selected="false">Code Diff</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="vmstatedetails-tab" data-bs-toggle="tab" data-bs-target="#vmstatedetails" type="button" role="tab" aria-controls="vmstatedetails" aria-selected="false">VM State Details</button>
-                </li>
-            </ul>
-            <div class="tab-content mt-3" id="myTabContent">
-                <div class="tab-pane fade show active" id="commit" role="tabpanel" aria-labelledby="commit-tab">
-                    <div id="commitDetails"></div>
-                </div>
-                <div class="tab-pane fade" id="vmstate" role="tabpanel" aria-labelledby="vmstate-tab">
-                    <div id="vmState"></div>
-                </div>
-                <div class="tab-pane fade" id="codediff" role="tabpanel" aria-labelledby="codediff-tab">
-                    <div id="codeDiff"></div>
-                </div>
-                <div class="tab-pane fade" id="vmstatedetails" role="tabpanel" aria-labelledby="vmstatedetails-tab">
-                    <div id="vmStateDetails"></div>
+                <div class="mt-4">
+                    <ul class="nav nav-tabs" id="detailsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="commit-tab" data-bs-toggle="tab" data-bs-target="#commit" type="button" role="tab" aria-controls="commit" aria-selected="true">Commit Details</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="vm-state-tab" data-bs-toggle="tab" data-bs-target="#vm-state" type="button" role="tab" aria-controls="vm-state" aria-selected="false">VM State</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="code-diff-tab" data-bs-toggle="tab" data-bs-target="#code-diff" type="button" role="tab" aria-controls="code-diff" aria-selected="false">Code Diff</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="vm-variables-tab" data-bs-toggle="tab" data-bs-target="#vm-variables" type="button" role="tab" aria-controls="vm-variables" aria-selected="false">VM Variables</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content mt-2" id="detailsTabContent">
+                        <div class="tab-pane fade show active" id="commit" role="tabpanel" aria-labelledby="commit-tab">
+                            <div id="commitDetails"></div>
+                        </div>
+                        <div class="tab-pane fade" id="vm-state" role="tabpanel" aria-labelledby="vm-state-tab">
+                            <div id="vmState"></div>
+                        </div>
+                        <div class="tab-pane fade" id="code-diff" role="tabpanel" aria-labelledby="code-diff-tab">
+                            <div id="codeDiff"></div>
+                        </div>
+                        <div class="tab-pane fade" id="vm-variables" role="tabpanel" aria-labelledby="vm-variables-tab">
+                            <div id="vmVariables"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -288,7 +288,7 @@
                 chart.data.datasets = datasets;
                 chart.update();
             } else {
-                const ctx = document.getElementById('vmChart').getContext('2d');
+                const ctx = document.getElementById('executionChart').getContext('2d');
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: { datasets },
@@ -443,15 +443,9 @@
         }
 
         function updateVMStateDetails(vmStateDetails, commitHash) {
-            document.getElementById('vmStateDetails').innerHTML = `
+            document.getElementById('vmVariables').innerHTML = `
                 <h2>VM Variables</h2>
                 <pre><code class="json">${JSON.stringify(vmStateDetails.variables || {}, null, 2)}</code></pre>
-                <h2>VM Parameters</h2>
-                <pre><code class="json">${JSON.stringify(vmStateDetails.parameters || {}, null, 2)}</code></pre>
-                <div class="execute-controls mt-3">
-                    <input type="number" id="stepCount" value="1" min="1" class="form-control d-inline-block" style="width: 100px;">
-                    <button onclick="executeVM('${commitHash}')" class="btn btn-primary">Execute Steps</button>
-                </div>
             `;
         }
 
@@ -498,30 +492,6 @@
                     console.warn(`No point found for commit hash: ${commitHash}`);
                     currentHighlightedCommit = null;
                 }
-            }
-        }
-
-        async function executeVM() {
-            // ... existing code ...
-
-            try {
-                const response = await fetch('/execute_vm', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                const result = await response.json();
-                if (response.ok) {
-                    showNotification(`Execution completed. ${result.steps_executed} steps executed.`, 'success');
-                    await updateUIAfterExecution(result.new_branch, result.new_state.commit_hash);
-                } else {
-                    showNotification(`Error: ${result.error}`, 'danger');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showNotification(`Error executing VM: ${error.message}`, 'danger');
-            } finally {
-                showLoading(false);
             }
         }
 
@@ -599,7 +569,7 @@
         }
 
         function clearDetails() {
-            ['commitDetails', 'vmState', 'codeDiff', 'vmStateDetails'].forEach(id => {
+            ['commitDetails', 'vmState', 'codeDiff', 'vmVariables'].forEach(id => {
                 document.getElementById(id).innerHTML = `<h2>No ${id.replace('Details', '').replace('vm', 'VM')} Available</h2>`;
             });
         }
