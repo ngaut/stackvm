@@ -253,14 +253,7 @@
 
         async function loadBranches() {
             const data = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
-            const select = document.getElementById('branchDropdown');
-            select.innerHTML = data.map(branch => `
-                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
-                    ${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})
-                </option>
-            `).join('');
-            document.getElementById('branchSelect').style.display = 'block';
-            currentBranch = data.find(branch => branch.is_active)?.name || data[0]?.name;
+            updateBranchSelector(data);
             return updateChart(data.map(branch => branch.name));
         }
 
@@ -270,14 +263,9 @@
             if (data.success) {
                 currentBranch = branchName;
                 showNotification(data.message, 'success');
-                
-                // Update the chart to highlight the new current branch
                 highlightCurrentBranch();
-                
-                // Update the step list for the new branch
                 const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`);
                 updateStepList(branchData);
-                
                 if (branchData.length > 0) {
                     showCommitDetailsAndHighlight(branchData[0].commit_hash);
                 } else {
@@ -294,51 +282,38 @@
                     return await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
                 } catch (error) {
                     console.warn(`Failed to fetch data for branch ${branch}:`, error);
-                    return []; // Return empty array for branches with no data
+                    return [];
                 }
             }));
 
-            // Filter out branches with no data
             const validBranches = branches.filter((_, index) => branchesData[index].length > 0);
             const validBranchesData = branchesData.filter(data => data.length > 0);
-
-            console.log('Valid Branches:', validBranches);
-            console.log('Valid Branches data:', validBranchesData);
 
             const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
             const pointStyles = ['circle', 'triangle', 'rect', 'rectRounded', 'rectRot', 'star', 'cross'];
 
-            const datasets = validBranchesData.map((data, index) => {
-                console.log(`Processing branch: ${validBranches[index]}, data length: ${data.length}`);
-                const branchData = data.map(state => ({
+            const datasets = validBranchesData.map((data, index) => ({
+                label: `${validBranches[index]} - Program Counter`,
+                data: data.map(state => ({
                     x: new Date(state.time),
                     y: state.vm_state?.program_counter,
                     commit_hash: state.commit_hash,
                     branch: validBranches[index]
-                }));
-                console.log(`Branch ${validBranches[index]} data:`, branchData);
-                return {
-                    label: `${validBranches[index]} - Program Counter`,
-                    data: branchData,
-                    borderColor: colors[index % colors.length],
-                    backgroundColor: `${colors[index % colors.length]}33`,
-                    fill: false,
-                    tension: 0.4,
-                    borderWidth: 1,
-                    pointRadius: 3,
-                    pointHoverRadius: 8,
-                    pointStyle: pointStyles[index % pointStyles.length]
-                };
-            });
+                })),
+                borderColor: colors[index % colors.length],
+                backgroundColor: `${colors[index % colors.length]}33`,
+                fill: false,
+                tension: 0.4,
+                borderWidth: 1,
+                pointRadius: 3,
+                pointHoverRadius: 8,
+                pointStyle: pointStyles[index % pointStyles.length]
+            }));
 
-            console.log('Datasets:', datasets);
-
-            // Calculate the min and max dates across all datasets
             const allDates = datasets.flatMap(dataset => dataset.data.map(d => d.x));
             const minDate = new Date(Math.min(...allDates));
             const maxDate = new Date(Math.max(...allDates));
 
-            // Add some padding to the date range
             minDate.setHours(minDate.getHours() - 1);
             maxDate.setHours(maxDate.getHours() + 1);
 
@@ -360,9 +335,7 @@
                                 type: 'time',
                                 time: { 
                                     unit: 'hour',
-                                    displayFormats: { 
-                                        hour: 'MMM D, HH:mm'
-                                    },
+                                    displayFormats: { hour: 'MMM D, HH:mm' },
                                     tooltipFormat: 'MMM D, YYYY, HH:mm:ss'
                                 },
                                 title: { display: true, text: 'Time' },
@@ -482,7 +455,6 @@
                     fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
                 ]);
 
-                updateChartForCommit(commitHash);
                 updateCommitDetails(commitDetails);
                 updateVMState(vmState);
                 updateCodeDiff(codeDiff);
@@ -493,20 +465,6 @@
                 console.error('Error fetching details:', error);
                 showNotification('Error fetching commit details: ' + error.message, 'danger');
                 clearDetails();
-            }
-        }
-
-        function updateChartForCommit(commitHash) {
-            if (chart) {
-                chart.data.datasets.forEach(dataset => {
-                    const pointIndex = dataset.data.findIndex(point => point.commit_hash === commitHash);
-                    if (pointIndex !== -1) {
-                        currentBranch = dataset.label.split(' - ')[0];
-                        document.getElementById('branchDropdown').value = currentBranch;
-                        chart.setActiveElements([{ datasetIndex: chart.data.datasets.indexOf(dataset), index: pointIndex }]);
-                        chart.update('none');
-                    }
-                });
             }
         }
 
@@ -576,11 +534,8 @@
 
         async function executeFromStep(index_within_plan, commitHash) {
             try {
-                const response = await fetch(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
-                const data = await response.json();
+                const data = await fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
                 
-                console.log('VM state data:', data);
-
                 if (!data || typeof data !== 'object') {
                     throw new Error('Invalid VM state data received');
                 }
@@ -589,27 +544,19 @@
                     throw new Error('Current plan is empty or not an array. Please ensure a plan is loaded.');
                 }
 
-                // Convert index_within_plan to a number and ensure it's within bounds
                 index_within_plan = Number(index_within_plan);
                 if (isNaN(index_within_plan) || index_within_plan < 0 || index_within_plan >= data.current_plan.length) {
                     throw new Error(`Invalid index within plan: ${index_within_plan}. Valid range is 0 to ${data.current_plan.length - 1}.`);
                 }
 
-                const currentPlan = data.current_plan;
-
-                // Open modal to edit plan
-                const updatedPlan = await openEditPlanModal(currentPlan, index_within_plan);
+                const updatedPlan = await openEditPlanModal(data.current_plan, index_within_plan);
 
                 if (updatedPlan) {
-                    // Show loading indicator after user confirms the plan
                     showLoading(true);
 
-                    // Update the plan
-                    const updateResponse = await fetch('/update_plan', {
+                    const updateData = await fetchWithErrorHandling('/update_plan', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             repo: currentRepo,
                             commit_hash: commitHash,
@@ -617,15 +564,11 @@
                             program_counter: index_within_plan
                         }),
                     });
-                    const updateData = await updateResponse.json();
 
                     if (updateData.success) {
-                        // Execute the VM with the updated plan
-                        const executeResponse = await fetch('/execute_vm', {
+                        const executeData = await fetchWithErrorHandling('/execute_vm', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 repo: currentRepo,
                                 commit_hash: updateData.new_commit_hash,
@@ -633,7 +576,6 @@
                                 steps: updatedPlan.length - index_within_plan
                             }),
                         });
-                        const executeData = await executeResponse.json();
 
                         if (executeData.success) {
                             await updateUIAfterExecution(executeData.new_branch, executeData.last_commit_hash);
@@ -666,7 +608,6 @@
                 const planEditor = document.getElementById('planEditor');
                 const savePlanButton = document.getElementById('savePlanButton');
 
-                // Set the initial content of the plan editor
                 planEditor.value = JSON.stringify(currentPlan, null, 2);
 
                 savePlanButton.onclick = () => {
@@ -685,23 +626,10 @@
 
         async function updateUIAfterExecution(newBranch, lastCommitHash) {
             currentBranch = newBranch;
-            await loadBranches(); // This will update the chart with all branches
+            await loadBranches();
             highlightCurrentBranch();
             if (lastCommitHash) {
                 showCommitDetailsAndHighlight(lastCommitHash);
-            }
-        }
-
-        // Modify the switchBranch function to update the UI
-        async function switchBranch(branchName) {
-            const data = await fetchWithErrorHandling(`/set_branch/${branchName}?repo=${currentRepo}`);
-            if (data.success) {
-                currentBranch = branchName;
-                await updateUIAfterExecution(branchName, data.last_commit_hash);
-                return true;
-            } else {
-                showNotification('Failed to switch branch: ' + data.error, 'danger');
-                return false;
             }
         }
 
@@ -715,14 +643,6 @@
             [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].map(el => new bootstrap.Tooltip(el));
         }
 
-        document.getElementById('stepSearch').addEventListener('input', e => {
-            const searchTerm = e.target.value.toLowerCase();
-            document.querySelectorAll('.step-item').forEach(item => {
-                item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
-            });
-        });
-
-        // Add this new function to handle manual refresh
         async function manualRefresh() {
             if (chart?.data?.datasets) {
                 const branches = chart.data.datasets.map(dataset => dataset.label.split(' - ')[0]);
@@ -731,18 +651,15 @@
             }
         }
 
-        // Add event listener for the refresh button
-        document.getElementById('refreshButton').addEventListener('click', manualRefresh);
-
-        // Add this function to your JavaScript code
-        async function updateBranchSelector() {
-            const data = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+        function updateBranchSelector(branches) {
             const select = document.getElementById('branchDropdown');
-            select.innerHTML = data.map(branch => `
+            select.innerHTML = branches.map(branch => `
                 <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
-                    ${branch.name} ${branch.is_active ? '(active)' : ''} (${new Date(branch.last_commit_date).toLocaleString()})
+                    ${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})
                 </option>
             `).join('');
+            document.getElementById('branchSelect').style.display = 'block';
+            currentBranch = branches.find(branch => branch.is_active)?.name || branches[0]?.name;
         }
 
         async function deleteBranch() {
@@ -753,14 +670,12 @@
             
             showLoading(true);
             try {
-                const response = await fetch(`/delete_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`, {
+                const data = await fetchWithErrorHandling(`/delete_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`, {
                     method: 'POST'
                 });
-                const data = await response.json();
                 
-                if (response.ok) {
+                if (data.success) {
                     showNotification(data.message, 'success');
-                    // Update the branch list and chart
                     await updateBranchesAndChart();
                 } else {
                     showNotification(`Error: ${data.error}`, 'danger');
@@ -778,15 +693,14 @@
             await updateChart(branches.map(branch => branch.name));
         }
 
-        function updateBranchSelector(branches) {
-            const select = document.getElementById('branchDropdown');
-            select.innerHTML = branches.map(branch => `
-                <option value="${branch.name}" ${branch.is_active ? 'selected' : ''}>
-                    ${branch.name} (${new Date(branch.last_commit_date).toLocaleString()})
-                </option>
-            `).join('');
-            currentBranch = branches.find(branch => branch.is_active)?.name || branches[0]?.name;
-        }
+        document.getElementById('stepSearch').addEventListener('input', e => {
+            const searchTerm = e.target.value.toLowerCase();
+            document.querySelectorAll('.step-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        document.getElementById('refreshButton').addEventListener('click', manualRefresh);
 
         loadDirectories();
         window.addEventListener('resize', () => { if (chart) chart.resize(); });
