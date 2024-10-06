@@ -179,6 +179,26 @@
         </div>
     </div>
 
+    <div class="modal fade" id="editParamsModal" tabindex="-1" aria-labelledby="editParamsModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editParamsModalLabel">Edit Parameters</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="editParamsForm">
+              <!-- Form fields will be dynamically added here -->
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="saveParamsButton">Save changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
         let chart, currentBranch = 'main', currentRepo = '', currentHighlightedCommit = null;
 
@@ -349,14 +369,14 @@
 
         function updateStepList(data) {
             const stepList = document.getElementById('stepList');
-            stepList.innerHTML = data.map((state, displayIndex) => `
+            stepList.innerHTML = data.map((state, index_within_plan) => `
                 <div class="step-item" id="step-${state.commit_hash}">
                     <div class="d-flex justify-content-between align-items-center">
                         <strong>${state.title || 'Untitled Step'}</strong>
                         <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
                     </div>
                     <div class="mt-2">
-                        <button onclick="executeFromStep(${data.length - 1 - displayIndex}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute">
+                        <button onclick="executeFromStep(${index_within_plan}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute">
                             <i class="bi bi-play-fill"></i> Execute
                         </button>
                     </div>
@@ -495,32 +515,158 @@
             }
         }
 
-        async function executeFromStep(stepIndex, commitHash) {
-            const steps = prompt("Enter the number of steps to execute:", "1");
-            if (steps === null) return;
-
+        async function executeFromStep(index_within_plan, commitHash) {
             showLoading(true);
             try {
-                const data = await fetchWithErrorHandling('/execute_vm', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ commit_hash: commitHash, steps: parseInt(steps), start_from: stepIndex, repo: currentRepo }),
-                });
-
-                let message = `Executed ${data.steps_executed} step(s) from step ${stepIndex}. `;
-                if (data.steps_executed < parseInt(steps)) {
-                    message += `(Reached end of plan at step ${data.plan_length}). `;
-                }
-                message += `New branch created: ${data.new_branch}`;
-                showNotification(message, 'success');
+                const response = await fetch(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
+                const data = await response.json();
                 
-                await switchBranch(data.new_branch);
-                await updateUIAfterExecution(data.new_branch, data.last_commit_hash || commitHash);
+                console.log('VM state data:', data);
+
+                if (!data || typeof data !== 'object') {
+                    throw new Error('Invalid VM state data received');
+                }
+
+                if (!Array.isArray(data.current_plan) || data.current_plan.length === 0) {
+                    throw new Error('Current plan is empty or not an array. Please ensure a plan is loaded.');
+                }
+
+                console.log('current_plan:', data.current_plan);
+
+                // Convert index_within_plan to a number and ensure it's within bounds
+                index_within_plan = Number(index_within_plan);
+                if (isNaN(index_within_plan) || index_within_plan < 0 || index_within_plan >= data.current_plan.length) {
+                    throw new Error(`Invalid index within plan: ${index_within_plan}. Valid range is 0 to ${data.current_plan.length - 1}.`);
+                }
+
+                const currentPlan = data.current_plan;
+
+                // Open modal to edit parameters
+                const updatedPlan = await openEditParamsModal(currentPlan, index_within_plan);
+
+                if (updatedPlan) {
+                    // Update the plan
+                    const updateResponse = await fetch('/update_plan', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            repo: currentRepo,
+                            commit_hash: commitHash,
+                            updated_plan: updatedPlan,
+                            program_counter: index_within_plan
+                        }),
+                    });
+                    const updateData = await updateResponse.json();
+
+                    if (updateData.success) {
+                        // Execute the VM with the updated plan
+                        const executeResponse = await fetch('/execute_vm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                repo: currentRepo,
+                                commit_hash: updateData.new_commit_hash,
+                                start_from: index_within_plan,
+                                steps: updatedPlan.length - index_within_plan
+                            }),
+                        });
+                        const executeData = await executeResponse.json();
+
+                        if (executeData.success) {
+                            await updateUIAfterExecution(executeData.new_branch, executeData.last_commit_hash);
+                            showNotification('Execution completed successfully', 'success');
+                        } else {
+                            showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+                        }
+                    } else {
+                        showNotification('Failed to update plan: ' + (updateData.error || 'Unknown error'), 'danger');
+                    }
+                }
             } catch (error) {
-                showNotification(`Error executing VM: ${error.message}`, 'danger');
+                console.error('Error in executeFromStep:', error);
+                showNotification('An error occurred: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
             }
+        }
+
+        async function openEditParamsModal(currentPlan, index_within_plan) {
+            return new Promise((resolve, reject) => {
+                const modalElement = document.getElementById('editParamsModal');
+                if (!modalElement) {
+                    console.error('Modal element not found');
+                    reject(new Error('Modal element not found'));
+                    return;
+                }
+
+                let modal;
+                try {
+                    modal = new bootstrap.Modal(modalElement);
+                } catch (error) {
+                    console.error('Error initializing modal:', error);
+                    reject(error);
+                    return;
+                }
+
+                const form = document.getElementById('editParamsForm');
+                if (!form) {
+                    console.error('Edit params form not found');
+                    reject(new Error('Edit params form not found'));
+                    return;
+                }
+
+                form.innerHTML = '';
+
+                if (!Array.isArray(currentPlan) || index_within_plan < 0 || index_within_plan >= currentPlan.length) {
+                    console.error('Invalid currentPlan or index_within_plan');
+                    reject(new Error('Invalid currentPlan or index_within_plan'));
+                    return;
+                }
+
+                const currentStep = currentPlan[index_within_plan];
+                if (!currentStep || typeof currentStep !== 'object') {
+                    console.error('Invalid step data');
+                    reject(new Error('Invalid step data'));
+                    return;
+                }
+
+                const parameters = currentStep.parameters || {};
+                for (const [key, value] of Object.entries(parameters)) {
+                    const formGroup = document.createElement('div');
+                    formGroup.className = 'mb-3';
+                    formGroup.innerHTML = `
+                        <label for="${key}" class="form-label">${key}</label>
+                        <input type="text" class="form-control" id="${key}" name="${key}" value="${value}">
+                    `;
+                    form.appendChild(formGroup);
+                }
+
+                const saveButton = document.getElementById('saveParamsButton');
+                if (!saveButton) {
+                    console.error('Save button not found');
+                    reject(new Error('Save button not found'));
+                    return;
+                }
+
+                saveButton.onclick = () => {
+                    const updatedParams = {};
+                    for (const input of form.elements) {
+                        if (input.name) {
+                            updatedParams[input.name] = input.value;
+                        }
+                    }
+                    const updatedPlan = [...currentPlan];
+                    updatedPlan[index_within_plan] = { ...currentStep, parameters: updatedParams };
+                    modal.hide();
+                    resolve(updatedPlan);
+                };
+
+                modal.show();
+            });
         }
 
         async function updateUIAfterExecution(newBranch, lastCommitHash) {

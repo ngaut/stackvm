@@ -168,6 +168,52 @@ def commit_details(commit_hash):
         app.logger.error(f"Error fetching commit details for {commit_hash}: {str(e)}")
         return jsonify({'error': str(e)}), 404
 
+@app.route('/update_plan', methods=['POST'])
+def update_plan():
+    data = request.json
+    repo_name = data.get('repo')
+    commit_hash = data.get('commit_hash')
+    updated_plan = data.get('updated_plan')
+    index_within_plan = data.get('program_counter')  # Changed from program_counter to index_within_plan
+    
+    if not all([repo_name, commit_hash, updated_plan, index_within_plan is not None]):
+        return jsonify({'error': 'Missing required parameters'}), 400
+
+    repo_path = get_repo_path(repo_name)
+    vm = VM(repo_path)
+
+    try:
+        # Load the state from the specified commit
+        vm.load_state(commit_hash)
+        
+        # Validate index_within_plan
+        if index_within_plan < 0 or index_within_plan >= len(vm.state['current_plan']):
+            return jsonify({'error': f'Invalid index_within_plan: {index_within_plan}. Valid range is 0 to {len(vm.state["current_plan"]) - 1}.'}), 400
+
+        # Update the plan
+        vm.state['current_plan'] = updated_plan
+        vm.state['program_counter'] = index_within_plan  # Set program_counter to index_within_plan
+        
+        # Save the updated state
+        vm.state_manager.save_state()
+        
+        # Commit the changes with a meaningful message
+        commit_message = f"Updated plan to execute from step {index_within_plan}"
+        commit_result = vm.git_manager.commit_changes(commit_message)
+        new_commit_hash = commit_result.hexsha if commit_result else None
+
+        if new_commit_hash:
+            return jsonify({
+                'success': True,
+                'message': 'Plan updated successfully',
+                'new_commit_hash': new_commit_hash
+            })
+        else:
+            return jsonify({'error': 'Failed to commit changes'}), 500
+    except Exception as e:
+        app.logger.error(f"Error updating plan: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/execute_vm', methods=['POST'])
 def execute_vm():
     try:
@@ -179,7 +225,7 @@ def execute_vm():
 
         commit_hash = data.get('commit_hash')
         steps = int(data.get('steps', 1))
-        start_from = int(data.get('start_from', 0))
+        index_within_plan = int(data.get('start_from', 0))  # Changed from start_from to index_within_plan
         repo_name = data.get('repo')
 
         if not all([commit_hash, steps, repo_name]):
@@ -198,20 +244,20 @@ def execute_vm():
         
         plan_length = len(vm.state['current_plan'])
         
-        if start_from >= plan_length:
-            app.logger.info(f"Start index {start_from} is beyond the current plan length {plan_length}")
+        if index_within_plan >= plan_length:
+            app.logger.info(f"Start index {index_within_plan} is beyond the current plan length {plan_length}")
             return jsonify({
                 'error': 'Start index is beyond the current plan length',
-                'start_from': start_from,
+                'index_within_plan': index_within_plan,
                 'plan_length': plan_length
             }), 400
         
         # Adjust steps if it would exceed the plan length
-        steps_to_execute = min(steps, plan_length - start_from)
+        steps_to_execute = min(steps, plan_length - index_within_plan)
         
-        vm.state['program_counter'] = start_from
+        vm.state['program_counter'] = index_within_plan
 
-        app.logger.info(f"Executing {steps_to_execute} steps from index {start_from}")
+        app.logger.info(f"Executing {steps_to_execute} steps from index {index_within_plan}")
         steps_executed = 0
         for _ in range(steps_to_execute):
             if vm.step():
@@ -227,13 +273,15 @@ def execute_vm():
         with open(os.path.join(repo_path, 'vm_state.json'), 'w') as f:
             f.write(new_state_json)
         repo.index.add(['vm_state.json'])
-        repo.index.commit(f"Updated VM state after executing {steps_executed} steps from index {start_from}")
+        repo.index.commit(f"Updated VM state after executing {steps_executed} steps from index {index_within_plan}")
 
         return jsonify({
+            'success': True,
             'new_state': new_state, 
             'new_branch': new_branch_name, 
             'steps_executed': steps_executed,
-            'plan_length': plan_length
+            'plan_length': plan_length,
+            'last_commit_hash': repo.head.commit.hexsha
         })
     except Exception as e:
         app.logger.error(f"Error in execute_vm: {str(e)}")

@@ -37,19 +37,19 @@ class GitManager:
 
         return repo
 
-    def commit_changes(self, message):
+    def commit_changes(self, commit_message):
         try:
             self.repo.git.add(all=True)
-            if self.repo.is_dirty():
-                self.repo.index.commit(message)
-                self.logger.info(f"Committed changes with message: {message}")
-                return True
+            if self.repo.is_dirty(untracked_files=True):
+                commit = self.repo.index.commit(commit_message)
+                return commit
             else:
-                self.logger.info("No changes to commit.")
-                return False
-        except git.GitCommandError as e:
-            self.logger.error(f"Git commit failed: {str(e)}")
-            return False
+                # If there are no changes to commit, return the latest commit
+                self.logger.info(f"No changes to commit, returning the latest commit {self.repo.head.commit.hexsha}")
+                return self.repo.head.commit
+        except Exception as e:
+            print(f"Error committing changes: {str(e)}")
+            return None
 
     def run_command(self, command):
         try:
