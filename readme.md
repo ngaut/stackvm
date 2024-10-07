@@ -1,4 +1,4 @@
-# Jarvis
+# StackVM
 
 ## Installation
 
@@ -10,6 +10,8 @@ pip install Flask GitPython
 ```
 
 ## Usage
+
+ export OPENAI_API_KEY
 
 1. **Run the Visualization Script**: 
    To summarize the performance improvement of TiDB from version 6.5 to the newest version, execute the following command:
