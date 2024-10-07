@@ -97,9 +97,6 @@
 <body>
     <div class="container">
         <h1 class="mb-4">VM Execution Visualization</h1>
-        <button id="refreshButton" class="btn btn-outline-primary me-2">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
         <div id="loading">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
@@ -756,8 +753,6 @@
                 item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
             });
         });
-
-        document.getElementById('refreshButton').addEventListener('click', manualRefresh);
 
         loadDirectories();
         window.addEventListener('resize', () => { if (chart) chart.resize(); });
