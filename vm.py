@@ -10,7 +10,7 @@ from utils import interpolate_variables, parse_plan, load_state, save_state
 from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
-import git  # Make sure this import is at the top of the file
+import git
 
 def show_file(repo, commit_hash, file_path):
     try:
@@ -51,8 +51,6 @@ class PlanExecutionVM:
 
         self.handlers_registered = False
         self.register_handlers()
-
-        self.load_state = self.load_state  # This line ensures the method is available
 
     def register_handlers(self):
         if not self.handlers_registered:
@@ -96,45 +94,46 @@ class PlanExecutionVM:
         else:
             return param
 
-    def _commit(self, action: str, detail: str = "") -> None:
+    def _commit(self, action: str, detail: str = "") -> Optional[str]:
         """
         Helper method to create and commit meaningful commit messages.
         
         Parameters:
             action (str): A brief description of the action performed.
             detail (str): Additional details about the action.
+        
+        Returns:
+            str: The commit hash if successful, None otherwise.
         """
         if detail:
             commit_message = f"{action}: {detail}"
         else:
             commit_message = action
-        self.git_manager.commit_changes(commit_message)
+        return self.git_manager.commit_changes(commit_message)
 
-    def execute_step_handler(self, step: Dict[str, Any]) -> bool:
+    def execute_step_handler(self, step: Dict[str, Any]) -> Optional[str]:
         step_type = step.get('type')
         params = step.get('parameters', {})
-        seq_no = step.get('seq_no', 'Unknown')  # Get seq_no, default to 'Unknown' if not present
+        seq_no = step.get('seq_no', 'Unknown')
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state['errors'].append("Invalid step type.")
-            return False
+            return None
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if handler:
             success = handler(params)
             if success:
-                save_state(self.state, self.repo_path)  # Save state after successful step execution
+                save_state(self.state, self.repo_path)
                 self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
-            
-            # Log the updated variables
+        
             self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
-            
-            # Prepare commit message
+        
             commit_message = f"[seq_no: {seq_no}][{step_type}] - Executed step\n\n"
             commit_message += "Input Parameters:\n"
             for k, v in params.items():
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
                 commit_message += f"- {k}: {value_preview}\n"
-            
+        
             commit_message += "\nOutput Variables:\n"
             output_vars = params.get('output_var')
             if isinstance(output_vars, str):
@@ -145,30 +144,13 @@ class PlanExecutionVM:
                 v = self.state['variables'].get(k)
                 value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
                 commit_message += f"- {k}: {value_preview}\n"
-            
-            # Use the prepared commit_message
-            self._commit("Execute Step", commit_message)
-            
-            return success
+        
+            commit_hash = self._commit("Execute Step", commit_message)
+        
+            return commit_hash if success else None
         else:
             self.logger.warning(f"Unknown instruction: {step_type}")
-            return False
-
-    def execute_plan(self, plan: List[Dict[str, Any]]) -> bool:
-        self.logger.info("Starting plan execution.")
-        while self.state['program_counter'] < len(plan):
-            step = plan[self.state['program_counter']]
-            success = self.execute_step_handler(step)
-            if not success:
-                self.logger.error(f"Execution failed at step {self.state['program_counter']}.")
-                self.state['errors'].append(f"Execution failed at step {self.state['program_counter']}.")
-                return False
-            if self.state['goal_completed']:
-                self.logger.info("Goal completed during plan execution.")
-                return True
-            self.state['program_counter'] += 1  # Increment program_counter after each step
-        self.logger.info("Plan executed successfully.")
-        return True
+            return None
 
     def execute_subplan(self, subplan: List[Dict[str, Any]]) -> bool:
         self.logger.info("Executing subplan.")
@@ -340,74 +322,6 @@ Provide your response as a valid JSON array of instruction steps.
         else:
             self.logger.info("No changes to the current plan.")
 
-    def run(self) -> None:
-        max_iterations = 1
-        iterations = 0
-
-        while not self.state['goal_completed'] and iterations < max_iterations:
-            self.logger.info(f">>>>>>>>>>>>>>>>>>>>Iteration {iterations}>>>>>>>>>>>>>>>>>>>")
-
-            # Save iteration start to state and commit the start of a new iteration
-            save_state(self.state, self.repo_path)
-            self._commit("Start Iteration", f"Iteration {iterations} started.")
-            iterations += 1
-
-            if not self.state['goal']:
-                self.logger.error("No goal is set.")
-                self.state['errors'].append("No goal is set.")
-                
-                commit_message = "Error: No goal is set."
-                if not self.git_manager.commit_changes(commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
-                
-                break
-
-            execution_success = self.execute_plan(self.state['current_plan'])
-            if not execution_success:
-                self.logger.error("Execution failed. Adjusting plan based on errors.")
-                self.state['errors'].append("Execution failed. Adjusting plan based on errors.")
-                
-                # Commit the execution failure before adjustment
-                self._commit("Execution Failed", "Initiating plan adjustment due to execution failure.")
-                
-                adjust_success = self.adjust_plan()
-                if not adjust_success:
-                    self.logger.error("Failed to adjust the plan. Stopping execution.")
-                    self.state['errors'].append("Failed to adjust the plan. Stopping execution.")
-                    
-                    # Commit the adjustment failure to Git
-                    self._commit("Plan Adjustment Failed", "Stopping execution due to failed plan adjustment.")
-                    
-                    break
-                
-            if self.state['goal_completed']:
-                self.logger.info("Goal achieved successfully.")
-                
-                # Commit goal achievement to Git
-                save_state(self.state, self.repo_path)
-                self._commit("Goal Achieved", "Goal achieved successfully.")
-                break
-
-            self.evolve()
-
-        if iterations >= max_iterations:
-            self.logger.error("Maximum iterations reached without achieving the goal.")
-            self.state['errors'].append("Maximum iterations reached without achieving the goal.")
-            
-            # Commit the iteration limit reached to Git
-            commit_message = "Maximum iterations reached without achieving the goal."
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-
-        result = self.state['variables'].get('result')
-        if result:
-            result = interpolate_variables(result, self.state['variables'])
-            print(f"\nFinal Result: {result}")
-        else:
-            print("\nNo result was generated.")
-
     def get_current_state(self) -> Dict[str, Any]:
         """
         Returns the current state of the VM.
@@ -441,20 +355,20 @@ Provide your response as a valid JSON array of instruction steps.
             step = self.state['current_plan'][self.state['program_counter']]
             self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}")
             try:
-                success = self.execute_step_handler(step)
-                if not success:
+                commit_hash = self.execute_step_handler(step)
+                if not commit_hash:
                     self.logger.error(f"Failed to execute step {self.state['program_counter']}: {step['type']}")
-                    return False
+                    return None
             except Exception as e:
                 self.logger.error(f"Error executing step {self.state['program_counter']}: {str(e)}")
                 self.state['errors'].append(f"Error in step {self.state['program_counter']}: {str(e)}")
-                return False
+                return None
             self.state['program_counter'] += 1
             save_state(self.state, self.repo_path)  # Save state after each step
-            return True
+            return commit_hash
         else:
             self.logger.info("Program execution complete.")
-            return False
+            return None
 
     def set_variable(self, var_name: str, value: Any) -> None:
         """
@@ -485,15 +399,3 @@ Provide your response as a valid JSON array of instruction steps.
             self.logger.info(f"State loaded from commit {commit_hash}")
         else:
             self.logger.error(f"Failed to load state from commit {commit_hash}")
-
-if __name__ == "__main__":
-    repo_path = GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S")
-    vm = PlanExecutionVM(repo_path)
-    vm.set_goal("summary the performance improvement of tidb from version 6.5 to newest version")
-    
-    if vm.generate_plan():
-        print("Generated Plan:")
-        print(json.dumps(vm.state['current_plan'], indent=2))
-        vm.run()
-    else:
-        print("Failed to generate plan.")

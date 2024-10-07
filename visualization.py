@@ -9,6 +9,8 @@ from flask import Flask, render_template, jsonify, request, abort, send_from_dir
 from config import GIT_REPO_PATH
 from git_manager import GitManager
 from utils import load_state, save_state
+import argparse
+from vm import PlanExecutionVM
 
 # Conditional imports to handle potential missing packages
 try:
@@ -294,24 +296,18 @@ def execute_vm():
 
         app.logger.info(f"Executing {steps_to_execute} steps from index {index_within_plan}")
         steps_executed = 0
+        last_commit_hash = None
         for _ in range(steps_to_execute):
-            if vm.step():
+            step_commit_hash = vm.step()
+            if step_commit_hash:
                 steps_executed += 1
+                last_commit_hash = step_commit_hash
             else:
-                app.logger.info("Reached end of current plan")
+                app.logger.info("Reached end of current plan or encountered an error")
                 break
 
         new_state = vm.get_current_state()
         app.logger.info(f"Execution completed, executed {steps_executed} steps. New state: {new_state}")
-
-        new_state_json = json.dumps(new_state, indent=2)
-        vm_state_path = os.path.join(repo_path, 'vm_state.json')
-        with open(vm_state_path, 'w') as f:
-            f.write(new_state_json)
-        
-        repo.index.add([vm_state_path])
-        commit_message = f"Updated VM state after executing {steps_executed} steps from index {index_within_plan}"
-        new_commit = repo.index.commit(commit_message)
 
         return jsonify({
             'success': True,
@@ -319,7 +315,7 @@ def execute_vm():
             'current_branch': current_branch,
             'steps_executed': steps_executed,
             'plan_length': plan_length,
-            'last_commit_hash': new_commit.hexsha
+            'last_commit_hash': last_commit_hash
         })
     except Exception as e:
         app.logger.error(f"Error in execute_vm: {str(e)}")
@@ -431,5 +427,48 @@ def repo_exists(repo_name):
     repo_path = os.path.join(GIT_REPO_PATH, repo_name)
     return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, '.git'))
 
+def run_vm_with_goal(goal, repo_path):
+    vm = PlanExecutionVM(repo_path)
+    vm.set_goal(goal)
+    
+    if vm.generate_plan():
+        print("Generated Plan:")
+        print(json.dumps(vm.state['current_plan'], indent=2))
+        
+        while True:
+            commit_hash = vm.step()
+            if commit_hash is None:
+                break
+            if vm.state['goal_completed']:
+                print("Goal completed during plan execution.")
+                break
+
+        if vm.state['goal_completed']:
+            print("Plan executed successfully.")
+            result = vm.get_variable('result')
+            if result:
+                print(f"\nFinal Result: {result}")
+            else:
+                print("\nNo result was generated.")
+        else:
+            print("Plan execution failed or did not complete.")
+            if vm.state['errors']:
+                print("Errors encountered:")
+                for error in vm.state['errors']:
+                    print(f"- {error}")
+    else:
+        print("Failed to generate plan.")
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
+    parser.add_argument("--goal", help="Set a goal for the VM to achieve")
+    parser.add_argument("--server", action="store_true", help="Start the visualization server")
+    args = parser.parse_args()
+
+    if args.goal:
+        repo_path = GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S")
+        run_vm_with_goal(args.goal, repo_path)
+    elif args.server:
+        app.run(debug=True)
+    else:
+        print("Please specify either --goal or --server")
