@@ -385,12 +385,12 @@
                         onClick: async (event, elements) => {
                             if (elements.length > 0) {
                                 const { index, datasetIndex } = elements[0];
-                                const branch = validBranches[datasetIndex];
+                                const branch = chart.data.datasets[datasetIndex].label.split(' - ')[0];
                                 const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
                                 currentBranch = branch;
                                 document.getElementById('branchDropdown').value = branch;
                                 try {
-                                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+                                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&repo=${encodeURIComponent(currentRepo)}`);
                                     if (branchData.length === 0) {
                                         showNotification(`No VM states found for branch: ${branch}`, 'warning');
                                         updateStepList([]);
@@ -429,24 +429,39 @@
         }
 
         function updateStepList(data) {
+            console.log(data);
+            // Filter out commits that are not step executions
+            const filteredData = data.filter(state => {
+                // Default to 'General' if commit_type is missing
+                const commitType = state.commit_type || 'General';
+                return commitType === 'StepExecution';
+            });
+
             const stepList = document.getElementById('stepList');
-            if (!Array.isArray(data) || data.length === 0) {
+            if (!Array.isArray(filteredData) || filteredData.length === 0) {
                 stepList.innerHTML = '<p>No steps available for this selection.</p>';
                 return;
             }
-            stepList.innerHTML = data.map((state, index_within_plan) => `
-                <div class="step-item" id="step-${state.commit_hash}">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>${state.title || 'Untitled Step'}</strong>
-                        <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
+            stepList.innerHTML = filteredData.map((state, index) => {
+                const description = state.details.description || 'No description available';
+                return `
+                    <div class="step-item" id="step-${state.commit_hash}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>${state.title}: ${description}</strong>
+                            <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
+                        </div>
+                        <div class="mt-2">
+                            <button onclick="executeFromStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
+                                <i class="bi bi-play-fill"></i> Execute
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <small>SeqNo:[${state.seq_no}], PC:[${state.vm_state.program_counter}]</small>
+                            ${state.vm_state.goal_completed ? '<span class="badge bg-success ms-2">Completed</span>' : ''}
+                        </div>
                     </div>
-                    <div class="mt-2">
-                        <button onclick="executeFromStep(${index_within_plan}, '${state.commit_hash}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
-                            <i class="bi bi-play-fill"></i> Execute
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             stepList.querySelectorAll('.step-item').forEach(item => {
                 item.addEventListener('click', event => {
@@ -493,6 +508,11 @@
                 <p><strong>Author:</strong> ${commitDetails.author}</p>
                 <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
                 <p><strong>Message:</strong> ${commitDetails.message}</p>
+                <p><strong>Commit Type:</strong> ${commitDetails.commit_type}</p>
+                <p><strong>Input Parameters:</strong></p>
+                <pre><code class="json">${JSON.stringify(commitDetails.input_parameters, null, 2)}</code></pre>
+                <p><strong>Output Variables:</strong></p>
+                <pre><code class="json">${JSON.stringify(commitDetails.output_variables, null, 2)}</code></pre>
                 <p><strong>Files changed:</strong></p>
                 <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
             `;
@@ -537,6 +557,9 @@
                         foundPoint = true;
                         chart.setActiveElements([{ datasetIndex, index: pointIndex }]);
                         chart.update();
+                        
+                        // Update currentBranch when highlighting a point
+                        currentBranch = dataset.label.split(' - ')[0];
                     }
                 });
 
@@ -549,7 +572,7 @@
             }
         }
 
-        async function executeFromStep(index_within_plan, commitHash) {
+        async function executeFromStep(commitHash, seqNo) {
             try {
                 const data = await fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
                 
@@ -561,12 +584,7 @@
                     throw new Error('Current plan is empty or not an array. Please ensure a plan is loaded.');
                 }
 
-                index_within_plan = Number(index_within_plan);
-                if (isNaN(index_within_plan) || index_within_plan < 0 || index_within_plan >= data.current_plan.length) {
-                    throw new Error(`Invalid index within plan: ${index_within_plan}. Valid range is 0 to ${data.current_plan.length - 1}.`);
-                }
-
-                const updatedPlan = await openEditPlanModal(data.current_plan, index_within_plan);
+                const updatedPlan = await openEditPlanModal(data.current_plan);
 
                 if (updatedPlan) {
                     showLoading(true);
@@ -578,7 +596,7 @@
                             repo: currentRepo,
                             commit_hash: commitHash,
                             updated_plan: updatedPlan,
-                            program_counter: index_within_plan
+                            seq_no: seqNo
                         }),
                     });
 
@@ -591,8 +609,8 @@
                                 repo: currentRepo,
                                 new_branch: updateData.new_branch,
                                 commit_hash: updateData.new_commit_hash,
-                                start_from: index_within_plan,
-                                steps: updatedPlan.length - index_within_plan
+                                steps: updatedPlan.length,
+                                seq_no: seqNo
                             }),
                         });
 
@@ -614,7 +632,7 @@
             }
         }
 
-        async function openEditPlanModal(currentPlan, index_within_plan) {
+        async function openEditPlanModal(currentPlan) {
             return new Promise((resolve, reject) => {
                 const modalElement = document.getElementById('editPlanModal');
                 if (!modalElement) {

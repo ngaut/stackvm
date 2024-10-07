@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from instruction_handlers import InstructionHandlers
-from utils import interpolate_variables, parse_plan, load_state, save_state
+from utils import interpolate_variables, parse_plan, load_state, save_state, get_commit_message_schema, StepType
 from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
@@ -38,7 +38,7 @@ class PlanExecutionVM:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
 
@@ -93,23 +93,13 @@ class PlanExecutionVM:
         else:
             return param
 
-    def _set_commit_message(self, action: str, detail: str = "") -> None:
-        """
-        Helper method to set a meaningful commit message.
-        
-        Parameters:
-            action (str): A brief description of the action performed.
-            detail (str): Additional details about the action.
-        """
-        if detail:
-            self.commit_message = f"{action}: {detail}"
-        else:
-            self.commit_message = action
+    def _set_commit_message(self, step_type: StepType, seq_no: str, description: str) -> None:
+        self.commit_message = get_commit_message_schema(step_type.value, seq_no, description, {}, {})  # Use the enum value
 
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         step_type = step.get('type')
         params = step.get('parameters', {})
-        seq_no = step.get('seq_no', 'Unknown')
+        seq_no = step.get('seq_no', 'Unknown')  # Ensure this is set correctly
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state['errors'].append("Invalid step type.")
@@ -123,26 +113,27 @@ class PlanExecutionVM:
         
                 self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
         
-                commit_message = f"[seq_no: {seq_no}][{step_type}] - Executed step\n\n"
-                commit_message += "Input Parameters:\n"
+                input_parameters = {}
                 for k, v in params.items():
                     value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                    commit_message += f"- {k}: {value_preview}\n"
+                    input_parameters[k] = value_preview
         
-                commit_message += "\nOutput Variables:\n"
                 output_vars = params.get('output_var')
                 if isinstance(output_vars, str):
                     output_vars = [output_vars]
                 elif not isinstance(output_vars, list):
                     output_vars = []
+                output_variables = {}
                 for k in output_vars:
                     v = self.state['variables'].get(k)
                     value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                    commit_message += f"- {k}: {value_preview}\n"
+                    output_variables[k] = value_preview
+            
+                # Set a meaningful description for the commit message
+                description = f"Executed step '{step_type}' with parameters: {json.dumps(input_parameters)}"
+                self._set_commit_message(StepType.STEP_EXECUTION, str(seq_no), description)  # Use the enum value
         
-                self._set_commit_message("Execute Step", commit_message)
-        
-            return success
+                return success
         else:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
@@ -156,8 +147,9 @@ class PlanExecutionVM:
                 self.state['errors'].append("Subplan execution failed.")
                 
                 # Commit subplan failure to Git
-                commit_message = f"Subplan execution failed at step: {step.get('type')}"
-                if not self.git_manager.commit_changes(commit_message):
+                description = f"Subplan execution failed at step: {step.get('type')}"
+                self._set_commit_message(StepType.PLAN_UPDATE, "Unknown", description)  # Use the enum
+                if not self.git_manager.commit_changes(self.commit_message):
                     self.logger.error("Failed to commit changes to Git.")
                     # Handle the failure as needed
                 
@@ -228,7 +220,7 @@ The final step should assign the result to the 'result' variable. The 'reasoning
 
             # Save state and commit the generated plan to Git
             save_state(self.state, self.repo_path)
-            self._set_commit_message("Generate Plan", f"Generated new plan on branch '{branch_name}'")
+            self._set_commit_message(StepType.GENERATE_PLAN, "0", f"Generated new plan on branch '{branch_name}'")  # Use the enum
             return True
         else:
             self.logger.error("Failed to parse the generated plan.")

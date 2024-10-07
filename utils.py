@@ -3,6 +3,13 @@ from typing import Any, Dict, List, Optional
 import os
 import git
 import logging
+from enum import Enum
+
+class StepType(Enum):
+    GENERATE_PLAN = "Generate Plan"
+    STEP_EXECUTION = "StepExecution"
+    PLAN_UPDATE = "PlanUpdate"
+    # Add other step types as needed
 
 def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
     if not isinstance(text, str):
@@ -62,9 +69,37 @@ def save_state(state, repo_path):
     try:
         state_file = os.path.join(repo_path, 'vm_state.json')
         with open(state_file, 'w') as f:
-            json.dump(state, f, indent=2, default=str)
+            json.dump(state, f, indent=2, default=str, sort_keys=True)
         logging.info(f"State saved to {state_file}")
     except Exception as e:
         logging.error(f"Error saving state: {str(e)}")
 
-# Add any other utility functions here
+def get_commit_message_schema(step_type: str, seq_no: str, description: str, input_parameters: Dict[str, Any], output_variables: Dict[str, Any]) -> str:
+    commit_info = {
+        "type": step_type,
+        "seq_no": seq_no,
+        "description": description,
+        "input_parameters": input_parameters,
+        "output_variables": output_variables
+    }
+    return json.dumps(commit_info)  # Convert to JSON format
+
+def parse_commit_message(message):
+    seq_no = "Unknown"
+
+    try:
+        commit_info = json.loads(message)  # Parse JSON formatted message
+        title = commit_info.get("description", "No description")
+        details = {
+            "input_parameters": commit_info.get("input_parameters", {}),
+            "output_variables": commit_info.get("output_variables", {})
+        }
+        commit_type = commit_info.get("type", "General")
+        seq_no = commit_info.get("seq_no", "Unknown")
+    except json.JSONDecodeError:
+        title = "Invalid commit message"
+        details = {}
+        commit_type = "General"
+
+    return seq_no, title, details, commit_type
+
