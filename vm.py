@@ -12,12 +12,6 @@ from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
 import git
 
-def show_file(repo, commit_hash, file_path):
-    try:
-        return repo.git.show(f'{commit_hash}:{file_path}')
-    except git.exc.GitCommandError as e:
-        logging.error(f"Error showing file {file_path} at commit {commit_hash}: {str(e)}")
-        raise
 
 class PlanExecutionVM:
     def __init__(self, repo_path=None):
@@ -75,10 +69,6 @@ class PlanExecutionVM:
         self.logger.info(f"Registered handler for instruction: {instruction_name}")
 
     def set_goal(self, goal: str) -> None:
-        if not isinstance(goal, str):
-            self.logger.error("Goal must be a string.")
-            self.state['errors'].append("Goal must be a string.")
-            return
         self.state['goal'] = goal
         self.logger.info(f"Goal set: {goal}")
         save_state(self.state, self.repo_path)
@@ -239,116 +229,6 @@ The final step should assign the result to the 'result' variable. The 'reasoning
             self.logger.error("Failed to parse the generated plan.")
             self.state['errors'].append("Failed to parse the generated plan.")
             return False
-
-    def adjust_plan(self) -> bool:
-        self.logger.info("Adjusting plan based on errors and context.")
-        context_info = {
-            'errors': self.state['errors'],
-            'previous_plans': len(self.state['previous_plans'])
-        }
-        prompt = f"""You are an intelligent assistant designed to analyze and adjust plans. Given the following context and the original goal, please generate an adjusted plan:
-
-1. Original Goal: {self.state['goal']}
-2. Context Information:
-   {json.dumps(context_info, indent=2)}
-
-3. Current Plan:
-   {json.dumps(self.state['current_plan'], indent=2)}
-
-Please provide an adjusted plan that addresses the errors and follows the format specified in the spec.md file. The plan should be a JSON array of instruction steps, where each step has a 'type' and 'parameters'. The final step should assign the result to the 'result' variable.
-
-Include a 'reasoning' step at the beginning of the plan that explains the adjustments made and provides a dependency analysis of the steps.
-
-Ensure that the plan adheres to the following guidelines from spec.md:
-1. Use supported instruction types: assign, llm_generate, retrieve_knowledge_graph, retrieve_knowledge_embedded_chunks, condition, and reasoning.
-2. Follow the correct parameter structure for each instruction type.
-3. Use variable references where appropriate, using the format {{"var": "variable_name"}}.
-4. Include error handling and conditional logic where necessary.
-5. Maintain a logical flow and dependencies between steps.
-
-Provide your response as a valid JSON array of instruction steps.
-"""
-
-        with open(VM_SPEC_PATH, 'r') as file:
-            prompt += "\n\nFor reference, here is the content of spec.md:\n\n" + file.read()
-
-        plan_response = self.llm_interface.generate(prompt)
-        if not plan_response:
-            self.logger.error("LLM failed to generate an adjusted plan.")
-            self.state['errors'].append("LLM failed to generate an adjusted plan.")
-            return False
-
-        new_plan = parse_plan(plan_response)
-        if new_plan:
-            # Create a new branch for the adjusted plan
-            branch_name = f"adjusted_plan_{len(self.state['previous_plans'])}"
-            if not self.git_manager.create_branch(branch_name):
-                self.logger.error(f"Failed to create branch '{branch_name}'.")
-                return False
-
-            if not self.git_manager.checkout_branch(branch_name):
-                self.logger.error(f"Failed to checkout branch '{branch_name}'.")
-                return False
-
-            # Save the adjusted plan in the state and commit
-            self.state['current_plan'] = new_plan
-            self.state['previous_plans'].append(new_plan)
-            self.state['errors'] = []
-            self.logger.info("Plan adjusted successfully.")
-
-            # Save state and commit the adjusted plan to Git
-            save_state(self.state, self.repo_path)
-            self._commit("Adjust Plan", f"Adjusted plan on branch '{branch_name}'")
-            return True
-        else:
-            self.logger.error("Failed to parse the adjusted plan.")
-            self.state['errors'].append("Failed to parse the adjusted plan.")
-            return False
-
-    def update_plan(self, new_plan: List[Dict[str, Any]]) -> None:
-        """
-        Updates the current plan with a new plan.
-        """
-        if new_plan:
-            self.state['current_plan'] = new_plan
-            self.state['previous_plans'].append(new_plan)
-            self.logger.info("Plan updated successfully.")
-            
-            # Commit the updated plan to Git
-            commit_message = f"Updated plan:\n{json.dumps(new_plan, indent=2)}"
-            if not self.git_manager.commit_changes(commit_message):
-                self.logger.error("Failed to commit changes to Git.")
-                # Handle the failure as needed
-        else:
-            self.logger.info("No changes to the current plan.")
-
-    def get_current_state(self) -> Dict[str, Any]:
-        """
-        Returns the current state of the VM.
-        """
-        return self.state
-
-
-    def analyze_branches(self) -> None:
-        """
-        Analyze branches to inform future plan generation and adjustments.
-        """
-        branches = self.git_manager.list_branches()
-        self.logger.info("Analyzing branches:")
-        for branch in branches:
-            self.logger.info(f"- {branch}")
-            # Here you can implement logic to analyze each branch,
-            # e.g., checking for successful goal completion,
-            # the number of errors, etc.
-
-    def evolve(self) -> None:
-        """
-        Evolve the VM's strategy based on branch analysis.
-        """
-        self.analyze_branches()
-        # Implement logic to decide which branches to merge,
-        # which plans to adjust, or whether to generate new plans
-        # e.g., merge branches that led to successful goal completion
 
     def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):

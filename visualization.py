@@ -306,9 +306,6 @@ def execute_vm():
                 app.logger.info("Reached end of current plan or encountered an error")
                 break
 
-        new_state = vm.get_current_state()
-        app.logger.info(f"Execution completed, executed {steps_executed} steps. New state: {new_state}")
-
         return jsonify({
             'success': True,
             'new_state': new_state, 

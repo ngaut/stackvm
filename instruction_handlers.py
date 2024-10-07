@@ -108,11 +108,3 @@ class InstructionHandlers:
             'dependency_analysis': dependency_analysis
         })
         return True
-
-    def revisit_plan(self) -> None:
-        self.vm.logger.info("Revisiting the plan based on new information...")
-        adjust_success = self.vm.adjust_plan()
-        if adjust_success:
-            self.vm.logger.info("Plan adjusted successfully.")
-        else:
-            self.vm.logger.error("Failed to adjust the plan.")
