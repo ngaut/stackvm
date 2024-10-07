@@ -47,6 +47,7 @@ class PlanExecutionVM:
         # Use the provided repo_path or the default GIT_REPO_PATH
         self.repo_path = repo_path or GIT_REPO_PATH
         self.git_manager = GitManager(self.repo_path)
+        self.commit_message = None  # New attribute to store commit message
 
         # Change the current working directory to the Git repo path
         os.chdir(self.repo_path)
@@ -92,31 +93,27 @@ class PlanExecutionVM:
         else:
             return param
 
-    def _commit(self, action: str, detail: str = "") -> Optional[str]:
+    def _set_commit_message(self, action: str, detail: str = "") -> None:
         """
-        Helper method to create and commit meaningful commit messages.
+        Helper method to set a meaningful commit message.
         
         Parameters:
             action (str): A brief description of the action performed.
             detail (str): Additional details about the action.
-        
-        Returns:
-            str: The commit hash if successful, None otherwise.
         """
         if detail:
-            commit_message = f"{action}: {detail}"
+            self.commit_message = f"{action}: {detail}"
         else:
-            commit_message = action
-        return self.git_manager.commit_changes(commit_message)
+            self.commit_message = action
 
-    def execute_step_handler(self, step: Dict[str, Any]) -> Optional[str]:
+    def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         step_type = step.get('type')
         params = step.get('parameters', {})
         seq_no = step.get('seq_no', 'Unknown')
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state['errors'].append("Invalid step type.")
-            return None
+            return False
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if handler:
             success = handler(params)
@@ -124,31 +121,31 @@ class PlanExecutionVM:
                 save_state(self.state, self.repo_path)
                 self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
         
-            self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
+                self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
         
-            commit_message = f"[seq_no: {seq_no}][{step_type}] - Executed step\n\n"
-            commit_message += "Input Parameters:\n"
-            for k, v in params.items():
-                value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                commit_message += f"- {k}: {value_preview}\n"
+                commit_message = f"[seq_no: {seq_no}][{step_type}] - Executed step\n\n"
+                commit_message += "Input Parameters:\n"
+                for k, v in params.items():
+                    value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
+                    commit_message += f"- {k}: {value_preview}\n"
         
-            commit_message += "\nOutput Variables:\n"
-            output_vars = params.get('output_var')
-            if isinstance(output_vars, str):
-                output_vars = [output_vars]
-            elif not isinstance(output_vars, list):
-                output_vars = []
-            for k in output_vars:
-                v = self.state['variables'].get(k)
-                value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
-                commit_message += f"- {k}: {value_preview}\n"
+                commit_message += "\nOutput Variables:\n"
+                output_vars = params.get('output_var')
+                if isinstance(output_vars, str):
+                    output_vars = [output_vars]
+                elif not isinstance(output_vars, list):
+                    output_vars = []
+                for k in output_vars:
+                    v = self.state['variables'].get(k)
+                    value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
+                    commit_message += f"- {k}: {value_preview}\n"
         
-            commit_hash = self._commit("Execute Step", commit_message)
+                self._set_commit_message("Execute Step", commit_message)
         
-            return commit_hash if success else None
+            return success
         else:
             self.logger.warning(f"Unknown instruction: {step_type}")
-            return None
+            return False
 
     def execute_subplan(self, subplan: List[Dict[str, Any]]) -> bool:
         self.logger.info("Executing subplan.")
@@ -231,7 +228,7 @@ The final step should assign the result to the 'result' variable. The 'reasoning
 
             # Save state and commit the generated plan to Git
             save_state(self.state, self.repo_path)
-            self._commit("Generate Plan", f"Generated new plan on branch '{branch_name}'")
+            self._set_commit_message("Generate Plan", f"Generated new plan on branch '{branch_name}'")
             return True
         else:
             self.logger.error("Failed to parse the generated plan.")
@@ -243,20 +240,20 @@ The final step should assign the result to the 'result' variable. The 'reasoning
             step = self.state['current_plan'][self.state['program_counter']]
             self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}")
             try:
-                commit_hash = self.execute_step_handler(step)
-                if not commit_hash:
+                success = self.execute_step_handler(step)
+                if not success:
                     self.logger.error(f"Failed to execute step {self.state['program_counter']}: {step['type']}")
-                    return None
+                    return False
             except Exception as e:
                 self.logger.error(f"Error executing step {self.state['program_counter']}: {str(e)}")
                 self.state['errors'].append(f"Error in step {self.state['program_counter']}: {str(e)}")
-                return None
+                return False
             self.state['program_counter'] += 1
             save_state(self.state, self.repo_path)  # Save state after each step
-            return commit_hash
+            return True
         else:
             self.logger.info("Program execution complete.")
-            return None
+            return False
 
     def set_variable(self, var_name: str, value: Any) -> None:
         """

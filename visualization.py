@@ -13,7 +13,6 @@ from utils import load_state, save_state
 import argparse
 from vm import PlanExecutionVM
 
-# Conditional imports to handle potential missing packages
 try:
     import git
     from git import Repo, NULL_TREE
@@ -106,13 +105,7 @@ def get_vm_data():
     repo = request.args.get('repo')
     
     app.logger.info(f"get_vm_data called with branch: '{branch}', repo: '{repo}'")
-    
-    if not branch or branch == 'undefined':
-        app.logger.warning(f"Invalid branch name received: '{branch}'")
-        return jsonify({'error': 'Invalid branch name'}), 400
-    
-    app.logger.info(f"Fetching VM data for branch: {branch}, repo: {repo}")
-    
+        
     try:
         vm_states = extract_vm_info(branch, repo)
         
@@ -241,8 +234,25 @@ def update_plan():
         app.logger.error(f"Error updating plan: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_vm_instance(repo_path):
-    return VM(repo_path)
+def commit_vm_changes(vm):
+    """
+    Commit changes made by the VM if there's a commit message.
+    
+    Args:
+    vm (PlanExecutionVM): The VM instance with potential changes to commit.
+    
+    Returns:
+    str or None: The commit hash if changes were committed, None otherwise.
+    """
+    if vm.commit_message:
+        commit_hash = vm.git_manager.commit_changes(vm.commit_message)
+        if commit_hash:
+            print(f"Committed changes: {commit_hash}")
+        else:
+            print("Failed to commit changes")
+        vm.commit_message = None  # Reset commit message
+        return commit_hash
+    return None
 
 @app.route('/execute_vm', methods=['POST'])
 def execute_vm():
@@ -262,7 +272,7 @@ def execute_vm():
         repo_path = get_current_repo_path()
         
         try:
-            vm = get_vm_instance(repo_path)
+            vm = PlanExecutionVM(repo_path)
         except ImportError as e:
             return jsonify({'error': str(e)}), 500
 
@@ -296,16 +306,19 @@ def execute_vm():
         steps_executed = 0
         last_commit_hash = None
         for _ in range(steps_to_execute):
-            step_commit_hash = vm.step()
-            if step_commit_hash:
+            success = vm.step()
+            if success:
                 steps_executed += 1
-                last_commit_hash = step_commit_hash
+                commit_hash = commit_vm_changes(vm)
+                if commit_hash:
+                    last_commit_hash = commit_hash
             else:
                 app.logger.info("Reached end of current plan or encountered an error")
                 break
     
         return jsonify({
             'success': True,
+            'steps_executed': steps_executed,
             'current_branch': current_branch,
             'last_commit_hash': last_commit_hash
         })
@@ -425,15 +438,18 @@ def run_vm_with_goal(goal, repo_path):
         print(json.dumps(vm.state['current_plan'], indent=2))
         
         while True:
-            commit_hash = vm.step()
-            if commit_hash is None:
+            success = vm.step()
+            if not success:
                 break
+            
+            # Commit changes after each successful step
+            commit_vm_changes(vm)
+            
             if vm.state['goal_completed']:
                 print("Goal completed during plan execution.")
                 break
 
         if vm.state['goal_completed']:
-            print("Plan executed successfully.")
             result = vm.get_variable('result')
             if result:
                 print(f"\nFinal Result: {result}")
@@ -449,7 +465,7 @@ def run_vm_with_goal(goal, repo_path):
         print("Failed to generate plan.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the VM with a specified goal and/or start the visualization server.")
+    parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
     parser.add_argument("--goal", help="Set a goal for the VM to achieve")
     parser.add_argument("--server", action="store_true", help="Start the visualization server")
     args = parser.parse_args()
@@ -457,13 +473,12 @@ if __name__ == "__main__":
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         run_vm_with_goal(args.goal, repo_path)
-        print("VM execution completed. Switching to server mode...")
-    
-    if args.server or args.goal:
+        print("VM execution completed")    
+    elif args.server:
         print("Starting visualization server...")
         # Ensure we're using the correct path for the current file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(current_dir)
         app.run(debug=True)
     else:
-        print("Please specify --goal to run the VM with a goal and/or --server to start the visualization server")
+        print("Please specify --goal to run the VM with a goal or --server to start the visualization server")

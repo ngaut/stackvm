@@ -597,7 +597,6 @@
                         });
 
                         if (executeData.success) {
-                            console.log(executeData.current_branch);
                             await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
                             showNotification('Execution completed successfully', 'success');
                         } else {
@@ -645,6 +644,8 @@
         }
 
         async function updateUIAfterExecution(newBranch, lastCommitHash) {
+            console.log(newBranch);
+
             currentBranch = newBranch;
             await loadBranches();
             highlightCurrentBranch();
