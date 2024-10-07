@@ -23,6 +23,12 @@ except ImportError:
     git_available = False
 
 try:
+    import flask  # Check if Flask is available
+except ImportError:
+    print("Flask is not installed. Please install it using: pip install Flask")
+    abort(500, description="Flask module not found. Please install Flask.")
+
+try:
     from vm import PlanExecutionVM as VM  # Aliased PlanExecutionVM to VM
 except ImportError:
     abort(500, description="VM module not found. Make sure vm.py is in the same directory and exports a VM class.")
