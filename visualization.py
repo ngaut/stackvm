@@ -5,6 +5,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import json
 import re
 from datetime import datetime
+import flask
 from flask import Flask, render_template, jsonify, request, abort, send_from_directory
 from config import GIT_REPO_PATH
 from git_manager import GitManager
@@ -127,8 +128,7 @@ def get_vm_data():
 
 @app.route('/vm_state/<commit_hash>')
 def get_vm_state(commit_hash):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
@@ -147,8 +147,7 @@ def get_vm_state(commit_hash):
 
 @app.route('/code_diff/<commit_hash>')
 def code_diff(commit_hash):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
@@ -166,8 +165,7 @@ def code_diff(commit_hash):
 
 @app.route('/commit_details/<commit_hash>')
 def commit_details(commit_hash):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
@@ -203,7 +201,7 @@ def update_plan():
     if not all([repo_name, commit_hash, updated_plan, index_within_plan is not None]):
         return jsonify({'error': 'Missing required parameters'}), 400
 
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     
     try:
         # Initialize repo
@@ -261,7 +259,7 @@ def execute_vm():
         if not all([commit_hash, steps, repo_name]):
             return jsonify({'error': 'Missing required parameters'}), 400
 
-        repo_path = get_repo_path(repo_name)
+        repo_path = get_current_repo_path()
         
         try:
             vm = get_vm_instance(repo_path)
@@ -305,13 +303,10 @@ def execute_vm():
             else:
                 app.logger.info("Reached end of current plan or encountered an error")
                 break
-
+    
         return jsonify({
             'success': True,
-            'new_state': new_state, 
             'current_branch': current_branch,
-            'steps_executed': steps_executed,
-            'plan_length': plan_length,
             'last_commit_hash': last_commit_hash
         })
     except Exception as e:
@@ -320,8 +315,7 @@ def execute_vm():
 
 @app.route('/vm_state_details/<commit_hash>')
 def vm_state_details(commit_hash):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     repo = git.Repo(repo_path)
     try:
         commit = repo.commit(commit_hash)
@@ -366,8 +360,7 @@ def set_repo(repo_name):
 
 @app.route('/get_branches')
 def get_branches():
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     try:
         repo = Repo(repo_path)
         branches = repo.branches
@@ -387,8 +380,7 @@ def get_branches():
 
 @app.route('/set_branch/<branch_name>')
 def set_branch(branch_name):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     try:
         repo = Repo(repo_path)
         repo.git.checkout(branch_name)
@@ -398,8 +390,7 @@ def set_branch(branch_name):
 
 @app.route('/delete_branch/<branch_name>', methods=['POST'])
 def delete_branch(branch_name):
-    repo_name = request.args.get('repo')
-    repo_path = get_repo_path(repo_name)
+    repo_path = get_current_repo_path()
     try:
         repo = Repo(repo_path)
         if branch_name == repo.active_branch.name:
@@ -417,8 +408,9 @@ def delete_branch(branch_name):
     except GitCommandError as e:
         return jsonify({'error': str(e)}), 400
 
-def get_repo_path(repo_name=None):
-    return os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
+def get_current_repo_path():
+    global git_manager
+    return git_manager.repo_path if git_manager else GIT_REPO_PATH
 
 def repo_exists(repo_name):
     repo_path = os.path.join(GIT_REPO_PATH, repo_name)
@@ -457,15 +449,21 @@ def run_vm_with_goal(goal, repo_path):
         print("Failed to generate plan.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
+    parser = argparse.ArgumentParser(description="Run the VM with a specified goal and/or start the visualization server.")
     parser.add_argument("--goal", help="Set a goal for the VM to achieve")
     parser.add_argument("--server", action="store_true", help="Start the visualization server")
     args = parser.parse_args()
 
     if args.goal:
-        repo_path = GIT_REPO_PATH + datetime.now().strftime("%Y%m%d%H%M%S")
+        repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         run_vm_with_goal(args.goal, repo_path)
-    elif args.server:
+        print("VM execution completed. Switching to server mode...")
+    
+    if args.server or args.goal:
+        print("Starting visualization server...")
+        # Ensure we're using the correct path for the current file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        os.chdir(current_dir)
         app.run(debug=True)
     else:
-        print("Please specify either --goal or --server")
+        print("Please specify --goal to run the VM with a goal and/or --server to start the visualization server")

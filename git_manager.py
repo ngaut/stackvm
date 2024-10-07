@@ -1,6 +1,14 @@
+import sys
 import os
-import git
-from git import Repo
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    import git
+    from git import Repo
+except ImportError:
+    print("GitPython is not installed. Please install it using: pip install GitPython")
+    sys.exit(1)
+
 import logging
 
 class GitManager:
@@ -42,13 +50,13 @@ class GitManager:
             self.repo.git.add(all=True)
             if self.repo.is_dirty(untracked_files=True):
                 commit = self.repo.index.commit(commit_message)
-                return commit
+                return commit.hexsha  # Return the commit hash as a string
             else:
-                # If there are no changes to commit, return the latest commit
-                self.logger.info(f"No changes to commit, returning the latest commit {self.repo.head.commit.hexsha}")
-                return self.repo.head.commit
+                # If there are no changes to commit, return the latest commit hash
+                self.logger.info(f"No changes to commit, returning the latest commit hash {self.repo.head.commit.hexsha}")
+                return self.repo.head.commit.hexsha  # Return the commit hash as a string
         except Exception as e:
-            print(f"Error committing changes: {str(e)}")
+            self.logger.error(f"Error committing changes: {str(e)}")
             return None
 
     def run_command(self, command):

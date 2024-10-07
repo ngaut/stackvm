@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import copy
 import json
 import logging
@@ -10,7 +14,11 @@ from utils import interpolate_variables, parse_plan, load_state, save_state
 from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
-import git
+try:
+    import git
+except ImportError:
+    print("GitPython is not installed. Please install it using: pip install GitPython")
+    sys.exit(1)
 
 
 class PlanExecutionVM:
