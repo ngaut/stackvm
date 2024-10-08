@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional
 
 from instruction_handlers import InstructionHandlers
 from utils import interpolate_variables, parse_plan, load_state, save_state, get_commit_message_schema, StepType
-from llm_interface import LLMInterface
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
 from git_manager import GitManager
+from prompts import get_generate_plan_prompt
 try:
     import git
 except ImportError:
@@ -22,7 +22,7 @@ except ImportError:
 
 
 class PlanExecutionVM:
-    def __init__(self, repo_path=None):
+    def __init__(self, repo_path=None, llm_interface=None):
         self.state: Dict[str, Any] = {
             'variables': {},
             'errors': [],
@@ -36,12 +36,8 @@ class PlanExecutionVM:
         # Initialize logger
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-        handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
 
-        self.llm_interface = LLMInterface(LLM_MODEL)
+        self.llm_interface = llm_interface
         
         # Use the provided repo_path or the default GIT_REPO_PATH
         self.repo_path = repo_path or GIT_REPO_PATH
@@ -157,36 +153,20 @@ class PlanExecutionVM:
                 break
         return True
 
-    def generate_plan(self) -> bool:
+    def generate_plan(self, custom_prompt=None) -> bool:
         if not self.state['goal']:
             self.logger.error("No goal is set.")
             self.state['errors'].append("No goal is set.")
             return False
 
         self.logger.info("Generating plan using LLM.")
-        prompt = f"""You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph and a vector database multiple times. 
-For the following goal, please:
-
-1. Analyze the requester's intent and the requester's query:
-   - Analyze and list the prerequisites of the query.
-   - Analyze and list the assumptions of the query. 
-   
-2. Break Down query into sub-queries:
-   - Each sub-query must be smaller, specific, retrievable with existing tools, and no further reasoning is required to achieve it.
-   - Identify dependencies between sub-queries
-
-3. Generate an Action Plan:
-   - For each sub-query (Assumptions included), create a corresponding action step to achieve it.
-   - Ensure the plan follows the format specified in the spec.md file.
-   - Include a 'reasoning' step at the beginning of the plan that explains the chain of thoughts and provides a dependency analysis of the steps.
-
-Goal: {self.state['goal']}
-
-The final step should assign the result to the 'result' variable.
-
-"""
-        with open(VM_SPEC_PATH, 'r') as file:
-            prompt += "the content of spec.md is:\n\n" + file.read()
+        
+        if custom_prompt:
+            prompt = custom_prompt
+        else:
+            with open(VM_SPEC_PATH, 'r') as file:
+                vm_spec_content = file.read()
+            prompt = get_generate_plan_prompt(self.state['goal'], vm_spec_content)
 
         plan_response = self.llm_interface.generate(prompt)
         
@@ -264,7 +244,7 @@ The final step should assign the result to the 'result' variable.
         """
         return self.state['variables'].get(var_name)
 
-    def load_state(self, commit_hash):
+    def set_state(self, commit_hash):
         """
         Load the state from a file based on the specific commit point.
         """

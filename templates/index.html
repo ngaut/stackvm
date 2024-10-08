@@ -633,11 +633,6 @@
                 };
 
                 modal.show();
-
-                // Ensure the editor is properly sized when the modal is shown
-                modalElement.addEventListener('shown.bs.modal', function () {
-                    jsonEditor.resize();
-                });
             });
         }
 
@@ -665,7 +660,7 @@
                             repo: currentRepo,
                             commit_hash: commitHash,
                             updated_plan: updatedPlan,
-                            seq_no: seqNo
+                            program_counter: data.program_counter // Add this line
                         }),
                     });
 
@@ -676,9 +671,9 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 repo: currentRepo,
-                                new_branch: updateData.new_branch,
                                 commit_hash: updateData.new_commit_hash,
                                 steps: updatedPlan.length,
+                                new_branch: updateData.new_branch,
                                 seq_no: seqNo
                             }),
                         });
