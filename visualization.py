@@ -145,10 +145,8 @@ def commit_details(commit_hash):
         commit = repo.commit(commit_hash)
         
         if commit.parents:
-            app.logger.info(f"Commit {commit_hash} has parents. Diffing against parent commit.")
             diff = commit.diff(commit.parents[0])
         else:
-            app.logger.info(f"Commit {commit_hash} has no parents. Diffing against NULL_TREE.")
             diff = commit.diff(NULL_TREE)
         
         seq_no, _, _, _ = parse_commit_message(commit.message)
@@ -240,9 +238,8 @@ def execute_vm():
         app.logger.info(f"Switching to new branch: {new_branch}")
         repo.git.checkout(new_branch)
     current_branch = repo.active_branch.name
-    app.logger.info(f"Using branch: {current_branch}")
+    app.logger.info(f"Using branch: {current_branch}, current plan: {vm.state['current_plan']}")
 
-    app.logger.info(f"current plan: {vm.state['current_plan']}")
     start_index = next((i for i, step in enumerate(vm.state['current_plan']) if str(step.get('seq_no')) == str(seq_no)), None)
     if start_index is None:
         return log_and_return_error(f'Step with seq_no {seq_no} not found in the plan. Available seq_no values: {[step.get("seq_no") for step in vm.state["current_plan"]]}', 'error', 400)
