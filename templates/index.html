@@ -307,8 +307,8 @@
                     stepped: 'before',
                     tension: 0,
                     borderWidth: 2,
-                    pointRadius: 6,  // Increased default point size
-                    pointHoverRadius: 10,  // Increased hover point size
+                    pointRadius: 6,  
+                    pointHoverRadius: 10,  
                     pointStyle: pointStyles[index % pointStyles.length],
                 };
             });
@@ -607,7 +607,6 @@
                 const modal = new bootstrap.Modal(modalElement);
                 const savePlanButton = document.getElementById('savePlanButton');
 
-                // Initialize JSONEditor
                 const container = document.getElementById('jsoneditor');
                 const options = {
                     mode: 'tree',
