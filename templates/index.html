@@ -741,14 +741,6 @@
             [...document.querySelectorAll('[data-bs-toggle="tooltip"]')].map(el => new bootstrap.Tooltip(el));
         }
 
-        async function manualRefresh() {
-            if (chart?.data?.datasets) {
-                const branches = chart.data.datasets.map(dataset => dataset.label.split(' - ')[0]);
-                await updateChart(branches);
-                if (currentHighlightedCommit) highlightChartPoint(currentHighlightedCommit, false);
-            }
-        }
-
         function updateBranchSelector(branches) {
             const select = document.getElementById('branchDropdown');
             select.innerHTML = branches.map(branch => `
