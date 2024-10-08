@@ -17,7 +17,7 @@ try:
 except ImportError:
     logging.error("Flask is not installed. Please install it using: pip install Flask")
 
-from config import GIT_REPO_PATH
+from config import GIT_REPO_PATH, VM_SPEC_CONTENT
 from git_manager import GitManager
 from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType
 from vm import PlanExecutionVM
@@ -230,7 +230,7 @@ def update_plan():
     repo = get_repo(get_current_repo_path())
 
     try:
-        program_counter = int(program_counter)  # Ensure program_counter is an integer
+        program_counter = int(program_counter) 
         new_commit_hash, new_branch_name = update_plan_logic(repo, commit_hash, updated_plan, program_counter)
         return jsonify({
             'success': True,
@@ -246,11 +246,10 @@ def update_plan():
 def generate_updated_plan(vm: PlanExecutionVM):
     app.logger.info("Generating updated plan from current execution point.")
     
-    prompt = get_plan_update_prompt(vm.state)
+    prompt = get_plan_update_prompt(vm.state, VM_SPEC_CONTENT)
     return vm.generate_plan(custom_prompt=prompt)
 
 def parse_plan(plan_text):
-    # Parse the plan text into a Python list
     try:
         plan = json.loads(plan_text)
         return plan

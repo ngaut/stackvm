@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from instruction_handlers import InstructionHandlers
 from utils import interpolate_variables, parse_plan, load_state, save_state, get_commit_message_schema, StepType
-from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH
+from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH, VM_SPEC_CONTENT
 from git_manager import GitManager
 from prompts import get_generate_plan_prompt
 try:
@@ -164,9 +164,7 @@ class PlanExecutionVM:
         if custom_prompt:
             prompt = custom_prompt
         else:
-            with open(VM_SPEC_PATH, 'r') as file:
-                vm_spec_content = file.read()
-            prompt = get_generate_plan_prompt(self.state['goal'], vm_spec_content)
+            prompt = get_generate_plan_prompt(self.state['goal'], VM_SPEC_CONTENT)
 
         plan_response = self.llm_interface.generate(prompt)
         
