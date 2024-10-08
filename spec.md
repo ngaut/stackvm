@@ -1,7 +1,7 @@
-# Specification for Generating Executable Plans for the Stack-Based Virtual Machine (VM)
+# Specification for Generating Executable Plans for the Virtual Machine (VM)
 
 ## Table of Contents
-1. Overview of the Stack-Based VM
+1. Overview of the VM
 2. Instruction Format
 3. Supported Instructions
 4. Parameters and Variable References
@@ -9,16 +9,14 @@
 6. Plan Structure
 7. Best Practices
 8. Example Plan
-9. Error Handling and Adjustments
 
-## 1. Overview of the Stack-Based VM
-The Stack-Based VM executes plans consisting of a sequence of instructions. Each instruction performs a specific operation and may interact with variables stored in a variable store. The VM supports conditional execution and can handle dependencies between instructions through variable assignments and references.
+## 1. Overview of the VM
+The VM executes plans consisting of a sequence of instructions. Each instruction performs a specific operation and may interact with variables stored in a variable store. The VM supports conditional execution and can handle dependencies between instructions through variable assignments and references.
 
 ### Key features:
 - **Variable Store**: A key-value store where variables are stored and accessed by name.
 - **Instruction Execution**: Instructions are executed sequentially unless control flow is altered by conditional statements.
 - **Plan Parsing**: Plans are provided in JSON format and parsed by the VM.
-- **Error Handling**: The VM logs errors and can adjust plans based on execution failures.
 
 ## 2. Instruction Format
 Each instruction in the plan is represented as a JSON object with the following keys:
@@ -163,8 +161,8 @@ Example:
   "seq_no": 7,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer.",
-    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3.\nStep 5 depends on Step 4.\nStep 6 depends on Step 5."
+    "chain_of_thoughts": "...",
+    "dependency_analysis": "..."
   }
 }
 
@@ -194,13 +192,9 @@ Dependencies: Manage dependencies by assigning outputs to variables and referenc
 ## 7. Best Practices
 - Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the main plan and any subplans.
 - Variable Naming: Use descriptive variable names to make the plan readable and maintainable.
-- Error Handling: Anticipate possible failures and structure the plan to handle them gracefully.
-- Contextual Prompts: Provide sufficient context to the LLM in prompts to ensure accurate responses.
-- Consistency: Maintain a consistent structure and format throughout the plan.
-- Testing: Verify the plan for syntax correctness and logical flow before execution.
 
 ## 8. Example Plan
-Goal: Determine the population of the capital city of the third largest neighboring country of France by area.
+Goal: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
 
 The plan:
 [
@@ -208,93 +202,79 @@ The plan:
     "seq_no": 0,
     "type": "reasoning",
     "parameters": {
-      "chain_of_thoughts": "To find the population of the capital city of the third largest neighboring country of France by area, we will:\n1. Retrieve a list of France's neighboring countries.\n2. Retrieve the area of each neighboring country.\n3. Use the LLM to determine the third largest country by area.\n4. Find the capital city of that country.\n5. Retrieve the population of the capital city.\n6. Compile the final answer."
+      "chain_of_thoughts": "To answer this question, we will:\n1. Determine the latest stable version of TiDB.\n2. Retrieve general information about the latest TiDB from the knowledge graph.\n3. Use the vector database to find relevant performance optimization techniques for the latest version.\n4. Retrieve specific e-commerce related optimizations from the knowledge graph.\n5. Combine and synthesize the information using the LLM.\n6. Compile the final answer.",
+      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 1.\nStep 5 depends on Steps 2, 3, and 4.\nStep 6 depends on Step 5."
     }
   },
   {
     "seq_no": 1,
     "type": "retrieve_knowledge_graph",
     "parameters": {
-      "query": "List all countries that share a border with France.",
-      "output_var": "neighboring_countries"
+      "query": "What is the latest stable version of TiDB?",
+      "output_var": "latest_tidb_version"
     }
   },
   {
     "seq_no": 2,
-    "type": "retrieve_knowledge_graph",
-    "parameters": {
-      "query": "Provide the area in square kilometers for each of these countries: {{neighboring_countries}}.",
-      "output_var": "country_areas"
-    }
-  },
-  {
-    "seq_no": 3,
     "type": "condition",
     "parameters": {
-      "prompt": "Do we have area data for all neighboring countries? Respond with 'true' or 'false'.",
-      "context": null,
+      "prompt": "Was a specific latest stable version of TiDB found? Answer 'true' or 'false'.",
+      "context": "Latest TiDB version: {{latest_tidb_version}}",
       "true_branch": [
         {
-          "seq_no": 4,
-          "type": "llm_generate",
+          "seq_no": 3,
+          "type": "retrieve_knowledge_graph",
           "parameters": {
-            "prompt": "Given the following countries and their areas: {{country_areas}}, list them in descending order by area and identify the third largest country.",
-            "context": null,
-            "output_var": "third_largest_country"
+            "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+            "output_var": "tidb_info"
           }
         }
       ],
       "false_branch": [
         {
-          "seq_no": 5,
-          "type": "llm_generate",
+          "seq_no": 4,
+          "type": "retrieve_embedded_chunks",
           "parameters": {
-            "prompt": "Some area data is missing for the countries: {{neighboring_countries}}. Based on general knowledge, which is the third largest country by area among France's neighbors?",
-            "context": null,
-            "output_var": "third_largest_country"
+            "embedding_query": "Latest TiDB version and its key features",
+            "top_k": 3,
+            "output_var": "tidb_info"
           }
         }
       ]
     }
   },
   {
+    "seq_no": 5,
+    "type": "retrieve_embedded_chunks",
+    "parameters": {
+      "embedding_query": "TiDB {{latest_tidb_version}} performance optimization techniques",
+      "top_k": 5,
+      "output_var": "performance_techniques"
+    }
+  },
+  {
     "seq_no": 6,
     "type": "retrieve_knowledge_graph",
     "parameters": {
-      "query": "What is the capital city of {{third_largest_country}}?",
-      "output_var": "capital_city"
+      "query": "What are specific considerations for optimizing TiDB {{latest_tidb_version}} for e-commerce applications?",
+      "output_var": "ecommerce_optimizations"
     }
   },
   {
     "seq_no": 7,
-    "type": "retrieve_embedded_chunks",
+    "type": "llm_generate",
     "parameters": {
-      "embedding_query": "Population data for {{capital_city}}.",
-      "top_k": 3,
-      "output_var": "population_data"
+      "prompt": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}\n\nProvide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
+      "context": null,
+      "output_var": "final_recommendations"
     }
   },
   {
     "seq_no": 8,
-    "type": "llm_generate",
-    "parameters": {
-      "prompt": "Based on the following information: {{population_data}}, what is the current population of {{capital_city}}? Provide only the number.",
-      "context": null,
-      "output_var": "population_number"
-    }
-  },
-  {
-    "seq_no": 9,
     "type": "assign",
     "parameters": {
-      "value": "The population of {{capital_city}}, the capital of {{third_largest_country}}—the third largest neighboring country of France by area—is approximately {{population_number}}.",
+      "value": "Best practices for optimizing TiDB {{latest_tidb_version}} performance for a high-volume e-commerce application:\n\n{{final_recommendations}}",
       "var_name": "final_answer"
     }
   }
 ]
-
-
-## 9. Error Handling and Adjustments
-If an instruction fails (e.g., due to invalid parameters or runtime errors), the VM logs the error.
-The VM may attempt to adjust the plan based on the errors by requesting a new plan from the LLM.
-To assist in adjustments, ensure that error messages are informative and that the plan is structured to allow for retries or alternative strategies.
