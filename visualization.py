@@ -185,18 +185,12 @@ def update_plan_logic(repo, commit_hash, updated_plan, program_counter):
         with open(vm_state_path, 'r') as f:
             vm_state = json.load(f)
 
-        if not isinstance(updated_plan, list):
-            app.logger.error(f"Invalid updated_plan: {updated_plan}")
-            return None, None
-
         vm_state['current_plan'] = updated_plan
         vm_state['program_counter'] = program_counter
 
         # Get seq_no from updated_plan at program_counter
-        program_counter = int(program_counter)  # Ensure program_counter is an integer
-        seq_no = 'unknown'
-        if isinstance(updated_plan, list) and 0 <= program_counter < len(updated_plan):
-            seq_no = updated_plan[program_counter].get('seq_no', 'unknown')
+        program_counter = int(program_counter)  
+        seq_no = updated_plan[program_counter].get('seq_no', 'unknown')
 
         desc = f"Updated plan to execute from program_counter: {program_counter}"
         commit_message = get_commit_message_schema(
@@ -272,11 +266,22 @@ def should_update_plan(vm: PlanExecutionVM):
     
     response = llm_interface.generate(prompt)
     
-    if response.lower().startswith('yes'):
-        app.logger.info(f"LLM suggests updating the plan: {response}")
-        return True
-    else:
-        app.logger.info(f"LLM suggests keeping the current plan: {response}")
+    try:
+        analysis = json.loads(response)
+        should_update = analysis.get('should_update', False)
+        explanation = analysis.get('explanation', '')
+        key_factors = analysis.get('key_factors', [])
+        
+        if should_update:
+            app.logger.info(f"LLM suggests updating the plan: {explanation}")
+            for factor in key_factors:
+                app.logger.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
+            return True
+        else:
+            app.logger.info(f"LLM suggests keeping the current plan: {explanation}")
+            return False
+    except json.JSONDecodeError:
+        app.logger.error("Failed to parse LLM response as JSON. Defaulting to not updating the plan.")
         return False
 
 @app.route('/execute_vm', methods=['POST'])
@@ -301,16 +306,6 @@ def execute_vm():
         return log_and_return_error(str(e), 'error', 500)
 
     vm.set_state(commit_hash)
-    
-    # Add debugging information
-    app.logger.info(f"VM state after set_state: {vm.state}")
-    
-    # Validate the current_plan
-    if not isinstance(vm.state.get('current_plan'), list):
-        error_msg = f"Invalid current_plan: expected list, got {type(vm.state.get('current_plan'))}"
-        app.logger.error(error_msg)
-        return log_and_return_error(error_msg, 'error', 500)
-
     repo = git.Repo(repo_path)
 
     if new_branch:
