@@ -288,23 +288,27 @@
             const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#17a2b8', '#6610f2', '#fd7e14', '#20c997'];
             const pointStyles = ['circle', 'triangle', 'rect', 'rectRounded', 'rectRot', 'star', 'cross'];
 
-            const datasets = validBranchesData.map((data, index) => ({
-                label: `${validBranches[index]} - Program Counter`,
-                data: data.map(state => ({
-                    x: new Date(state.time),
-                    y: state.vm_state?.program_counter,
-                    commit_hash: state.commit_hash,
-                    branch: validBranches[index]
-                })),
-                borderColor: colors[index % colors.length],
-                backgroundColor: `${colors[index % colors.length]}33`,
-                fill: false,
-                tension: 0.4,
-                borderWidth: 1,
-                pointRadius: 3,
-                pointHoverRadius: 8,
-                pointStyle: pointStyles[index % pointStyles.length]
-            }));
+            const datasets = validBranchesData.map((data, index) => {
+                const sortedData = data.sort((a, b) => new Date(a.time) - new Date(b.time));
+                return {
+                    label: `${validBranches[index]} - Program Counter`,
+                    data: sortedData.map(state => ({
+                        x: new Date(state.time),
+                        y: state.vm_state?.program_counter,
+                        commit_hash: state.commit_hash,
+                        branch: validBranches[index]
+                    })),
+                    borderColor: colors[index % colors.length],
+                    backgroundColor: `${colors[index % colors.length]}33`,
+                    fill: false,
+                    stepped: 'before',
+                    tension: 0,
+                    borderWidth: 2,
+                    pointRadius: 6,  // Increased default point size
+                    pointHoverRadius: 10,  // Increased hover point size
+                    pointStyle: pointStyles[index % pointStyles.length],
+                };
+            });
 
             const allDates = datasets.flatMap(dataset => dataset.data.map(d => d.x));
             const minDate = new Date(Math.min(...allDates));
@@ -313,95 +317,113 @@
             minDate.setHours(minDate.getHours() - 1);
             maxDate.setHours(maxDate.getHours() + 1);
 
+            const allProgramCounters = datasets.flatMap(dataset => dataset.data.map(d => d.y)).filter(y => y !== undefined && y !== null);
+            const minPC = Math.min(...allProgramCounters);
+            const maxPC = Math.max(...allProgramCounters);
+
+            // Adjust y-axis range
+            const yMin = Math.max(0, Math.floor(minPC) - 1);
+            const yMax = Math.ceil(maxPC) + 1;
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { 
+                            unit: 'hour',
+                            displayFormats: { hour: 'MMM D, HH:mm' },
+                            tooltipFormat: 'MMM D, YYYY, HH:mm:ss'
+                        },
+                        title: { display: true, text: 'Time' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                        ticks: { 
+                            color: '#666',
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 12
+                        },
+                        min: minDate,
+                        max: maxDate
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Program Counter' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                        ticks: { 
+                            color: '#666',
+                            stepSize: 1,
+                            precision: 0
+                        },
+                        min: yMin,
+                        max: yMax,
+                        afterBuildTicks: (scale) => {
+                            scale.ticks = scale.ticks.filter(tick => Number.isInteger(tick.value));
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { 
+                        mode: 'index', 
+                        intersect: false,
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY, HH:mm:ss');
+                            },
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toFixed(0);
+                                }
+                                return `${label} (${context.raw.branch})`;
+                            },
+                            afterBody: function(tooltipItems) {
+                                return `Commit: ${tooltipItems[0].raw.commit_hash}`;
+                            }
+                        }
+                    }
+                },
+                onClick: async (event, elements) => {
+                    if (elements.length > 0) {
+                        const { index, datasetIndex } = elements[0];
+                        const branch = chart.data.datasets[datasetIndex].label.split(' - ')[0];
+                        const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
+                        currentBranch = branch;
+                        document.getElementById('branchDropdown').value = branch;
+                        try {
+                            const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&repo=${encodeURIComponent(currentRepo)}`);
+                            if (branchData.length === 0) {
+                                showNotification(`No VM states found for branch: ${branch}`, 'warning');
+                                updateStepList([]);
+                            } else {
+                                updateStepList(branchData);
+                                showCommitDetailsAndHighlight(commitHash);
+                            }
+                            showNotification(`Switched to branch: ${branch}`, 'info');
+                        } catch (error) {
+                            console.error('Error fetching branch data:', error);
+                            showNotification(`Error fetching data for branch: ${branch}`, 'danger');
+                            updateStepList([]);
+                        }
+                    }
+                },
+            };
+
             if (chart) {
                 chart.data.datasets = datasets;
-                chart.options.scales.x.min = minDate;
-                chart.options.scales.x.max = maxDate;
+                chart.options = chartOptions;
                 chart.update();
             } else {
                 const ctx = document.getElementById('executionChart').getContext('2d');
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: { datasets },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                type: 'time',
-                                time: { 
-                                    unit: 'hour',
-                                    displayFormats: { hour: 'MMM D, HH:mm' },
-                                    tooltipFormat: 'MMM D, YYYY, HH:mm:ss'
-                                },
-                                title: { display: true, text: 'Time' },
-                                grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                                ticks: { 
-                                    color: '#666',
-                                    maxRotation: 0,
-                                    autoSkip: true,
-                                    maxTicksLimit: 12
-                                },
-                                min: minDate,
-                                max: maxDate
-                            },
-                            y: {
-                                beginAtZero: true,
-                                title: { display: true, text: 'Program Counter' },
-                                grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                                ticks: { color: '#666' },
-                            }
-                        },
-                        plugins: {
-                            legend: { position: 'top' },
-                            tooltip: { 
-                                mode: 'index', 
-                                intersect: false,
-                                callbacks: {
-                                    title: function(tooltipItems) {
-                                        return moment(tooltipItems[0].parsed.x).format('MMM D, YYYY, HH:mm:ss');
-                                    },
-                                    label: function(context) {
-                                        let label = context.dataset.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        if (context.parsed.y !== null) {
-                                            label += context.parsed.y.toFixed(2);
-                                        }
-                                        return `${label} (${context.raw.branch})`;
-                                    },
-                                    afterBody: function(tooltipItems) {
-                                        return `Commit: ${tooltipItems[0].raw.commit_hash}`;
-                                    }
-                                }
-                            }
-                        },
-                        onClick: async (event, elements) => {
-                            if (elements.length > 0) {
-                                const { index, datasetIndex } = elements[0];
-                                const branch = chart.data.datasets[datasetIndex].label.split(' - ')[0];
-                                const commitHash = chart.data.datasets[datasetIndex].data[index].commit_hash;
-                                currentBranch = branch;
-                                document.getElementById('branchDropdown').value = branch;
-                                try {
-                                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&repo=${encodeURIComponent(currentRepo)}`);
-                                    if (branchData.length === 0) {
-                                        showNotification(`No VM states found for branch: ${branch}`, 'warning');
-                                        updateStepList([]);
-                                    } else {
-                                        updateStepList(branchData);
-                                        showCommitDetailsAndHighlight(commitHash);
-                                    }
-                                    showNotification(`Switched to branch: ${branch}`, 'info');
-                                } catch (error) {
-                                    console.error('Error fetching branch data:', error);
-                                    showNotification(`Error fetching data for branch: ${branch}`, 'danger');
-                                    updateStepList([]);
-                                }
-                            }
-                        },
-                    }
+                    options: chartOptions
                 });
             }
 
@@ -412,11 +434,15 @@
             if (chart) {
                 chart.data.datasets.forEach(dataset => {
                     if (dataset.label.startsWith(currentBranch)) {
-                        dataset.borderWidth = 3;
-                        dataset.pointRadius = 5;
+                        dataset.borderWidth = 6;  
+                        dataset.pointRadius = 4; 
+                        dataset.pointHoverRadius = 16; 
+                        dataset.zIndex = 10;  
                     } else {
-                        dataset.borderWidth = 1;
-                        dataset.pointRadius = 3;
+                        dataset.borderWidth = 2;
+                        dataset.pointRadius = 4;
+                        dataset.pointHoverRadius = 10;
+                        dataset.zIndex = 1;
                     }
                 });
                 chart.update();
