@@ -150,11 +150,11 @@ Example:
   }
 }
 6. reasoning
-Purpose: Provides a detailed explanation of the plan's reasoning, analysis, and steps.
+Purpose: Provides a detailed explanation(chain of thoughts) of the plan's reasoning, analysis, and steps.
 
 Parameters:
 
-explanation: A string containing the reasoning and analysis for the plan.
+chain_of_thoughts: A string containing the reasoning and analysis for the plan.
 dependency_analysis: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
 
 Example:
@@ -163,7 +163,7 @@ Example:
   "seq_no": 7,
   "type": "reasoning",
   "parameters": {
-    "explanation": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer.",
+    "chain_of_thoughts": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer.",
     "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3.\nStep 5 depends on Step 4.\nStep 6 depends on Step 5."
   }
 }
@@ -208,7 +208,7 @@ The plan:
     "seq_no": 0,
     "type": "reasoning",
     "parameters": {
-      "explanation": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer."
+      "chain of thoughts": "To determine the population of the capital city of the third largest neighboring country of France by area, we will follow these steps:\n1. Retrieve a list of France's neighboring countries sorted by area.\n2. Identify the third largest country from this list.\n3. Find the capital city of the identified country.\n4. Retrieve population data for the capital city.\n5. Extract and validate the population number.\n6. Format the final answer."
     }
   },
   {

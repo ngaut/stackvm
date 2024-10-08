@@ -156,18 +156,17 @@ class InstructionHandlers:
         self.vm.set_variable(var_name, value_resolved)
         return True
 
-    def reasoning_handler(self, params: Dict[str, Any]) -> bool:
-        """Handle reasoning steps."""
-        explanation = params.get('explanation')
+    def reasoning_handler(self, params):
+        chain_of_thoughts = params.get('chain_of_thoughts')
         dependency_analysis = params.get('dependency_analysis')
-
-        if not isinstance(explanation, str) or not isinstance(dependency_analysis, str):
-            return self._handle_error("Invalid parameters for 'reasoning'.")
-
-        self.vm.logger.info("Reasoning step:Explanation: {explanation}\n{dependency_analysis}")
         
-        self.vm.state['msgs'].append({
-            'explanation': explanation,
-            'dependency_analysis': dependency_analysis
-        })
+        if not chain_of_thoughts or not dependency_analysis:
+            self.vm.logger.error("Missing chain_of_thoughts or dependency_analysis in reasoning step.")
+            return False
+        
+        self.vm.logger.info(f"Chain of Thoughts: {chain_of_thoughts}")
+        self.vm.logger.info(f"Dependency Analysis: {dependency_analysis}")
+        
+        # You can add any additional processing or logging here if needed
+        
         return True
