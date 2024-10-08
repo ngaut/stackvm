@@ -10,12 +10,12 @@ try:
     from git import Repo, NULL_TREE
     from git.exc import GitCommandError
 except ImportError:
-    print("GitPython is not installed. Please install it using: pip install GitPython")
+    logging.error("GitPython is not installed. Please install it using: pip install GitPython")
 
 try:
     from flask import Flask, render_template, jsonify, request, current_app
 except ImportError:
-    print("Flask is not installed. Please install it using: pip install Flask")
+    logging.error("Flask is not installed. Please install it using: pip install Flask")
 
 from config import GIT_REPO_PATH
 from git_manager import GitManager
@@ -30,10 +30,10 @@ app = Flask(__name__)
 
 # Configure logging
 def setup_logging():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     app.logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
     for handler in app.logger.handlers:
-        handler.setFormatter(formatter)
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'))
 
 setup_logging()
 
@@ -380,8 +380,8 @@ def run_vm_with_goal(goal, repo_path):
     vm.set_goal(goal)
     
     if vm.generate_plan():
-        print("Generated Plan:")
-        print(json.dumps(vm.state['current_plan'], indent=2))
+        logging.info("Generated Plan:")
+        logging.info(json.dumps(vm.state['current_plan'], indent=2))
         
         while True:
             success = vm.step()
@@ -392,23 +392,20 @@ def run_vm_with_goal(goal, repo_path):
             commit_vm_changes(vm)
             
             if vm.state['goal_completed']:
-                print("Goal completed during plan execution.")
+                logging.info("Goal completed during plan execution.")
                 break
 
         if vm.state['goal_completed']:
             result = vm.get_variable('result')
             if result:
-                print(f"\nFinal Result: {result}")
+                logging.info(f"\nFinal Result: {result}")
             else:
-                print("\nNo result was generated.")
+                logging.info("\nNo result was generated.")
         else:
-            print("Plan execution failed or did not complete.")
-            if vm.state['errors']:
-                print("Errors encountered:")
-                for error in vm.state['errors']:
-                    print(f"- {error}")
+            logging.warning("Plan execution failed or did not complete.")
+            logging.error(vm.state['errors'])
     else:
-        print("Failed to generate plan.")
+        logging.error("Failed to generate plan.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
@@ -419,11 +416,11 @@ if __name__ == "__main__":
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         run_vm_with_goal(args.goal, repo_path)
-        print("VM execution completed")    
+        logging.info("VM execution completed")    
     elif args.server:
-        print("Starting visualization server...")
+        logging.info("Starting visualization server...")
         current_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(current_dir)
         app.run(debug=True)
     else:
-        print("Please specify --goal to run the VM with a goal or --server to start the visualization server")
+        logging.info("Please specify --goal to run the VM with a goal or --server to start the visualization server")
