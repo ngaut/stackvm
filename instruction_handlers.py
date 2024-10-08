@@ -1,5 +1,79 @@
+import os
+import requests
 from typing import Any, Dict, Optional, List
 from utils import interpolate_variables  # Add this import
+
+# Add these imports at the top of the file
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+# Read the API key from environment variables
+API_KEY = os.environ.get('TIDB_AI_API_KEY')
+if not API_KEY:
+    logger.error("TIDB_AI_API_KEY not found in environment variables")
+
+def search_graph(query):
+    """
+    Searches the graph based on the provided query.
+    Args:
+        query (str): The search query.
+    Returns:
+        dict: JSON response from the API or an error message.
+    """
+    url = 'https://tidb.ai/api/v1/admin/graph/search'
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': f"Bearer {API_KEY}"
+    }
+    data = {
+        'query': query,
+        'include_meta': False,
+        'depth': 2,
+        'with_degree': False
+    }
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request to search_graph failed: {e}")
+        return {"error": "Failed to perform search_graph request."}
+    except ValueError:
+        logger.error("Invalid JSON response received from search_graph.")
+        return {"error": "Invalid response format."}
+
+def embedding_retrieve(query, top_k=5):
+    """
+    Retrieves embeddings based on the provided query.
+    Args:
+        query (str): The input question for embedding retrieval.
+        top_k (int): Number of top results to retrieve.
+    Returns:
+        dict: JSON response from the API or an error message.
+    """
+    url = 'https://tidb.ai/api/v1/admin/embedding_retrieve'
+    params = {
+        'question': query,
+        'chat_engine': 'default',
+        'top_k': top_k
+    }
+    headers = {
+        'accept': 'application/json',
+        'Authorization': f"Bearer {API_KEY}"
+    }
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Request to retrieve_embedding failed: {e}")
+        return {"error": "Failed to perform retrieve_embedding request."}
+    except ValueError:
+        logger.error("Invalid JSON response received from retrieve_embedding.")
+        return {"error": "Invalid response format."}
 
 class InstructionHandlers:
     def __init__(self, vm):
@@ -19,7 +93,7 @@ class InstructionHandlers:
         if not query or not output_var:
             return self._handle_error("Missing 'query' or 'output_var' in parameters.")
 
-        result = f"Simulated knowledge graph data for query '{query}'"
+        result = search_graph(query)
         self.vm.set_variable(output_var, result)
         return True
 
@@ -32,7 +106,7 @@ class InstructionHandlers:
         if not isinstance(embedding_query, str) or not isinstance(output_var, str):
             return self._handle_error("Invalid parameters for 'retrieve_knowledge_embedded_chunks'.")
 
-        result = self.vm.retrieve_knowledge_embedded_chunks(embedding_query, top_k)
+        result = embedding_retrieve(embedding_query, top_k)
         if result is not None:
             self.vm.set_variable(output_var, result)
             return True

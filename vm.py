@@ -26,7 +26,6 @@ class PlanExecutionVM:
         self.state: Dict[str, Any] = {
             'variables': {},
             'errors': [],
-            'previous_plans': [],
             'goal': None,
             'current_plan': [],
             'program_counter': 0,
@@ -200,7 +199,7 @@ The final step should assign the result to the 'result' variable. The 'reasoning
         
         if plan:
             # Create a new branch for the plan
-            branch_name = f"plan_{len(self.state['previous_plans'])}"
+            branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             try:
                 if not self.git_manager.create_branch(branch_name):
                     self.logger.error(f"Failed to create branch '{branch_name}'.")
@@ -215,7 +214,6 @@ The final step should assign the result to the 'result' variable. The 'reasoning
 
             # Save the plan in the state and commit
             self.state['current_plan'] = plan
-            self.state['previous_plans'].append(plan)
             self.logger.info("Plan generated and parsed successfully.")
 
             # Save state and commit the generated plan to Git
