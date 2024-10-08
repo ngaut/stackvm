@@ -25,8 +25,20 @@ Make sure the updated plan adheres to this specification.
 """
 
 def get_should_update_plan_prompt(vm_state):
-    return f"""
-    Analyze the current VM execution state and determine if the plan needs to be updated.
+    json_format = '''
+    {{
+        "should_update": boolean,
+        "explanation": string,
+        "key_factors": [
+            {{
+                "factor": string,
+                "impact": string
+            }}
+        ]
+    }}
+    '''
+    
+    return f"""Analyze the current VM execution state and determine if the plan needs to be updated.
 
     Goal: {vm_state['goal']}
     Current Variables: {json.dumps(vm_state['variables'], indent=2)}
@@ -42,17 +54,8 @@ def get_should_update_plan_prompt(vm_state):
     5. Completeness: Does the plan address all necessary aspects of the goal?
     6. Adaptability: Can the current plan handle any new circumstances that have arisen?
 
-    Provide your analysis in JSON format:
-    {
-        "should_update": boolean,
-        "explanation": string,
-        "key_factors": [
-            {
-                "factor": string,
-                "impact": string
-            }
-        ]
-    }
+    MUST Provide your analysis in JSON format:
+    {json_format}
 
     Set "should_update" to true if the plan requires modification, false otherwise.
     In the "explanation", provide a concise rationale for your decision.

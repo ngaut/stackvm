@@ -229,7 +229,6 @@ class PlanExecutionVM:
         Logs the assignment and handles goal completion if needed.
         """
         self.state['variables'][var_name] = value
-        self.logger.info(f"Variable '{var_name}' set to '{value}'.")
         
         # Mark goal as completed if 'result' is assigned
         if var_name == 'result':

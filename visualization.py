@@ -256,18 +256,16 @@ def should_update_plan(vm: PlanExecutionVM):
         app.logger.info("Plan update triggered due to errors.")
         return True
     
-    # Check if we've reached the end of the current plan
-    if vm.state['program_counter'] >= len(vm.state['current_plan']):
-        app.logger.info("Plan update triggered as we've reached the end of the current plan.")
-        return True
-    
     # Use LLM to judge if we should update the plan
     prompt = get_should_update_plan_prompt(vm.state)
-    
     response = llm_interface.generate(prompt)
     
     try:
-        analysis = json.loads(response)
+        # find the first json object in the response
+        start_index = response.find('{')
+        end_index = response.rfind('}') + 1
+        json_response = response[start_index:end_index]
+        analysis = json.loads(json_response)
         should_update = analysis.get('should_update', False)
         explanation = analysis.get('explanation', '')
         key_factors = analysis.get('key_factors', [])
