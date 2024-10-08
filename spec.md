@@ -91,7 +91,7 @@ Example:
     "output_var": "knowledge_data"
   }
 }
-4. retrieve_knowledge_embedded_chunks
+4. retrieve_embedded_chunks
 Purpose: Retrieves embedded knowledge chunks based on an embedding query.
 
 Parameters:
@@ -103,7 +103,7 @@ Example:
 
 {
   "seq_no": 3,
-  "type": "retrieve_knowledge_embedded_chunks",
+  "type": "retrieve_embedded_chunks",
   "parameters": {
     "embedding_query": "Information about Mount Everest",
     "top_k": 3,
@@ -238,7 +238,7 @@ The plan:
   },
   {
     "seq_no": 4,
-    "type": "retrieve_knowledge_embedded_chunks",
+    "type": "retrieve_embedded_chunks",
     "parameters": {
       "embedding_query": "Population of {{capital_city}}",
       "top_k": 3,

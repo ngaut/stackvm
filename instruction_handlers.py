@@ -97,14 +97,14 @@ class InstructionHandlers:
         self.vm.set_variable(output_var, result)
         return True
 
-    def retrieve_knowledge_embedded_chunks_handler(self, params: Dict[str, Any]) -> bool:
+    def retrieve_embedded_chunks_handler(self, params: Dict[str, Any]) -> bool:
         """Handle retrieval of embedded chunks."""
         embedding_query = self.vm.resolve_parameter(params.get('embedding_query'))
         output_var = params.get('output_var')
         top_k = params.get('top_k', 5)
 
         if not isinstance(embedding_query, str) or not isinstance(output_var, str):
-            return self._handle_error("Invalid parameters for 'retrieve_knowledge_embedded_chunks'.")
+            return self._handle_error("Invalid parameters for 'retrieve_embedded_chunks'.")
 
         result = embedding_retrieve(embedding_query, top_k)
         if result is not None:
