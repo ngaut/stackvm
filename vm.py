@@ -164,7 +164,8 @@ class PlanExecutionVM:
             return False
 
         self.logger.info("Generating plan using LLM.")
-        prompt = f"""You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph multiple times. For the following goal, please:
+        prompt = f"""You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph and a vector database multiple times. 
+For the following goal, please:
 
 1. Analyze the requester's intent and the requester's query:
    - Analyze and list the prerequisites of the query.
@@ -172,17 +173,16 @@ class PlanExecutionVM:
    
 2. Break Down query into sub-queries:
    - Each sub-query must be smaller, specific, retrievable with existing tools, and no further reasoning is required to achieve it.
-   - Identify dependencies between sub-queries and draw a dependency graph.
+   - Identify dependencies between sub-queries
 
 3. Generate an Action Plan:
    - For each sub-query (Assumptions included), create a corresponding action step to achieve it.
    - Ensure the plan follows the format specified in the spec.md file.
-   - Include a 'reasoning' step at the beginning of the plan that explains the overall approach and provides a dependency analysis of the steps.
+   - Include a 'reasoning' step at the beginning of the plan that explains the chain of thoughts and provides a dependency analysis of the steps.
 
 Goal: {self.state['goal']}
 
-Please provide your response as a JSON array of instruction steps, where each step has a 'type' and 'parameters'. 
-The final step should assign the result to the 'result' variable. The 'reasoning' step should include both 'explanation' and 'dependency_analysis' parameters.
+The final step should assign the result to the 'result' variable.
 
 """
         with open(VM_SPEC_PATH, 'r') as file:
