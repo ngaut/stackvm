@@ -1,7 +1,7 @@
 import os
 import requests
 from typing import Any, Dict, Optional, List
-from utils import interpolate_variables  # Add this import
+from utils import interpolate_variables, find_first_json_object
 
 # Add these imports at the top of the file
 import logging
@@ -142,11 +142,7 @@ class InstructionHandlers:
         result = self.vm.llm_interface.evaluate_condition(prompt, context)
         
         try:
-            # find the first valid JSON object in the result
-            json_start = result.find('{')
-            json_end = result.rfind('}') + 1
-            json_str = result[json_start:json_end]
-            parsed_result = json.loads(json_str)
+            parsed_result = find_first_json_object(result)
             if not isinstance(parsed_result, dict) or 'result' not in parsed_result or 'explanation' not in parsed_result:
                 raise ValueError("Invalid JSON structure")
             
@@ -162,8 +158,6 @@ class InstructionHandlers:
                     return self.vm.execute_subplan(if_false)
             else:
                 return self._handle_error(f"Invalid condition result type: {type(condition_result)}. Expected boolean.")
-        except json.JSONDecodeError:
-            return self._handle_error(f"Invalid JSON response from LLM: {result}")
         except ValueError as e:
             return self._handle_error(f"Error parsing LLM response: {str(e)}")
         except Exception as e:

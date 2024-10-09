@@ -9,7 +9,6 @@ class StepType(Enum):
     GENERATE_PLAN = "Generate Plan"
     STEP_EXECUTION = "StepExecution"
     PLAN_UPDATE = "PlanUpdate"
-    # Add other step types as needed
 
 def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
     if not isinstance(text, str):
@@ -22,14 +21,12 @@ def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
 def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
     try:
         print(f"Parsing plan: {plan_response}")
-        start = plan_response.find('[')
-        end = plan_response.rfind(']')
+        json_str = find_first_json_array(plan_response)
         
-        if start != -1 and end != -1 and start < end:
-            json_str = plan_response[start:end+1]
-            plan = json.loads(json_str)
-        else:
+        if json_str is None:
             raise ValueError("No valid JSON array found in the response")
+        
+        plan = json.loads(json_str)
         
         if not isinstance(plan, list):
             raise ValueError("Parsed plan is not a list")

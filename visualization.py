@@ -19,7 +19,7 @@ except ImportError:
 
 from config import GIT_REPO_PATH, VM_SPEC_CONTENT
 from git_manager import GitManager
-from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType,find_first_json_array, find_first_json_object
+from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType,find_first_json_array, find_first_json_object, parse_plan
 from vm import PlanExecutionVM
 
 # Add these imports at the top of the file
@@ -28,7 +28,6 @@ from config import LLM_MODEL
 
 # Add this import at the top of the file
 from prompts import get_plan_update_prompt, get_should_update_plan_prompt, get_generate_plan_prompt
-from utils import parse_plan
 
 # Add this import at the top of the file
 from commit_message_wrapper import commit_message_wrapper
@@ -206,14 +205,6 @@ def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: li
     new_plan = generate_plan(vm.state['goal'], custom_prompt=prompt)
     app.logger.info(f"Generated updated plan: {new_plan}, previous plan: {vm.state['current_plan']}")
     return new_plan
-
-def parse_plan(plan_text):
-    try:
-        plan = json.loads(find_first_json_array(plan_text))
-        return plan
-    except json.JSONDecodeError:
-        app.logger.error(f"Failed to parse plan text: {plan_text}")
-        return None
 
 def should_update_plan(vm: PlanExecutionVM):
     if vm.state.get('errors'):
