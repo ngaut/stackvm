@@ -107,8 +107,10 @@ Analyze the current VM execution state and determine if the plan needs to be upd
 
 def get_generate_plan_prompt(goal, vm_spec_content):
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph and a vector database multiple times. 
-For the following goal, please:
+Your task is to generate a detailed action plan to achieve the following goal:
+Goal: {goal}
+VM Specification:{vm_spec_content}
+
 
 1. **Analyze the Request**:
    - Determine the primary intent behind the goal.
@@ -121,14 +123,25 @@ For the following goal, please:
 
 3. **Generate an Action Plan**:
    - For each sub-goal, create a corresponding action step to achieve it.
-   - Ensure the plan follows the format specified in the `spec.md` file.
+   - Ensure the plan follows the VM Specification.
    - Include a 'reasoning' step at the beginning of the plan that outlines the chain of thought and dependency analysis of the steps.
 
-Goal: {goal}
 
-The final step should assign the result to the 'result' variable.
+The final step of the plan must be assign the result to the 'result' variable.
+Please provide only the JSON array for the action plan without any additional text, explanations, or markdown. 
+Ensure the JSON is properly formatted and encapsulated within a ```json code block.
 
-The content of `spec.md` is:
-
-{vm_spec_content}
+    ```json
+    [
+      {{
+        "seq_no": 0,
+        "type": "reasoning",
+        "parameters": {{
+          "chain_of_thoughts": "...",
+          "dependency_analysis": "..."
+        }}
+      }},
+      ...
+    ]
+    ```
 """

@@ -1,9 +1,10 @@
 import json
-from typing import Any, Dict, List, Optional
 import os
-import git
 import logging
+import re
+from typing import Any, Dict, List, Optional
 from enum import Enum
+import git
 
 class StepType(Enum):
     GENERATE_PLAN = "Generate Plan"
@@ -11,26 +12,25 @@ class StepType(Enum):
     PLAN_UPDATE = "PlanUpdate"
 
 def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
+    """Interpolate variables in the given text."""
     if not isinstance(text, str):
         return text
     for var, value in variables.items():
-        if f"{{{{{var}}}}}" in text:
-            text = text.replace(f"{{{{{var}}}}}", str(value))
+        text = text.replace(f"{{{{{var}}}}}", str(value))
     return text
 
 def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
+    """Parse the plan response to extract a list of steps."""
     try:
         print(f"Parsing plan: {plan_response}")
-        json_str = find_first_json_array(plan_response)
-        
-        if json_str is None:
-            raise ValueError("No valid JSON array found in the response")
-        
+        json_str = extract_json(plan_response)
+
         plan = json.loads(json_str)
-        
+
         if not isinstance(plan, list):
-            raise ValueError("Parsed plan is not a list")
+            raise ValueError("Parsed plan is not a list.")
         
+        # Modify specific steps if necessary
         for step in plan:
             if (step.get('type') == 'assign' and
                     step.get('parameters', {}).get('var_name') == 'final_summary'):
@@ -38,30 +38,36 @@ def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
         
         return plan
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"Failed to parse plan: {e}")
+        logging.error(f"Failed to parse plan: {e}")
         return None
 
-def load_state(commit_hash, repo_path):
-    """
-    Load the state from a file based on the specific commit point.
-    """
+def extract_json(plan_response: str) -> str:
+    """Extract JSON from the plan response."""
+    json_code_block_pattern = re.compile(r'```json\s*(\[\s*{.*?}\s*\])\s*```', re.DOTALL)
+    match = json_code_block_pattern.search(plan_response)
+    if match:
+        return match.group(1)
+    
+    json_str = find_first_json_array(plan_response)
+    if not json_str:
+        raise ValueError("No valid JSON array found in the response.")
+    
+    return json_str
+
+def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
+    """Load the state from a file based on the specific commit point."""
     try:
         repo = git.Repo(repo_path)
         state_content = repo.git.show(f'{commit_hash}:vm_state.json')
-        loaded_state = json.loads(state_content)
-        return loaded_state
-    except git.exc.GitCommandError as e:
+        return json.loads(state_content)
+    except (git.exc.GitCommandError, json.JSONDecodeError) as e:
         logging.error(f"Error loading state from commit {commit_hash}: {str(e)}")
-    except json.JSONDecodeError as e:
-        logging.error(f"Error parsing state JSON from commit {commit_hash}: {str(e)}")
     except Exception as e:
         logging.error(f"Unexpected error loading state from commit {commit_hash}: {str(e)}")
     return None
 
-def save_state(state, repo_path):
-    """
-    Save the state to a file in the repository.
-    """
+def save_state(state: Dict[str, Any], repo_path: str) -> None:
+    """Save the state to a file in the repository."""
     try:
         state_file = os.path.join(repo_path, 'vm_state.json')
         with open(state_file, 'w') as f:
@@ -70,6 +76,7 @@ def save_state(state, repo_path):
         logging.error(f"Error saving state: {str(e)}")
 
 def get_commit_message_schema(step_type: str, seq_no: str, description: str, input_parameters: Dict[str, Any], output_variables: Dict[str, Any]) -> str:
+    """Generate a commit message schema in JSON format."""
     commit_info = {
         "type": step_type,
         "seq_no": seq_no,
@@ -77,13 +84,13 @@ def get_commit_message_schema(step_type: str, seq_no: str, description: str, inp
         "input_parameters": input_parameters,
         "output_variables": output_variables
     }
-    return json.dumps(commit_info)  # Convert to JSON format
+    return json.dumps(commit_info)
 
-def parse_commit_message(message):
+def parse_commit_message(message: str) -> tuple:
+    """Parse a commit message and return its components."""
     seq_no = "Unknown"
-
     try:
-        commit_info = json.loads(message)  # Parse JSON formatted message
+        commit_info = json.loads(message)
         title = commit_info.get("description", "No description")
         details = {
             "input_parameters": commit_info.get("input_parameters", {}),
@@ -99,6 +106,7 @@ def parse_commit_message(message):
     return seq_no, title, details, commit_type
 
 def find_first_json_array(text: str) -> Optional[str]:
+    """Find the first JSON array in the given text."""
     stack = []
     start = -1
     for i, char in enumerate(text):
@@ -114,6 +122,7 @@ def find_first_json_array(text: str) -> Optional[str]:
     return None
 
 def find_first_json_object(text: str) -> Optional[str]:
+    """Find the first JSON object in the given text."""
     stack = []
     start = -1
     for i, char in enumerate(text):

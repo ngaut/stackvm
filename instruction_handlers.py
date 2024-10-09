@@ -98,20 +98,20 @@ class InstructionHandlers:
         self.vm.set_variable(output_var, result)
         return True
 
-    def retrieve_embedded_chunks_handler(self, params: Dict[str, Any]) -> bool:
-        """Handle retrieval of embedded chunks."""
-        embedding_query = self.vm.resolve_parameter(params.get('embedding_query'))
+    def vector_search_handler(self, params: Dict[str, Any]) -> bool:  # Updated method name
+        """Handle retrieval of embedded chunks."""  # Updated docstring
+        vector_search = self.vm.resolve_parameter(params.get('vector_search'))
         output_var = params.get('output_var')
         top_k = params.get('top_k', 5)
 
-        if not isinstance(embedding_query, str) or not isinstance(output_var, str):
-            return self._handle_error("Invalid parameters for 'retrieve_embedded_chunks'.")
+        if not isinstance(vector_search, str) or not isinstance(output_var, str):
+            return self._handle_error("Invalid parameters for 'vector_search'.")  # Updated error message
 
-        result = embedding_retrieve(embedding_query, top_k)
+        result = embedding_retrieve(vector_search, top_k)
         if result is not None:
             self.vm.set_variable(output_var, result)
             return True
-        return self._handle_error(f"Failed to retrieve embedded chunks for query '{embedding_query}'.")
+        return self._handle_error(f"Failed to retrieve embedded chunks for query '{vector_search}'.")
 
     def llm_generate_handler(self, params: Dict[str, Any]) -> bool:
         """Handle LLM generation."""
@@ -140,12 +140,10 @@ class InstructionHandlers:
             return self._handle_error("Invalid prompt for 'condition' instruction.")
 
         result = self.vm.llm_interface.evaluate_condition(prompt, context)
+        self.vm.logger.info(f"Condition result: {result}")
         
         try:
-            parsed_result = find_first_json_object(result)
-            if not isinstance(parsed_result, dict) or 'result' not in parsed_result or 'explanation' not in parsed_result:
-                raise ValueError("Invalid JSON structure")
-            
+            parsed_result = json.loads(find_first_json_object(result))
             condition_result = parsed_result['result']
             explanation = parsed_result['explanation']
             
@@ -158,8 +156,6 @@ class InstructionHandlers:
                     return self.vm.execute_subplan(if_false)
             else:
                 return self._handle_error(f"Invalid condition result type: {type(condition_result)}. Expected boolean.")
-        except ValueError as e:
-            return self._handle_error(f"Error parsing LLM response: {str(e)}")
         except Exception as e:
             return self._handle_error(f"Unexpected error in condition handling: {str(e)}")
 

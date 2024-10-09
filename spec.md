@@ -89,21 +89,21 @@ Example:
     "output_var": "knowledge_data"
   }
 }
-4. retrieve_embedded_chunks
+4. vector_search
 Purpose: Retrieves embedded knowledge chunks based on an embedding query.
 
 Parameters:
 
-embedding_query: The embedding query string. Can be a direct string or a variable reference.
+vector_search: The query string. Can be a direct string or a variable reference.
 top_k: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
 output_var: The name of the variable to store the retrieved chunks.
 Example:
 
 {
   "seq_no": 3,
-  "type": "retrieve_embedded_chunks",
+  "type": "vector_search",
   "parameters": {
-    "embedding_query": "Information about Mount Everest",
+    "vector_search": "Information about Mount Everest",
     "top_k": 3,
     "output_var": "embedded_chunks"
   }
@@ -236,7 +236,7 @@ The plan:
       "true_branch": [
         {
           "seq_no": 3,
-          "type": "retrieve_knowledge_graph",
+          "type": "vector_search",
           "parameters": {
             "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
             "output_var": "tidb_info"
@@ -246,9 +246,9 @@ The plan:
       "false_branch": [
         {
           "seq_no": 4,
-          "type": "retrieve_embedded_chunks",
+          "type": "retrieve_knowledge_graph",
           "parameters": {
-            "embedding_query": "Latest TiDB version and its key features",
+            "vector_search": "Latest TiDB version and its key features",
             "top_k": 3,
             "output_var": "tidb_info"
           }
@@ -258,16 +258,16 @@ The plan:
   },
   {
     "seq_no": 5,
-    "type": "retrieve_embedded_chunks",
+    "type": "vector_search",
     "parameters": {
-      "embedding_query": "TiDB {{latest_tidb_version}} performance optimization techniques",
+      "vector_search": "TiDB {{latest_tidb_version}} performance optimization techniques",
       "top_k": 5,
       "output_var": "performance_techniques"
     }
   },
   {
     "seq_no": 6,
-    "type": "retrieve_knowledge_graph",
+    "type": "vector_search",
     "parameters": {
       "query": "What are specific considerations for optimizing TiDB {{latest_tidb_version}} for e-commerce applications?",
       "output_var": "ecommerce_optimizations"

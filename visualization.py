@@ -440,9 +440,10 @@ def run_vm_with_goal(goal, repo_path):
     vm = PlanExecutionVM(repo_path, llm_interface) 
     vm.set_goal(goal)
     
-    if generate_plan(goal):  
+    plan = generate_plan(goal)
+    if plan:
         logging.info("Generated Plan:")
-        logging.info(json.dumps(vm.state['current_plan'], indent=2))
+        vm.state['current_plan'] = plan
         
         while True:
             success = vm.step()

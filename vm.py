@@ -54,7 +54,7 @@ class PlanExecutionVM:
         if not self.handlers_registered:
             self.instruction_handlers = InstructionHandlers(self)
             self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
-            self.register_instruction('retrieve_embedded_chunks', self.instruction_handlers.retrieve_embedded_chunks_handler)
+            self.register_instruction('vector_search', self.instruction_handlers.vector_search_handler)  # Updated
             self.register_instruction('llm_generate', self.instruction_handlers.llm_generate_handler)
             self.register_instruction('condition', self.instruction_handlers.condition_handler)
             self.register_instruction('assign', self.instruction_handlers.assign_handler)
