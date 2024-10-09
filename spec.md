@@ -117,13 +117,20 @@ prompt: The condition prompt to provide to the LLM. Can be a direct string or a 
 context (optional): Additional context for the LLM. Can be a direct string or a variable reference.
 true_branch: A list of instructions to execute if the condition evaluates to true.
 false_branch: A list of instructions to execute if the condition evaluates to false.
+
+The prompt should explicitly require the LLM to return a JSON result with the following schema:
+{
+  "result": boolean,
+  "explanation": string
+}
+
 Example:
 
 {
   "seq_no": 4,
   "type": "condition",
   "parameters": {
-    "prompt": "Is {{number}} even? Respond with 'true' or 'false'.",
+    "prompt": "Is {{number}} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
     "context": null,
     "true_branch": [
       {
@@ -146,6 +153,12 @@ Example:
       }
     ]
   }
+}
+
+Expected LLM response format:
+{
+  "result": true,
+  "explanation": "The number is divisible by 2 without a remainder, making it even."
 }
 6. reasoning
 Purpose: Provides a detailed chain of thoughts of the plan's reasoning, analysis, and steps.
@@ -218,7 +231,7 @@ The plan:
     "seq_no": 2,
     "type": "condition",
     "parameters": {
-      "prompt": "Was a specific latest stable version of TiDB found? Answer 'true' or 'false'.",
+      "prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
       "context": "Latest TiDB version: {{latest_tidb_version}}",
       "true_branch": [
         {

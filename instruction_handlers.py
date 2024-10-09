@@ -5,6 +5,7 @@ from utils import interpolate_variables  # Add this import
 
 # Add these imports at the top of the file
 import logging
+import json
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -130,19 +131,43 @@ class InstructionHandlers:
 
     def condition_handler(self, params: Dict[str, Any]) -> bool:
         """Handle conditional execution."""
-        condition = self.vm.resolve_parameter(params.get('condition'))
-        if_true = params.get('if_true', [])
-        if_false = params.get('if_false', [])
+        prompt = self.vm.resolve_parameter(params.get('prompt'))
+        context = self.vm.resolve_parameter(params.get('context'))
+        if_true = params.get('true_branch', [])
+        if_false = params.get('false_branch', [])
 
-        if not isinstance(condition, str):
-            return self._handle_error("Invalid condition for 'condition' instruction.")
+        if not isinstance(prompt, str):
+            return self._handle_error("Invalid prompt for 'condition' instruction.")
 
-        result = self.vm.llm_interface.evaluate_condition(condition)
-        if result == 'true':
-            return self.vm.execute_subplan(if_true)
-        elif result == 'false':
-            return self.vm.execute_subplan(if_false)
-        return self._handle_error(f"Invalid condition result: {result}")
+        result = self.vm.llm_interface.evaluate_condition(prompt, context)
+        
+        try:
+            # find the first valid JSON object in the result
+            json_start = result.find('{')
+            json_end = result.rfind('}') + 1
+            json_str = result[json_start:json_end]
+            parsed_result = json.loads(json_str)
+            if not isinstance(parsed_result, dict) or 'result' not in parsed_result or 'explanation' not in parsed_result:
+                raise ValueError("Invalid JSON structure")
+            
+            condition_result = parsed_result['result']
+            explanation = parsed_result['explanation']
+            
+            self.vm.logger.info(f"Condition result: {condition_result}. Explanation: {explanation}")
+            
+            if isinstance(condition_result, bool):
+                if condition_result:
+                    return self.vm.execute_subplan(if_true)
+                else:
+                    return self.vm.execute_subplan(if_false)
+            else:
+                return self._handle_error(f"Invalid condition result type: {type(condition_result)}. Expected boolean.")
+        except json.JSONDecodeError:
+            return self._handle_error(f"Invalid JSON response from LLM: {result}")
+        except ValueError as e:
+            return self._handle_error(f"Error parsing LLM response: {str(e)}")
+        except Exception as e:
+            return self._handle_error(f"Unexpected error in condition handling: {str(e)}")
 
     def assign_handler(self, params: Dict[str, Any]) -> bool:
         """Handle variable assignment."""

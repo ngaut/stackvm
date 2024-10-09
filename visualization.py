@@ -189,7 +189,10 @@ def update_plan_logic(repo, commit_hash, updated_plan, program_counter):
         vm_state['program_counter'] = program_counter
 
         # Get seq_no from updated_plan at program_counter
-        program_counter = int(program_counter)  
+        program_counter = int(program_counter)
+        if program_counter < 0 or program_counter >= len(updated_plan):
+            raise ValueError(f"Invalid program_counter: {program_counter}. Plan length: {len(updated_plan)}")
+        
         seq_no = updated_plan[program_counter].get('seq_no', 'unknown')
 
         desc = f"Updated plan to execute from program_counter: {program_counter}"
@@ -342,9 +345,10 @@ def execute_vm():
             app.logger.info("Step execution failed.")
             # Check if plan needs to be updated
             if should_update_plan(vm):
-                app.logger.info("Attempting to update plan.")
                 updated_plan = generate_updated_plan(vm)
-                if updated_plan:
+                app.logger.info(f"updated_plan: {updated_plan}")
+
+                if updated_plan and isinstance(updated_plan, list):
                     # Use current program_counter for plan update
                     new_commit_hash, new_branch_name = update_plan_logic(
                         repo, last_commit_hash, updated_plan, vm.state['program_counter'])
@@ -354,7 +358,7 @@ def execute_vm():
                     last_commit_hash = new_commit_hash
                     continue  # Continue execution with updated plan
                 else:
-                    app.logger.error("Plan update failed. Stopping execution.")
+                    app.logger.error(f"Stopping execution. Plan update failed or returned invalid plan: '{updated_plan}'")
                     break
             else:
                 app.logger.info("No plan update triggered. Stopping execution.")
@@ -366,16 +370,16 @@ def execute_vm():
             if should_update_plan(vm):
                 app.logger.info("Plan update required.")
                 updated_plan = generate_updated_plan(vm)
-                if updated_plan:
+                if updated_plan and isinstance(updated_plan, list):
                     new_commit_hash, new_branch_name = update_plan_logic(
                         repo, last_commit_hash, updated_plan, vm.state['program_counter'])
                     repo.git.checkout(new_branch_name)
                     vm.set_state(new_commit_hash)
-                    app.logger.info(f"Resumed execution with updated plan on branch '{new_branch_name}'.")
+                    app.logger.info(f"Resumed execution with updated plan on branch '{new_branch_name}', plan: '{updated_plan}'.")
                     last_commit_hash = new_commit_hash
                     continue  # Continue execution with updated plan
                 else:
-                    app.logger.error("Failed to generate updated plan. Stopping execution.")
+                    app.logger.error(f"Stopping execution. Failed to generate valid updated plan: '{updated_plan}'")
                     break
 
         if vm.state.get('goal_completed'):

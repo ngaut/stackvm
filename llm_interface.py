@@ -35,24 +35,19 @@ class LLMInterface:
     def evaluate_condition(self, prompt: str, context: Optional[str] = None) -> Optional[str]:
         try:
             if context:
-                full_prompt = f"{context}\n{prompt}"
+                full_prompt = f"prompt: {prompt}\ncontext: {context}"
             else:
-                full_prompt = prompt
+                full_prompt = f"prompt: {prompt}"
 
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant. Respond with 'true' or 'false' only."},
+                    {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": full_prompt}
                 ],
                 temperature=0
             )
-            result = response.choices[0].message.content.strip().lower()
-            if result in ['true', 'false']:
-                return result
-            else:
-                print(f"Invalid condition response: '{result}'. Expected 'true' or 'false'.")
-                return None
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Condition evaluation failed: {e}")
             return None

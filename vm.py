@@ -105,9 +105,7 @@ class PlanExecutionVM:
             if success:
                 save_state(self.state, self.repo_path)
                 self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
-        
-                self.logger.debug(f"Current Variables: {json.dumps(self.state['variables'], indent=2)}")
-        
+                
                 input_parameters = {}
                 for k, v in params.items():
                     value_preview = str(v)[:50] + '...' if len(str(v)) > 50 else str(v)
@@ -153,11 +151,11 @@ class PlanExecutionVM:
                 break
         return True
 
-    def generate_plan(self, custom_prompt=None) -> bool:
+    def generate_plan(self, custom_prompt=None) -> List[Dict[str, Any]]:
         if not self.state['goal']:
             self.logger.error("No goal is set.")
             self.state['errors'].append("No goal is set.")
-            return False
+            return []
 
         self.logger.info("Generating plan using LLM.")
         
@@ -171,7 +169,7 @@ class PlanExecutionVM:
         if not plan_response:
             self.logger.error("LLM failed to generate a response.")
             self.state['errors'].append("LLM failed to generate a response.")
-            return False
+            return []
         
         plan = parse_plan(plan_response)
         
@@ -181,14 +179,14 @@ class PlanExecutionVM:
             try:
                 if not self.git_manager.create_branch(branch_name):
                     self.logger.error(f"Failed to create branch '{branch_name}'.")
-                    return False
+                    return []
 
                 if not self.git_manager.checkout_branch(branch_name):
                     self.logger.error(f"Failed to checkout branch '{branch_name}'.")
-                    return False
+                    return []
             except Exception as e:
                 self.logger.error(f"Error in Git operations: {str(e)}")
-                return False
+                return []
 
             # Save the plan in the state and commit
             self.state['current_plan'] = plan
@@ -197,11 +195,11 @@ class PlanExecutionVM:
             # Save state and commit the generated plan to Git
             save_state(self.state, self.repo_path)
             self._set_commit_message(StepType.GENERATE_PLAN, "0", f"Generated new plan on branch '{branch_name}'")  # Use the enum
-            return True
+            return plan
         else:
             self.logger.error("Failed to parse the generated plan.")
             self.state['errors'].append("Failed to parse the generated plan.")
-            return False
+            return []
 
     def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):
@@ -220,7 +218,8 @@ class PlanExecutionVM:
             save_state(self.state, self.repo_path)  # Save state after each step
             return True
         else:
-            self.logger.info("Program execution complete.")
+            self.logger.error(f"Program counter ({self.state['program_counter']}) out of range for current plan (length: {len(self.state['current_plan'])})")
+            self.state['errors'].append(f"Program counter out of range: {self.state['program_counter']}")
             return False
 
     def set_variable(self, var_name: str, value: Any) -> None:
