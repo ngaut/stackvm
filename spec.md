@@ -21,7 +21,7 @@ The VM executes plans consisting of a sequence of instructions. Each instruction
 ## 2. Instruction Format
 Each instruction in the plan is represented as a JSON object with the following keys:
 
-- `seq_no`: A unique integer identifying the instruction's sequence within the plan.
+- `seq_no`: A unique and AUTO-INCREMENT integer identifying the instruction's sequence within the plan, starts from 0.
 - `type`: A string indicating the instruction type.
 - `parameters`: An object containing parameters required by the instruction.
 

@@ -19,7 +19,7 @@ except ImportError:
 
 from config import GIT_REPO_PATH, VM_SPEC_CONTENT
 from git_manager import GitManager
-from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType
+from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType,find_first_json_array, find_first_json_object
 from vm import PlanExecutionVM
 
 # Add these imports at the top of the file
@@ -27,7 +27,11 @@ from llm_interface import LLMInterface
 from config import LLM_MODEL
 
 # Add this import at the top of the file
-from prompts import get_plan_update_prompt, get_should_update_plan_prompt
+from prompts import get_plan_update_prompt, get_should_update_plan_prompt, get_generate_plan_prompt
+from utils import parse_plan
+
+# Add this import at the top of the file
+from commit_message_wrapper import commit_message_wrapper
 
 # Add this near the top of the file, after other global variables
 llm_interface = LLMInterface(LLM_MODEL)
@@ -60,7 +64,6 @@ def get_repo(repo_path):
 def get_commits(repo, branch_name):
     try:
         commits = list(repo.iter_commits(branch_name))
-        app.logger.info(f"Successfully retrieved {len(commits)} commits for branch {branch_name}")
         return commits
     except GitCommandError as e:
         app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}", exc_info=True)
@@ -93,8 +96,6 @@ def index():
 def get_vm_data():
     branch = request.args.get('branch', 'main')
     repo_name = request.args.get('repo')
-    
-    app.logger.info(f"get_vm_data called with branch: '{branch}', repo: '{repo_name}'")
     
     repo_path = os.path.join(GIT_REPO_PATH, repo_name) if repo_name else GIT_REPO_PATH
     repo = get_repo(repo_path)
@@ -168,122 +169,81 @@ def commit_details(commit_hash):
             'seq_no': seq_no,
             'files_changed': [item.a_path for item in diff]
         }
-        app.logger.info(f"Commit details for {commit_hash}: {details}")
         return jsonify(details)
     except Exception as e:
         return log_and_return_error(f"Error fetching commit details for {commit_hash}: {str(e)}", 'error', 404)
 
-# Refactored update_plan logic into a separate function
-def update_plan_logic(repo, commit_hash, updated_plan, program_counter):
-    try:
-        new_branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        new_branch = repo.create_head(new_branch_name, commit_hash)
-        repo.head.reference = new_branch
-        repo.head.reset(index=True, working_tree=True)
+def generate_plan(goal, custom_prompt=None):
+    if not goal:
+        app.logger.error("No goal is set.")
+        return []
 
-        vm_state_path = os.path.join(repo.working_dir, 'vm_state.json')
-        with open(vm_state_path, 'r') as f:
-            vm_state = json.load(f)
-
-        vm_state['current_plan'] = updated_plan
-        vm_state['program_counter'] = program_counter
-
-        # Get seq_no from updated_plan at program_counter
-        program_counter = int(program_counter)
-        if program_counter < 0 or program_counter >= len(updated_plan):
-            raise ValueError(f"Invalid program_counter: {program_counter}. Plan length: {len(updated_plan)}")
-        
-        seq_no = updated_plan[program_counter].get('seq_no', 'unknown')
-
-        desc = f"Updated plan to execute from program_counter: {program_counter}"
-        commit_message = get_commit_message_schema(
-            step_type=StepType.PLAN_UPDATE.value,
-            seq_no=str(seq_no),
-            description=desc,
-            input_parameters={},
-            output_variables={}
-        )
-        
-        save_state(vm_state, repo.working_dir)
-        repo.index.add([vm_state_path])
-        new_commit = repo.index.commit(commit_message)
-
-        return new_commit.hexsha, new_branch_name
-    except Exception as e:
-        app.logger.error(f"Error in update_plan_logic: {str(e)}")
-        raise e
-
-@app.route('/update_plan', methods=['POST'])
-def update_plan():
-    data = request.json
-    repo_name = data.get('repo')
-    commit_hash = data.get('commit_hash')
-    updated_plan = data.get('updated_plan')
-    program_counter = data.get('program_counter')
     
-    if not all([repo_name, commit_hash, updated_plan, program_counter]):
-        return log_and_return_error('Missing required parameters', 'error', 400)
+    if custom_prompt:
+        prompt = custom_prompt
+    else:
+        prompt = get_generate_plan_prompt(goal, VM_SPEC_CONTENT)
 
-    repo = get_repo(get_current_repo_path())
+    plan_response = llm_interface.generate(prompt)
 
-    try:
-        program_counter = int(program_counter) 
-        new_commit_hash, new_branch_name = update_plan_logic(repo, commit_hash, updated_plan, program_counter)
-        return jsonify({
-            'success': True,
-            'message': f"Updated plan to execute from program_counter: {program_counter}",
-            'new_commit_hash': new_commit_hash,
-            'new_branch': new_branch_name
-        })
-    except ValueError:
-        return log_and_return_error("Invalid program_counter value", 'error', 400)
-    except Exception as e:
-        return log_and_return_error(f"Error updating plan: {str(e)}", 'error', 500)
+    app.logger.info(f"Generating plan using LLM: {plan_response}")
 
-def generate_updated_plan(vm: PlanExecutionVM):
-    app.logger.info("Generating updated plan from current execution point.")
+    if not plan_response:
+        app.logger.error(f"LLM failed to generate a response: {plan_response}")
+        return []
     
-    prompt = get_plan_update_prompt(vm.state, VM_SPEC_CONTENT)
-    return vm.generate_plan(custom_prompt=prompt)
+    plan = parse_plan(plan_response)
+    
+    if plan:
+        return plan
+    else:
+        app.logger.error("Failed to parse the generated plan.")
+        return []
+
+# Update the generate_updated_plan function to use the new generate_plan function
+def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):    
+    prompt = get_plan_update_prompt(vm.state, VM_SPEC_CONTENT, explanation, key_factors)
+    new_plan = generate_plan(vm.state['goal'], custom_prompt=prompt)
+    app.logger.info(f"Generated updated plan: {new_plan}, previous plan: {vm.state['current_plan']}")
+    return new_plan
 
 def parse_plan(plan_text):
     try:
-        plan = json.loads(plan_text)
+        plan = json.loads(find_first_json_array(plan_text))
         return plan
     except json.JSONDecodeError:
-        app.logger.error("Failed to parse plan text.")
+        app.logger.error(f"Failed to parse plan text: {plan_text}")
         return None
 
 def should_update_plan(vm: PlanExecutionVM):
     if vm.state.get('errors'):
         app.logger.info("Plan update triggered due to errors.")
-        return True
+        return True, "Errors detected in VM state", [{"factor": "VM errors", "impact": "Critical"}]
     
     # Use LLM to judge if we should update the plan
     prompt = get_should_update_plan_prompt(vm.state)
     response = llm_interface.generate(prompt)
     
-    try:
-        # find the first json object in the response
-        start_index = response.find('{')
-        end_index = response.rfind('}') + 1
-        json_response = response[start_index:end_index]
+    # Use the new find_first_json_object function to find the first JSON object in the response
+    json_response = find_first_json_object(response)
+    if json_response:
         analysis = json.loads(json_response)
-        should_update = analysis.get('should_update', False)
-        explanation = analysis.get('explanation', '')
-        key_factors = analysis.get('key_factors', [])
-        
-        if should_update:
-            app.logger.info(f"LLM suggests updating the plan: {explanation}")
-            for factor in key_factors:
-                app.logger.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
-            return True
-        else:
-            app.logger.info(f"LLM suggests keeping the current plan: {explanation}")
-            return False
-    except json.JSONDecodeError:
-        app.logger.error("Failed to parse LLM response as JSON. Defaulting to not updating the plan.")
-        return False
+    else:
+        app.logger.error("No valid JSON object found in the response.")
+        return log_and_return_error("No valid JSON object found.", 'error', 400)
+    
+    should_update = analysis.get('should_update', False)
+    explanation = analysis.get('explanation', '')
+    key_factors = analysis.get('key_factors', [])
+    
+    if should_update:
+        app.logger.info(f"LLM suggests updating the plan: {explanation}")
+        for factor in key_factors:
+            app.logger.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
+        return True, explanation, key_factors
+    else:
+        app.logger.info(f"LLM suggests keeping the current plan: {explanation}")
+        return False, explanation, key_factors
 
 @app.route('/execute_vm', methods=['POST'])
 def execute_vm():
@@ -291,7 +251,7 @@ def execute_vm():
     app.logger.info(f"Received execute_vm request with data: {data}")
 
     commit_hash = data.get('commit_hash')
-    steps = int(data.get('steps', 1))
+    steps = int(data.get('steps', 20)) # maximum number of steps to execute
     repo_name = data.get('repo')
     new_branch = data.get('new_branch')
     seq_no = data.get('seq_no')
@@ -341,46 +301,31 @@ def execute_vm():
         if commit_hash:
             last_commit_hash = commit_hash
 
-        if not success:
-            app.logger.info("Step execution failed.")
-            # Check if plan needs to be updated
-            if should_update_plan(vm):
-                updated_plan = generate_updated_plan(vm)
-                app.logger.info(f"updated_plan: {updated_plan}")
+        # Check if plan needs to be updated
+        should_update, explanation, key_factors = should_update_plan(vm)
+        if should_update:
+            updated_plan = generate_updated_plan(vm, explanation, key_factors)
 
-                if updated_plan and isinstance(updated_plan, list):
-                    # Use current program_counter for plan update
-                    new_commit_hash, new_branch_name = update_plan_logic(
-                        repo, last_commit_hash, updated_plan, vm.state['program_counter'])
-                    repo.git.checkout(new_branch_name)
-                    vm.set_state(new_commit_hash)
-                    app.logger.info(f"Resumed execution with updated plan on branch '{new_branch_name}'.")
+            # Create a new branch for the updated plan
+            branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            if vm.git_manager.create_branch(branch_name) and vm.git_manager.checkout_branch(branch_name):
+                # Update the VM state with the new plan
+                vm.state['current_plan'] = updated_plan
+                commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, vm.state['program_counter'], explanation)
+                save_state(vm.state, repo_path)
+                
+                new_commit_hash = commit_vm_changes(vm)
+                if new_commit_hash:
                     last_commit_hash = new_commit_hash
-                    continue  # Continue execution with updated plan
+                    app.logger.info(f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}")
                 else:
-                    app.logger.error(f"Stopping execution. Plan update failed or returned invalid plan: '{updated_plan}'")
+                    app.logger.error("Failed to commit updated plan")
                     break
             else:
-                app.logger.info("No plan update triggered. Stopping execution.")
+                app.logger.error(f"Failed to create or checkout branch '{branch_name}'")
                 break
-        else:
-            steps_executed += 1
 
-            # Check if plan needs to be updated even after successful step
-            if should_update_plan(vm):
-                app.logger.info("Plan update required.")
-                updated_plan = generate_updated_plan(vm)
-                if updated_plan and isinstance(updated_plan, list):
-                    new_commit_hash, new_branch_name = update_plan_logic(
-                        repo, last_commit_hash, updated_plan, vm.state['program_counter'])
-                    repo.git.checkout(new_branch_name)
-                    vm.set_state(new_commit_hash)
-                    app.logger.info(f"Resumed execution with updated plan on branch '{new_branch_name}', plan: '{updated_plan}'.")
-                    last_commit_hash = new_commit_hash
-                    continue  # Continue execution with updated plan
-                else:
-                    app.logger.error(f"Stopping execution. Failed to generate valid updated plan: '{updated_plan}'")
-                    break
+        steps_executed += 1
 
         if vm.state.get('goal_completed'):
             app.logger.info("Goal completed. Stopping execution.")
@@ -389,7 +334,7 @@ def execute_vm():
     return jsonify({
         'success': True,
         'steps_executed': steps_executed,
-        'current_branch': current_branch,
+        'current_branch': vm.git_manager.get_current_branch(),
         'last_commit_hash': last_commit_hash
     })
 
@@ -485,13 +430,13 @@ def repo_exists(repo_name):
     return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, '.git'))
 
 def commit_vm_changes(vm):
-    if vm.commit_message:
-        commit_hash = vm.git_manager.commit_changes(vm.commit_message)
+    if commit_message_wrapper.get_commit_message():
+        commit_hash = vm.git_manager.commit_changes(commit_message_wrapper.get_commit_message())
         if commit_hash:
             app.logger.info(f"Committed changes: {commit_hash}")
         else:
             app.logger.warning("Failed to commit changes")
-        vm.commit_message = None  # Reset commit message
+        commit_message_wrapper.clear_commit_message()  # Reset commit message
         return commit_hash
     return None
 
@@ -501,10 +446,10 @@ def get_llm_response(prompt):
 
 # Update the run_vm_with_goal function
 def run_vm_with_goal(goal, repo_path):
-    vm = PlanExecutionVM(repo_path, llm_interface)  # Pass llm_interface to PlanExecutionVM
+    vm = PlanExecutionVM(repo_path, llm_interface) 
     vm.set_goal(goal)
     
-    if vm.generate_plan():  # This now uses the default prompt
+    if generate_plan(goal):  
         logging.info("Generated Plan:")
         logging.info(json.dumps(vm.state['current_plan'], indent=2))
         

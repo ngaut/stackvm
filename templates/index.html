@@ -162,25 +162,6 @@
         </div>
     </div>
 
-    <!-- Edit Plan Modal -->
-    <div class="modal fade" id="editPlanModal" tabindex="-1" aria-labelledby="editPlanModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="editPlanModalLabel">Edit Plan</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div id="jsoneditor" style="width: 100%; height: 400px;"></div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary" id="savePlanButton">Save changes</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- External JS -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
@@ -193,7 +174,6 @@
     <!-- Custom JS -->
     <script>
         let chart, currentBranch = 'main', currentRepo = '', currentHighlightedCommit = null;
-        let jsonEditor;
 
         // Utility functions
         function showLoading(show = true) {
@@ -593,110 +573,30 @@
             }
         }
 
-        // Execution and Plan Management
-        async function openEditPlanModal(currentPlan) {
-            return new Promise((resolve, reject) => {
-                const modalElement = document.getElementById('editPlanModal');
-                if (!modalElement) {
-                    console.error('Modal element not found');
-                    reject(new Error('Modal element not found'));
-                    return;
-                }
-
-                const modal = new bootstrap.Modal(modalElement);
-                const savePlanButton = document.getElementById('savePlanButton');
-
-                const container = document.getElementById('jsoneditor');
-                const options = {
-                    mode: 'tree',
-                    modes: ['tree', 'view', 'form', 'code', 'text'],
-                    onError: function (err) {
-                        alert(err.toString());
-                    },
-                    onModeChange: function (newMode, oldMode) {
-                        console.log('Mode switched from', oldMode, 'to', newMode);
-                    }
-                };
-                jsonEditor = new JSONEditor(container, options);
-
-                // Set the JSON content
-                jsonEditor.set(currentPlan);
-
-                savePlanButton.onclick = () => {
-                    try {
-                        const updatedPlan = jsonEditor.get();
-                        modal.hide();
-                        resolve(updatedPlan);
-                    } catch (error) {
-                        showNotification('Invalid JSON: ' + error.message, 'danger');
-                    }
-                };
-
-                modal.show();
-            });
-        }
-
         async function executeFromStep(commitHash, seqNo) {
             try {
-                const data = await fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`);
-                
-                if (!data || typeof data !== 'object') {
-                    throw new Error('Invalid VM state data received');
-                }
+                showLoading(true);
+                const executeData = await fetchWithErrorHandling('/execute_vm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repo: currentRepo,
+                        commit_hash: commitHash,
+                        seq_no: seqNo
+                    }),
+                });
 
-                if (!Array.isArray(data.current_plan) || data.current_plan.length === 0) {
-                    throw new Error('Current plan is empty or not an array. Please ensure a plan is loaded.');
-                }
-
-                const updatedPlan = await openEditPlanModal(data.current_plan);
-
-                if (updatedPlan) {
-                    showLoading(true);
-
-                    const updateData = await fetchWithErrorHandling('/update_plan', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            repo: currentRepo,
-                            commit_hash: commitHash,
-                            updated_plan: updatedPlan,
-                            program_counter: data.program_counter
-                        }),
-                    });
-
-                    if (updateData.success) {
-                        console.log(updateData);
-                        const executeData = await fetchWithErrorHandling('/execute_vm', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                repo: currentRepo,
-                                commit_hash: updateData.new_commit_hash,
-                                steps: updatedPlan.length,
-                                new_branch: updateData.new_branch,
-                                seq_no: seqNo
-                            }),
-                        });
-
-                        if (executeData.success) {
-                            await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
-                            showNotification('Execution completed successfully', 'success');
-                        } else {
-                            showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
-                        }
-                    } else {
-                        showNotification('Failed to update plan: ' + (updateData.error || 'Unknown error'), 'danger');
-                    }
+                if (executeData.success) {
+                    await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                    showNotification('Execution completed successfully', 'success');
+                } else {
+                    showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
                 }
             } catch (error) {
                 console.error('Error in executeFromStep:', error);
                 showNotification('An error occurred: ' + error.message, 'danger');
             } finally {
                 showLoading(false);
-                if (jsonEditor) {
-                    jsonEditor.destroy();
-                    jsonEditor = null;
-                }
             }
         }
 

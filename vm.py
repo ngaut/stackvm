@@ -10,10 +10,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from instruction_handlers import InstructionHandlers
-from utils import interpolate_variables, parse_plan, load_state, save_state, get_commit_message_schema, StepType
+from utils import interpolate_variables, parse_plan, load_state, save_state, StepType
 from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH, VM_SPEC_CONTENT
 from git_manager import GitManager
 from prompts import get_generate_plan_prompt
+from commit_message_wrapper import commit_message_wrapper  # Add this import
 try:
     import git
 except ImportError:
@@ -42,7 +43,6 @@ class PlanExecutionVM:
         # Use the provided repo_path or the default GIT_REPO_PATH
         self.repo_path = repo_path or GIT_REPO_PATH
         self.git_manager = GitManager(self.repo_path)
-        self.commit_message = None  # New attribute to store commit message
 
         # Change the current working directory to the Git repo path
         os.chdir(self.repo_path)
@@ -88,13 +88,10 @@ class PlanExecutionVM:
         else:
             return param
 
-    def _set_commit_message(self, step_type: StepType, seq_no: str, description: str) -> None:
-        self.commit_message = get_commit_message_schema(step_type.value, seq_no, description, {}, {})  # Use the enum value
-
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         step_type = step.get('type')
         params = step.get('parameters', {})
-        seq_no = step.get('seq_no', 'Unknown')  # Ensure this is set correctly
+        seq_no = step.get('seq_no', 'Unknown')
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state['errors'].append("Invalid step type.")
@@ -124,7 +121,7 @@ class PlanExecutionVM:
             
                 # Set a meaningful description for the commit message
                 description = f"Executed step '{step_type}' with parameters: {json.dumps(input_parameters)}"
-                self._set_commit_message(StepType.STEP_EXECUTION, str(seq_no), description)  # Use the enum value
+                commit_message_wrapper.set_commit_message(StepType.STEP_EXECUTION, str(seq_no), description)
         
                 return success
         else:
@@ -139,67 +136,14 @@ class PlanExecutionVM:
                 self.logger.error("Subplan execution failed.")
                 self.state['errors'].append("Subplan execution failed.")
                 
-                # Commit subplan failure to Git
+                # Set commit message for subplan failure
                 description = f"Subplan execution failed at step: {step.get('type')}"
-                self._set_commit_message(StepType.PLAN_UPDATE, "Unknown", description)  # Use the enum
-                if not self.git_manager.commit_changes(self.commit_message):
-                    self.logger.error("Failed to commit changes to Git.")
-                    # Handle the failure as needed
+                commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, "Unknown", description)
                 
                 return False
             if self.state['goal_completed']:
                 break
         return True
-
-    def generate_plan(self, custom_prompt=None) -> List[Dict[str, Any]]:
-        if not self.state['goal']:
-            self.logger.error("No goal is set.")
-            self.state['errors'].append("No goal is set.")
-            return []
-
-        self.logger.info("Generating plan using LLM.")
-        
-        if custom_prompt:
-            prompt = custom_prompt
-        else:
-            prompt = get_generate_plan_prompt(self.state['goal'], VM_SPEC_CONTENT)
-
-        plan_response = self.llm_interface.generate(prompt)
-        
-        if not plan_response:
-            self.logger.error("LLM failed to generate a response.")
-            self.state['errors'].append("LLM failed to generate a response.")
-            return []
-        
-        plan = parse_plan(plan_response)
-        
-        if plan:
-            # Create a new branch for the plan
-            branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            try:
-                if not self.git_manager.create_branch(branch_name):
-                    self.logger.error(f"Failed to create branch '{branch_name}'.")
-                    return []
-
-                if not self.git_manager.checkout_branch(branch_name):
-                    self.logger.error(f"Failed to checkout branch '{branch_name}'.")
-                    return []
-            except Exception as e:
-                self.logger.error(f"Error in Git operations: {str(e)}")
-                return []
-
-            # Save the plan in the state and commit
-            self.state['current_plan'] = plan
-            self.logger.info("Plan generated and parsed successfully.")
-
-            # Save state and commit the generated plan to Git
-            save_state(self.state, self.repo_path)
-            self._set_commit_message(StepType.GENERATE_PLAN, "0", f"Generated new plan on branch '{branch_name}'")  # Use the enum
-            return plan
-        else:
-            self.logger.error("Failed to parse the generated plan.")
-            self.state['errors'].append("Failed to parse the generated plan.")
-            return []
 
     def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):

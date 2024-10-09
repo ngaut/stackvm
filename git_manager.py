@@ -59,21 +59,12 @@ class GitManager:
             self.logger.error(f"Error committing changes: {str(e)}")
             return None
 
-    def run_command(self, command):
-        try:
-            result = self.repo.git.execute(command)
-            return result
-        except git.GitCommandError as e:
-            self.logger.error(f"Git command failed: {str(e)}")
-            return None
-
     def list_branches(self):
         return [branch.name for branch in self.repo.branches]
 
     def create_branch(self, branch_name):
         try:
             self.repo.create_head(branch_name)
-            self.logger.info(f"Created new branch: {branch_name}")
             return True
         except git.GitCommandError as e:
             self.logger.error(f"Failed to create branch {branch_name}: {str(e)}")
@@ -82,8 +73,10 @@ class GitManager:
     def checkout_branch(self, branch_name):
         try:
             self.repo.git.checkout(branch_name)
-            self.logger.info(f"Checked out branch: {branch_name}")
             return True
         except git.GitCommandError as e:
             self.logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
             return False
+
+    def get_current_branch(self):
+        return self.repo.active_branch.name

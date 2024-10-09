@@ -1,16 +1,31 @@
 import json
+import datetime
 
-def get_plan_update_prompt(vm_state, vm_spec_content):
-    return f"""Given the following goal, current state, execution point, and VM specification, generate an updated plan that integrates improvements and addresses any identified issues from the current execution point.
+def get_plan_update_prompt(vm_state, vm_spec_content, explanation=None, key_factors=None):
+    prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+Analyze the current VM execution state and update the plan.
 
-**Goal**: {vm_state['goal']}
-**Current Variables**: {json.dumps(vm_state['variables'], indent=2)}
-**Current Program Counter**: {vm_state['program_counter']}
-**Current Plan**: {json.dumps(vm_state['current_plan'], indent=2)}
+    Goal: {vm_state['goal']}
+    Current Variables: {json.dumps(vm_state['variables'], indent=2)}
+    Current Program Counter: {vm_state['program_counter']}
+    Current Plan: {json.dumps(vm_state['current_plan'], indent=2)}
+    Last Executed Step: {json.dumps(vm_state['current_plan'][vm_state['program_counter'] - 1], indent=2) if vm_state['program_counter'] > 0 else "No steps executed yet"}
+    """
 
-**Execution Context**:
-- **Last Executed Step**: {json.dumps(vm_state['current_plan'][vm_state['program_counter'] - 1], indent=2) if vm_state['program_counter'] > 0 else "No steps executed yet"}
-- **Current Errors/Issues**: {json.dumps(vm_state.get('errors', []), indent=2)}
+    if explanation:
+        prompt += f"\n    Reason for plan update: {explanation}\n"
+
+    if key_factors:
+        prompt += f"\n    Key factors influencing the update:\n    {json.dumps(key_factors, indent=2)}\n"
+
+    prompt += f"""
+    Evaluate the following aspects:
+    1. Goal Alignment: Is the current plan still effectively working towards the goal?
+    2. New Information: Have any variables changed in a way that affects the plan's validity?
+    3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
+    4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
+    5. Completeness: Does the plan address all necessary aspects of the goal?
+    6. Adaptability: Can the current plan handle any new circumstances that have arisen?
 
 **Instructions**:
 1. **Analyze and Identify Issues**:
@@ -25,11 +40,12 @@ def get_plan_update_prompt(vm_state, vm_spec_content):
 3. **Merge with Original Plan**:
    - Integrate proposed changes seamlessly into the original plan starting from the current program counter.
    - Preserve all steps prior to the current program counter without alteration.
-   - Remove or adjust subsequent steps from the original plan only if they are rendered obsolete or suboptimal by the updates.
-   - Make sure the updated plan is not the same as Current Plan.
 
 4. **Adhere to VM Specification**:
    - Ensure that the revised plan complies with the provided VM specification in format and structure.
+
+5. **Avoid Redundancy**:
+   - Do not generate an identical plan. Ensure that the updated plan includes at least some meaningful changes to improve upon the original.
 
 **Guidelines for the Updated Plan**:
 - **Consistency**: The format and structure of the plan should remain consistent with the original, as specified in the VM specification.
@@ -41,10 +57,10 @@ def get_plan_update_prompt(vm_state, vm_spec_content):
 
 **Output**:
 Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification. The updated plan should effectively address any identified issues and continue execution towards the goal without introducing redundancy.
-
-"""
-
-
+After the updated plan, provide a summary of the changes made to the plan and the diff with the previous plan.
+    """
+    
+    return prompt
 
 def get_should_update_plan_prompt(vm_state):
     json_format = '''
@@ -59,8 +75,9 @@ def get_should_update_plan_prompt(vm_state):
         ]
     }}
     '''
-    
-    return f"""Analyze the current VM execution state and determine if the plan needs to be updated.
+
+    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+Analyze the current VM execution state and determine if the plan needs to be updated.
 
     Goal: {vm_state['goal']}
     Current Variables: {json.dumps(vm_state['variables'], indent=2)}
@@ -89,7 +106,8 @@ def get_should_update_plan_prompt(vm_state):
 
 
 def get_generate_plan_prompt(goal, vm_spec_content):
-    return f"""You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph and a vector database multiple times. 
+    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+You are an intelligent assistant designed to analyze user queries and retrieve information from a knowledge graph and a vector database multiple times. 
 For the following goal, please:
 
 1. **Analyze the Request**:
@@ -114,4 +132,3 @@ The content of `spec.md` is:
 
 {vm_spec_content}
 """
-

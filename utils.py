@@ -52,7 +52,6 @@ def load_state(commit_hash, repo_path):
         repo = git.Repo(repo_path)
         state_content = repo.git.show(f'{commit_hash}:vm_state.json')
         loaded_state = json.loads(state_content)
-        logging.info(f"State loaded from commit {commit_hash}")
         return loaded_state
     except git.exc.GitCommandError as e:
         logging.error(f"Error loading state from commit {commit_hash}: {str(e)}")
@@ -70,7 +69,6 @@ def save_state(state, repo_path):
         state_file = os.path.join(repo_path, 'vm_state.json')
         with open(state_file, 'w') as f:
             json.dump(state, f, indent=2, default=str, sort_keys=True)
-        logging.info(f"State saved to {state_file}")
     except Exception as e:
         logging.error(f"Error saving state: {str(e)}")
 
@@ -103,3 +101,32 @@ def parse_commit_message(message):
 
     return seq_no, title, details, commit_type
 
+def find_first_json_array(text: str) -> Optional[str]:
+    stack = []
+    start = -1
+    for i, char in enumerate(text):
+        if char == '[':
+            if not stack:
+                start = i
+            stack.append(i)
+        elif char == ']':
+            if stack:
+                stack.pop()
+                if not stack:
+                    return text[start:i+1]
+    return None
+
+def find_first_json_object(text: str) -> Optional[str]:
+    stack = []
+    start = -1
+    for i, char in enumerate(text):
+        if char == '{':
+            if not stack:
+                start = i
+            stack.append(i)
+        elif char == '}':
+            if stack:
+                stack.pop()
+                if not stack:
+                    return text[start:i+1]
+    return None
