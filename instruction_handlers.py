@@ -151,9 +151,16 @@ class InstructionHandlers:
             
             if isinstance(condition_result, bool):
                 if condition_result:
-                    return self.vm.execute_subplan(if_true)
+                    success, steps_executed = self.vm.execute_subplan(if_true)
+                    total_steps = len(if_true) + len(if_false)
                 else:
-                    return self.vm.execute_subplan(if_false)
+                    success, steps_executed = self.vm.execute_subplan(if_false)
+                    total_steps = len(if_false) + len(if_true)
+                
+                if success:
+                    self.vm.state['program_counter'] += total_steps
+                
+                return success
             else:
                 return self._handle_error(f"Invalid condition result type: {type(condition_result)}. Expected boolean.")
         except Exception as e:

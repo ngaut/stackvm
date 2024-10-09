@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from instruction_handlers import InstructionHandlers
 from utils import interpolate_variables, parse_plan, load_state, save_state, StepType
@@ -101,7 +101,6 @@ class PlanExecutionVM:
             success = handler(params)
             if success:
                 save_state(self.state, self.repo_path)
-                self.logger.info(f"Saved VM state after executing step {self.state['program_counter']}")
                 
                 input_parameters = {}
                 for k, v in params.items():
@@ -128,8 +127,9 @@ class PlanExecutionVM:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
 
-    def execute_subplan(self, subplan: List[Dict[str, Any]]) -> bool:
+    def execute_subplan(self, subplan: List[Dict[str, Any]]) -> Tuple[bool, int]:
         self.logger.info("Executing subplan.")
+        steps_in_subplan = len(subplan)
         for step in subplan:
             success = self.execute_step_handler(step)
             if not success:
@@ -140,15 +140,15 @@ class PlanExecutionVM:
                 description = f"Subplan execution failed at step: {step.get('type')}"
                 commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, "Unknown", description)
                 
-                return False
+                return False, steps_in_subplan
             if self.state['goal_completed']:
                 break
-        return True
+        return True, steps_in_subplan
 
     def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):
             step = self.state['current_plan'][self.state['program_counter']]
-            self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}")
+            self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}, seq_no: {step.get('seq_no', 'Unknown')}, plan length: {len(self.state['current_plan'])}")
             try:
                 success = self.execute_step_handler(step)
                 if not success:

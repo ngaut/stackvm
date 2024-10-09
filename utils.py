@@ -22,7 +22,6 @@ def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
 def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
     """Parse the plan response to extract a list of steps."""
     try:
-        print(f"Parsing plan: {plan_response}")
         json_str = extract_json(plan_response)
 
         plan = json.loads(json_str)
