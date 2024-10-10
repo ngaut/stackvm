@@ -146,9 +146,22 @@ class PlanExecutionVM:
         return True, steps_in_subplan
 
     def step(self):
-        if self.state['program_counter'] < len(self.state['current_plan']):
-            step = self.state['current_plan'][self.state['program_counter']]
-            self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}, seq_no: {step.get('seq_no', 'Unknown')}, plan length: {len(self.state['current_plan'])}")
+        # Find the step with seq_no equal to program_counter
+        step = next(
+            (
+                s
+                for s in self.state["current_plan"]
+                if s.get("seq_no") == self.state["program_counter"]
+            ),
+            None,
+        )
+        plan_length = (
+            self.state["current_plan"][-1].get("seq_no") + 1
+            if self.state["current_plan"]
+            else 0
+        )
+        if step:
+            self.logger.info(f"Executing step {self.state['program_counter']}: {step['type']}, seq_no: {step.get('seq_no', 'Unknown')}, plan length: {plan_length}")
             try:
                 success = self.execute_step_handler(step)
                 if not success:
