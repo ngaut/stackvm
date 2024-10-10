@@ -129,7 +129,25 @@ Example:
        "jump_if_false": 6
      }
    }
-6. reasoning
+6. jmp
+   Purpose: Unconditionally jumps to a specified sequence number.
+
+   Parameters:
+   - target_seq: The seq_no to jump to.
+
+   Usage:
+   - The `jmp` instruction can be used in conjunction with `jmp_if` to manage conditional logic effectively. After a `jmp_if` instruction determines which branch to take, a `jmp` can be used to skip over the alternative branch that should not be executed. This ensures that only the relevant steps are processed, optimizing the execution flow.
+
+   Example:
+
+   {
+     "seq_no": 4,
+     "type": "jmp",
+     "parameters": {
+       "target_seq": 6
+     }
+   }
+7. reasoning
 Purpose: Provides a detailed chain of thoughts of the plan's reasoning, analysis, and steps.
 
 Parameters:
@@ -168,7 +186,7 @@ Dependencies: Manage dependencies by assigning outputs to variables and referenc
 
 ## 6. Plan Structure
 - Sequential Execution: Instructions are executed in order based on their `seq_no`.
-- Control Flow: Use the `jmp_if` instruction for branching logic.
+- Control Flow: Use the `jmp_if` and `jmp` instruction for branching logic.
 - Subplans: Branches in a `jmp_if` instruction are subplans (lists of instructions) with their own `seq_no` values.
 
 ## 7. Best Practices
@@ -203,7 +221,7 @@ The plan:
       "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
       "context": "Latest TiDB version: {{latest_tidb_version}}",
       "jump_if_true": 3,
-      "jump_if_false": 4
+      "jump_if_false": 5
     }
   },
   {
@@ -216,6 +234,13 @@ The plan:
   },
   {
     "seq_no": 4,
+    "type": "jmp",
+    "parameters": {
+      "target_seq": 6
+    }
+  },
+  {
+    "seq_no": 5,
     "type": "retrieve_knowledge_graph",
     "parameters": {
       "vector_search": "Latest TiDB version and its key features",
@@ -224,7 +249,7 @@ The plan:
     }
   },
   {
-    "seq_no": 5,
+    "seq_no": 6,
     "type": "vector_search",
     "parameters": {
       "vector_search": "TiDB {{latest_tidb_version}} performance optimization techniques",
@@ -233,7 +258,7 @@ The plan:
     }
   },
   {
-    "seq_no": 6,
+    "seq_no": 7,
     "type": "vector_search",
     "parameters": {
       "query": "What are specific considerations for optimizing TiDB {{latest_tidb_version}} for e-commerce applications?",
@@ -241,7 +266,7 @@ The plan:
     }
   },
   {
-    "seq_no": 7,
+    "seq_no": 8,
     "type": "llm_generate",
     "parameters": {
       "prompt": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}\n\nProvide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
@@ -250,7 +275,7 @@ The plan:
     }
   },
   {
-    "seq_no": 8,
+    "seq_no": 9,
     "type": "assign",
     "parameters": {
       "value": "Best practices for optimizing TiDB {{latest_tidb_version}} performance for a high-volume e-commerce application:\n\n{{final_recommendations}}",

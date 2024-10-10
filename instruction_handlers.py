@@ -162,6 +162,25 @@ class InstructionHandlers:
         except Exception as e:
             return self._handle_error(f"Unexpected error in jmp_if_handler: {str(e)}")
 
+    def jmp_handler(self, params: Dict[str, Any]) -> bool:
+        """Handle unconditional jumps to a specified sequence number."""
+        target_seq = params.get('target_seq')
+        if target_seq is None:
+            return self._handle_error("Missing 'target_seq' in parameters.")
+
+        try:
+            # Find the index of the target sequence number
+            target_index = self.vm.find_step_index(target_seq)
+            if target_index is None:
+                return self._handle_error(f"Target sequence number {target_seq} not found in the plan.")
+
+            self.vm.logger.info(f"Unconditionally jumping to seq_no {target_seq}.")
+            # Set the program counter to the target index
+            self.vm.state['program_counter'] = target_index
+            return True
+        except Exception as e:
+            return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}")
+
     def assign_handler(self, params: Dict[str, Any]) -> bool:
         """Handle variable assignment."""
         value = params.get('value')
