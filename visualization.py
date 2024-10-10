@@ -266,7 +266,9 @@ def execute_vm():
     current_branch = repo.active_branch.name
     app.logger.info(f"Using branch: {current_branch}")
 
+    """
     # Set program_counter based on seq_no if provided
+    # It had been handled by vm.set_state(commit_hash) above
     if seq_no is not None:
         start_index = next((i for i, step in enumerate(vm.state['current_plan']) if str(step.get('seq_no')) == str(seq_no)), None)
         if start_index is None:
@@ -276,6 +278,7 @@ def execute_vm():
         # Ensure program_counter is initialized
         if 'program_counter' not in vm.state:
             vm.state['program_counter'] = 0
+    """
 
     steps_executed = 0
     last_commit_hash = commit_hash
@@ -473,6 +476,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
     parser.add_argument("--goal", help="Set a goal for the VM to achieve")
     parser.add_argument("--server", action="store_true", help="Start the visualization server")
+    parser.add_argument("--port", type=int, default=5000, help="Port to run the visualization server on")  # Add this line
+
     args = parser.parse_args()
 
     if args.goal:
@@ -483,6 +488,6 @@ if __name__ == "__main__":
         logging.info("Starting visualization server...")
         current_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(current_dir)
-        app.run(debug=True)
+        app.run(debug=True, port=args.port)  # Update this line to use args.port
     else:
         logging.info("Please specify --goal to run the VM with a goal or --server to start the visualization server")
