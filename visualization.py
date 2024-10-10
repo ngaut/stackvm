@@ -5,41 +5,27 @@ import logging
 import argparse
 from datetime import datetime
 
-try:
-    import git
-    from git import Repo, NULL_TREE
-    from git.exc import GitCommandError
-except ImportError:
-    logging.error("GitPython is not installed. Please install it using: pip install GitPython")
+import git
+from git import Repo, NULL_TREE
+from git.exc import GitCommandError
+from flask import Flask, render_template, jsonify, request, current_app
 
-try:
-    from flask import Flask, render_template, jsonify, request, current_app
-except ImportError:
-    logging.error("Flask is not installed. Please install it using: pip install Flask")
-
-from config import GIT_REPO_PATH, VM_SPEC_CONTENT
+from config import GIT_REPO_PATH, VM_SPEC_CONTENT, LLM_MODEL
 from git_manager import GitManager
-from utils import load_state, save_state, parse_commit_message, get_commit_message_schema, StepType,find_first_json_array, find_first_json_object, parse_plan
+from utils import load_state, save_state, parse_commit_message, StepType, find_first_json_object, parse_plan
 from vm import PlanExecutionVM
-
-# Add these imports at the top of the file
 from llm_interface import LLMInterface
-from config import LLM_MODEL
-
-# Add this import at the top of the file
 from prompts import get_plan_update_prompt, get_should_update_plan_prompt, get_generate_plan_prompt
-
-# Add this import at the top of the file
 from commit_message_wrapper import commit_message_wrapper
-
-# Add this near the top of the file, after other global variables
-llm_interface = LLMInterface(LLM_MODEL)
 
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# Initialize LLM interface
+llm_interface = LLMInterface(LLM_MODEL)
 
 # Configure logging
 def setup_logging():
@@ -62,8 +48,7 @@ def get_repo(repo_path):
 
 def get_commits(repo, branch_name):
     try:
-        commits = list(repo.iter_commits(branch_name))
-        return commits
+        return list(repo.iter_commits(branch_name))
     except GitCommandError as e:
         app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}", exc_info=True)
         return []
@@ -177,12 +162,7 @@ def generate_plan(goal, custom_prompt=None):
         app.logger.error("No goal is set.")
         return []
 
-    
-    if custom_prompt:
-        prompt = custom_prompt
-    else:
-        prompt = get_generate_plan_prompt(goal, VM_SPEC_CONTENT)
-
+    prompt = custom_prompt or get_generate_plan_prompt(goal, VM_SPEC_CONTENT)
     plan_response = llm_interface.generate(prompt)
 
     app.logger.info(f"Generating plan using LLM: {plan_response}")
@@ -199,7 +179,6 @@ def generate_plan(goal, custom_prompt=None):
         app.logger.error("Failed to parse the generated plan.")
         return []
 
-# Update the generate_updated_plan function to use the new generate_plan function
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):    
     prompt = get_plan_update_prompt(vm.state, VM_SPEC_CONTENT, explanation, key_factors)
     new_plan = generate_plan(vm.state['goal'], custom_prompt=prompt)
@@ -211,17 +190,15 @@ def should_update_plan(vm: PlanExecutionVM):
         app.logger.info("Plan update triggered due to errors.")
         return True, "Errors detected in VM state", [{"factor": "VM errors", "impact": "Critical"}]
     
-    # Use LLM to judge if we should update the plan
     prompt = get_should_update_plan_prompt(vm.state)
     response = llm_interface.generate(prompt)
     
-    # Use the new find_first_json_object function to find the first JSON object in the response
     json_response = find_first_json_object(response)
     if json_response:
         analysis = json.loads(json_response)
     else:
         app.logger.error("No valid JSON object found in the response.")
-        return log_and_return_error("No valid JSON object found.", 'error', 400)
+        return False, "No valid JSON object found.", []
     
     should_update = analysis.get('should_update', False)
     explanation = analysis.get('explanation', '')
@@ -231,10 +208,10 @@ def should_update_plan(vm: PlanExecutionVM):
         app.logger.info(f"LLM suggests updating the plan: {explanation}")
         for factor in key_factors:
             app.logger.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
-        return True, explanation, key_factors
     else:
         app.logger.info(f"LLM suggests keeping the current plan: {explanation}")
-        return False, explanation, key_factors
+    
+    return should_update, explanation, key_factors
 
 @app.route('/execute_vm', methods=['POST'])
 def execute_vm():
@@ -242,10 +219,9 @@ def execute_vm():
     app.logger.info(f"Received execute_vm request with data: {data}")
 
     commit_hash = data.get('commit_hash')
-    steps = int(data.get('steps', 20)) # maximum number of steps to execute
+    steps = int(data.get('steps', 20))
     repo_name = data.get('repo')
     new_branch = data.get('new_branch')
-    seq_no = data.get('seq_no')
 
     if not all([commit_hash, steps, repo_name]):
         return log_and_return_error('Missing required parameters', 'error', 400)
@@ -266,20 +242,6 @@ def execute_vm():
     current_branch = repo.active_branch.name
     app.logger.info(f"Using branch: {current_branch}")
 
-    """
-    # Set program_counter based on seq_no if provided
-    # It had been handled by vm.set_state(commit_hash) above
-    if seq_no is not None:
-        start_index = next((i for i, step in enumerate(vm.state['current_plan']) if str(step.get('seq_no')) == str(seq_no)), None)
-        if start_index is None:
-            return log_and_return_error(f'Step with seq_no {seq_no} not found in the plan.', 'error', 400)
-        vm.state['program_counter'] = start_index
-    else:
-        # Ensure program_counter is initialized
-        if 'program_counter' not in vm.state:
-            vm.state['program_counter'] = 0
-    """
-
     steps_executed = 0
     last_commit_hash = commit_hash
 
@@ -295,15 +257,12 @@ def execute_vm():
         if commit_hash:
             last_commit_hash = commit_hash
 
-        # Check if plan needs to be updated
         should_update, explanation, key_factors = should_update_plan(vm)
         if should_update:
             updated_plan = generate_updated_plan(vm, explanation, key_factors)
 
-            # Create a new branch for the updated plan
             branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             if vm.git_manager.create_branch(branch_name) and vm.git_manager.checkout_branch(branch_name):
-                # Update the VM state with the new plan
                 vm.state['current_plan'] = updated_plan
                 commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, vm.state['program_counter'], explanation)
                 save_state(vm.state, repo_path)
@@ -430,15 +389,13 @@ def commit_vm_changes(vm):
             app.logger.info(f"Committed changes: {commit_hash}")
         else:
             app.logger.warning("Failed to commit changes")
-        commit_message_wrapper.clear_commit_message()  # Reset commit message
+        commit_message_wrapper.clear_commit_message()
         return commit_hash
     return None
 
-# Add a new function to get LLM response
 def get_llm_response(prompt):
     return llm_interface.generate(prompt)
 
-# Update the run_vm_with_goal function
 def run_vm_with_goal(goal, repo_path):
     vm = PlanExecutionVM(repo_path, llm_interface) 
     vm.set_goal(goal)
@@ -453,7 +410,6 @@ def run_vm_with_goal(goal, repo_path):
             if not success:
                 break
             
-            # Commit changes after each successful step
             commit_vm_changes(vm)
             
             if vm.state.get('goal_completed'):
@@ -476,7 +432,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the VM with a specified goal or start the visualization server.")
     parser.add_argument("--goal", help="Set a goal for the VM to achieve")
     parser.add_argument("--server", action="store_true", help="Start the visualization server")
-    parser.add_argument("--port", type=int, default=5000, help="Port to run the visualization server on")  # Add this line
+    parser.add_argument("--port", type=int, default=5000, help="Port to run the visualization server on")
 
     args = parser.parse_args()
 
@@ -488,6 +444,6 @@ if __name__ == "__main__":
         logging.info("Starting visualization server...")
         current_dir = os.path.dirname(os.path.abspath(__file__))
         os.chdir(current_dir)
-        app.run(debug=True, port=args.port)  # Update this line to use args.port
+        app.run(debug=True, port=args.port)
     else:
         logging.info("Please specify --goal to run the VM with a goal or --server to start the visualization server")
