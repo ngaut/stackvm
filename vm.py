@@ -54,9 +54,9 @@ class PlanExecutionVM:
         if not self.handlers_registered:
             self.instruction_handlers = InstructionHandlers(self)
             self.register_instruction('retrieve_knowledge_graph', self.instruction_handlers.retrieve_knowledge_graph_handler)
-            self.register_instruction('vector_search', self.instruction_handlers.vector_search_handler)  # Updated
+            self.register_instruction('vector_search', self.instruction_handlers.vector_search_handler)
             self.register_instruction('llm_generate', self.instruction_handlers.llm_generate_handler)
-            self.register_instruction('condition', self.instruction_handlers.condition_handler)
+            self.register_instruction('jmp_if', self.instruction_handlers.jmp_if_handler)  
             self.register_instruction('assign', self.instruction_handlers.assign_handler)
             self.register_instruction('reasoning', self.instruction_handlers.reasoning_handler)
             self.handlers_registered = True
@@ -194,3 +194,11 @@ class PlanExecutionVM:
             self.logger.info(f"State loaded from commit {commit_hash}")
         else:
             self.logger.error(f"Failed to load state from commit {commit_hash}")
+
+    def find_step_index(self, seq_no: int) -> Optional[int]:
+        for index, step in enumerate(self.state['current_plan']):
+            if step.get('seq_no') == seq_no:
+                return index
+        self.logger.error(f"Seq_no {seq_no} not found in the current plan.")
+        self.state['errors'].append(f"Seq_no {seq_no} not found in the current plan.")
+        return None

@@ -108,58 +108,27 @@ Example:
     "output_var": "embedded_chunks"
   }
 }
-5. condition
-Purpose: Evaluates a condition using the LLM and executes one of two branches based on the result.
+5. jmp_if
+   Purpose: Conditionally jumps to specified sequence numbers based on the evaluation of a condition using the LLM.
 
-Parameters:
+   Parameters:
+   - `condition_prompt`: The prompt to evaluate the condition. Can be a direct string or a variable reference.
+   - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
+   - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true.
+   - `jump_if_false`: The `seq_no` to jump to if the condition evaluates to false.
 
-prompt: The condition prompt to provide to the LLM. Can be a direct string or a variable reference.
-context (optional): Additional context for the LLM. Can be a direct string or a variable reference.
-true_branch: A list of instructions to execute if the condition evaluates to true.
-false_branch: A list of instructions to execute if the condition evaluates to false.
+   Example:
 
-The prompt should explicitly require the LLM to return a JSON result with the following schema:
-{
-  "result": boolean,
-  "explanation": string
-}
-
-Example:
-
-{
-  "seq_no": 4,
-  "type": "condition",
-  "parameters": {
-    "prompt": "Is {{number}} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
-    "context": null,
-    "true_branch": [
-      {
-        "seq_no": 5,
-        "type": "assign",
-        "parameters": {
-          "value": "The number is even.",
-          "var_name": "result"
-        }
-      }
-    ],
-    "false_branch": [
-      {
-        "seq_no": 6,
-        "type": "assign",
-        "parameters": {
-          "value": "The number is odd.",
-          "var_name": "result"
-        }
-      }
-    ]
-  }
-}
-
-Expected LLM response format:
-{
-  "result": true,
-  "explanation": "The number is divisible by 2 without a remainder, making it even."
-}
+   {
+     "seq_no": 4,
+     "type": "jmp_if",
+     "parameters": {
+       "condition_prompt": "Is {{number}} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
+       "context": null,
+       "jump_if_true": 5,
+       "jump_if_false": 6
+     }
+   }
 6. reasoning
 Purpose: Provides a detailed chain of thoughts of the plan's reasoning, analysis, and steps.
 
@@ -199,8 +168,8 @@ Dependencies: Manage dependencies by assigning outputs to variables and referenc
 
 ## 6. Plan Structure
 - Sequential Execution: Instructions are executed in order based on their `seq_no`.
-- Control Flow: Use the condition instruction for branching logic.
-- Subplans: Branches in a condition instruction are subplans (lists of instructions) with their own `seq_no` values.
+- Control Flow: Use the `jmp_if` instruction for branching logic.
+- Subplans: Branches in a `jmp_if` instruction are subplans (lists of instructions) with their own `seq_no` values.
 
 ## 7. Best Practices
 - Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the main plan and any subplans.
@@ -229,31 +198,29 @@ The plan:
   },
   {
     "seq_no": 2,
-    "type": "condition",
+    "type": "jmp_if",
     "parameters": {
-      "prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
+      "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
       "context": "Latest TiDB version: {{latest_tidb_version}}",
-      "true_branch": [
-        {
-          "seq_no": 3,
-          "type": "vector_search",
-          "parameters": {
-            "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
-            "output_var": "tidb_info"
-          }
-        }
-      ],
-      "false_branch": [
-        {
-          "seq_no": 4,
-          "type": "retrieve_knowledge_graph",
-          "parameters": {
-            "vector_search": "Latest TiDB version and its key features",
-            "top_k": 3,
-            "output_var": "tidb_info"
-          }
-        }
-      ]
+      "jump_if_true": 3,
+      "jump_if_false": 4
+    }
+  },
+  {
+    "seq_no": 3,
+    "type": "vector_search",
+    "parameters": {
+      "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "output_var": "tidb_info"
+    }
+  },
+  {
+    "seq_no": 4,
+    "type": "retrieve_knowledge_graph",
+    "parameters": {
+      "vector_search": "Latest TiDB version and its key features",
+      "top_k": 3,
+      "output_var": "tidb_info"
     }
   },
   {
