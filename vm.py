@@ -127,24 +127,6 @@ class PlanExecutionVM:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
 
-    def execute_subplan(self, subplan: List[Dict[str, Any]]) -> Tuple[bool, int]:
-        self.logger.info("Executing subplan.")
-        steps_in_subplan = len(subplan)
-        for step in subplan:
-            success = self.execute_step_handler(step)
-            if not success:
-                self.logger.error("Subplan execution failed.")
-                self.state['errors'].append("Subplan execution failed.")
-                
-                # Set commit message for subplan failure
-                description = f"Subplan execution failed at step: {step.get('type')}"
-                commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, "Unknown", description)
-                
-                return False, steps_in_subplan
-            if self.state['goal_completed']:
-                break
-        return True, steps_in_subplan
-
     def step(self):
         if self.state['program_counter'] < len(self.state['current_plan']):
             step = self.state['current_plan'][self.state['program_counter']]
