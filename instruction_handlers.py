@@ -80,10 +80,28 @@ class InstructionHandlers:
     def __init__(self, vm):
         self.vm = vm
 
-    def _handle_error(self, message: str) -> bool:
-        """Common error handling method."""
-        self.vm.logger.error(message)
-        self.vm.state['errors'].append(message)
+    def _handle_error(self, message: str, instruction: Optional[str] = None, params: Optional[Dict[str, Any]] = None) -> bool:
+        """
+        Common error handling method with enhanced context for reflection.
+        
+        Args:
+            message (str): The error message.
+            instruction (Optional[str]): The instruction that caused the error.
+            params (Optional[Dict[str, Any]]): The parameters of the instruction.
+        
+        Returns:
+            bool: Always returns False to indicate an error occurred.
+        """
+        error_context = {
+            "error_message": message,
+            "instruction": instruction,
+            "params": params,
+            "current_step": self.vm.state.get('current_step'),
+            "program_counter": self.vm.state.get('program_counter'),
+        }
+        
+        self.vm.logger.error(f"Error occurred: {json.dumps(error_context, indent=2)}")
+        self.vm.state['errors'].append(error_context)
         return False
 
     def retrieve_knowledge_graph_handler(self, params: Dict[str, Any]) -> bool:
@@ -92,7 +110,7 @@ class InstructionHandlers:
         output_var = params.get('output_var')
         
         if not query or not output_var:
-            return self._handle_error("Missing 'query' or 'output_var' in parameters.")
+            return self._handle_error("Missing 'query' or 'output_var' in parameters.", "retrieve_knowledge_graph", params)
 
         result = search_graph(query)
         self.vm.set_variable(output_var, result)
@@ -105,13 +123,13 @@ class InstructionHandlers:
         top_k = params.get('top_k', 5)
 
         if not isinstance(vector_search, str) or not isinstance(output_var, str):
-            return self._handle_error("Invalid parameters for 'vector_search'.")  # Updated error message
+            return self._handle_error("Invalid parameters for 'vector_search'.", "vector_search", params)
 
         result = embedding_retrieve(vector_search, top_k)
         if result is not None:
             self.vm.set_variable(output_var, result)
             return True
-        return self._handle_error(f"Failed to retrieve embedded chunks for query '{vector_search}'.")
+        return self._handle_error(f"Failed to retrieve embedded chunks for query '{vector_search}'.", "vector_search", params)
 
     def llm_generate_handler(self, params: Dict[str, Any]) -> bool:
         """Handle LLM generation."""
@@ -166,20 +184,18 @@ class InstructionHandlers:
         """Handle unconditional jumps to a specified sequence number."""
         target_seq = params.get('target_seq')
         if target_seq is None:
-            return self._handle_error("Missing 'target_seq' in parameters.")
+            return self._handle_error("Missing 'target_seq' in parameters.", "jmp", params)
 
         try:
-            # Find the index of the target sequence number
             target_index = self.vm.find_step_index(target_seq)
             if target_index is None:
-                return self._handle_error(f"Target sequence number {target_seq} not found in the plan.")
+                return self._handle_error(f"Target sequence number {target_seq} not found in the plan.", "jmp", params)
 
             self.vm.logger.info(f"Unconditionally jumping to seq_no {target_seq}.")
-            # Set the program counter to the target index
             self.vm.state['program_counter'] = target_index
             return True
         except Exception as e:
-            return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}")
+            return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}", "jmp", params)
 
     def assign_handler(self, params: Dict[str, Any]) -> bool:
         """Handle variable assignment."""
