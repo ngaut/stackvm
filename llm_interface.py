@@ -1,16 +1,30 @@
 import os
+import time
 from typing import Optional, Dict, List, Any
 import openai
 from config import LLM_MODEL
 from utils import parse_plan
 
 class LLMInterface:
-    def __init__(self, model: str):
+    def __init__(self, model: str, max_retries: int = 3, retry_delay: float = 1.0):
         self.model = model
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         openai.api_key = os.getenv('OPENAI_API_KEY')
         if not openai.api_key:
             raise ValueError("OpenAI API key not set. Please set the OPENAI_API_KEY environment variable.")
         self.client = openai.OpenAI()
+
+    def _retry_with_exponential_backoff(self, func, *args, **kwargs):
+        for attempt in range(self.max_retries):
+            try:
+                return func(*args, **kwargs)
+            except (openai.RateLimitError, openai.APIError, openai.APIConnectionError) as e:
+                if attempt == self.max_retries - 1:
+                    raise
+                wait_time = self.retry_delay * (2 ** attempt)
+                print(f"API request failed. Retrying in {wait_time:.2f} seconds...")
+                time.sleep(wait_time)
 
     def generate(self, prompt: str, context: Optional[str] = None) -> Optional[str]:
         try:
@@ -19,7 +33,8 @@ class LLMInterface:
             else:
                 full_prompt = prompt
 
-            response = self.client.chat.completions.create(
+            response = self._retry_with_exponential_backoff(
+                self.client.chat.completions.create,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
@@ -39,7 +54,8 @@ class LLMInterface:
             else:
                 full_prompt = f"prompt: {prompt}"
 
-            response = self.client.chat.completions.create(
+            response = self._retry_with_exponential_backoff(
+                self.client.chat.completions.create,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},

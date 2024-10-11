@@ -1,19 +1,16 @@
-import copy
 import json
 import logging
 import os
 import sys
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 # Add the parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from instruction_handlers import InstructionHandlers
-from utils import interpolate_variables, parse_plan, load_state, save_state, StepType
-from config import LLM_MODEL, GIT_REPO_PATH, VM_SPEC_PATH, VM_SPEC_CONTENT
+from utils import interpolate_variables, load_state, save_state, StepType
+from config import GIT_REPO_PATH
 from git_manager import GitManager
-from prompts import get_generate_plan_prompt
 from commit_message_wrapper import commit_message_wrapper
 
 try:
