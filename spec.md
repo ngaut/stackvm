@@ -271,7 +271,7 @@ The plan:
          - If no specific version is found, our recommendations may be more general and less tailored.
 
       This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
-      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 1.\nSteps 4-8 depend on the outcome of Step 3.\nStep 9 depends on Steps 4-8.\nStep 10 depends on Step 9."
+      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
     }
   },
   {
@@ -279,14 +279,14 @@ The plan:
     "type": "retrieve_knowledge_graph",
     "parameters": {
       "query": "TiDB latest stable version",
-      "output_var": "tidb_version_graph"
+      "output_var": "latest_tidb_version_info"
     }
   },
   {
   "seq_no": 2,
   "type": "llm_generate",
   "parameters": {
-    "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'Unknown'.",
+    "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'latest version tidb'.",
     "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
     "output_var": "latest_tidb_version"
   }

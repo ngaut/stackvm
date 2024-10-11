@@ -1,15 +1,15 @@
 import json
 import datetime
 
-def get_plan_update_prompt(vm_state, vm_spec_content, explanation=None, key_factors=None):
+def get_plan_update_prompt(vm, vm_spec_content, explanation=None, key_factors=None):
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
 
-    Goal: {vm_state['goal']}
-    Current Variables: {json.dumps(vm_state['variables'], indent=2)}
-    Current Program Counter: {vm_state['program_counter']}
-    Current Plan: {json.dumps(vm_state['current_plan'], indent=2)}
-    Last Executed Step: {json.dumps(vm_state['current_plan'][vm_state['program_counter'] - 1], indent=2) if vm_state['program_counter'] > 0 else "No steps executed yet"}
+    Goal: {vm.state['goal']}
+    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
+    Current Program Counter: {vm.state['program_counter']}
+    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
+    Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
     """
 
     if explanation:
@@ -62,7 +62,7 @@ After the updated plan, provide a summary of the changes made to the plan and th
     
     return prompt
 
-def get_should_update_plan_prompt(vm_state):
+def get_should_update_plan_prompt(vm):
     json_format = '''
     {{
         "should_update": boolean,
@@ -79,11 +79,11 @@ def get_should_update_plan_prompt(vm_state):
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and determine if the plan needs to be updated.
 
-    Goal: {vm_state['goal']}
-    Current Variables: {json.dumps(vm_state['variables'], indent=2)}
-    Current Program Counter: {vm_state['program_counter']}
-    Current Plan: {json.dumps(vm_state['current_plan'], indent=2)}
-    Last Executed Step: {json.dumps(vm_state['current_plan'][vm_state['program_counter'] - 1], indent=2) if vm_state['program_counter'] > 0 else "No steps executed yet"}
+    Goal: {vm.state['goal']}
+    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
+    Current Program Counter: {vm.state['program_counter']}
+    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
+    Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
 
     Evaluate the following aspects:
     1. Goal Alignment: Is the current plan still effectively working towards the goal?
