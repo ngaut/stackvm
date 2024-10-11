@@ -12,6 +12,7 @@ from utils import interpolate_variables, load_state, save_state, StepType
 from config import GIT_REPO_PATH
 from git_manager import GitManager
 from commit_message_wrapper import commit_message_wrapper
+from variable_manager import VariableManager  # New import
 
 try:
     import git
@@ -25,8 +26,8 @@ VARIABLE_PREVIEW_LENGTH = 50
 
 class PlanExecutionVM:
     def __init__(self, repo_path: Optional[str] = None, llm_interface: Any = None):
+        self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
-            'variables': {},
             'errors': [],
             'goal': None,
             'current_plan': [],
@@ -84,16 +85,8 @@ class PlanExecutionVM:
         save_state(self.state, self.repo_path)
 
     def resolve_parameter(self, param: Any) -> Any:
-        """Resolve a parameter, handling variable references."""
-        if isinstance(param, dict) and 'var' in param:
-            var_name = param['var']
-            value = self.state['variables'].get(var_name)
-            self.logger.info(f"Resolved variable '{var_name}' to value: {value}")
-            return value
-        elif isinstance(param, str):
-            return interpolate_variables(param, self.state['variables'])
-        else:
-            return param
+        """Resolve a parameter, interpolating variables if it's a string."""
+        return self.variable_manager.interpolate_variables(param)
 
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:
         """Execute a single step in the plan."""
@@ -122,7 +115,7 @@ class PlanExecutionVM:
         input_parameters = {k: self._preview_value(v) for k, v in params.items()}
         output_vars = params.get('output_var', [])
         output_vars = [output_vars] if isinstance(output_vars, str) else output_vars
-        output_variables = {k: self._preview_value(self.state['variables'].get(k)) for k in output_vars}
+        output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars}
 
         description = f"Executed seq_no: {seq_no}, step: '{step_type}' with parameters: {json.dumps(input_parameters)}"
         if output_variables:
@@ -154,6 +147,7 @@ class PlanExecutionVM:
                 return False
             if step['type'] not in ("jmp_if", "jmp"):
                 self.state['program_counter'] += 1
+                self.garbage_collect()  # Perform GC after each non-jump step
             save_state(self.state, self.repo_path)
             return True
         except Exception as e:
@@ -162,22 +156,24 @@ class PlanExecutionVM:
             return False
 
     def set_variable(self, var_name: str, value: Any) -> None:
-        """Set a variable in the VM's state and handle goal completion if needed."""
-        self.state['variables'][var_name] = value
+        self.variable_manager.set(var_name, value)
         
         if var_name == 'result':
             self.state['goal_completed'] = True
             self.logger.info("Goal has been marked as completed.")
 
     def get_variable(self, var_name: str) -> Any:
-        """Retrieve a variable's value from the VM's state."""
-        return self.state['variables'].get(var_name)
+        return self.variable_manager.get(var_name)
+
+    def garbage_collect(self) -> None:
+        self.variable_manager.garbage_collect()
 
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
         loaded_state = load_state(commit_hash, self.repo_path)
         if loaded_state:
             self.state = loaded_state
+            self.variable_manager.set_all_variables(loaded_state.get('variables', {}))
             self.logger.info(f"State loaded from commit {commit_hash}")
         else:
             self.logger.error(f"Failed to load state from commit {commit_hash}")
@@ -190,3 +186,6 @@ class PlanExecutionVM:
         self.logger.error(f"Seq_no {seq_no} not found in the current plan.")
         self.state['errors'].append(f"Seq_no {seq_no} not found in the current plan.")
         return None
+
+    def get_all_variables(self) -> Dict[str, Any]:
+        return self.variable_manager.get_all_variables()

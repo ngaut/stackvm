@@ -1,7 +1,7 @@
 import os
 import requests
 from typing import Any, Dict, Optional, List
-from utils import interpolate_variables, find_first_json_object
+from utils import find_first_json_object
 
 # Add these imports at the top of the file
 import logging
@@ -116,8 +116,8 @@ class InstructionHandlers:
         self.vm.set_variable(output_var, result)
         return True
 
-    def vector_search_handler(self, params: Dict[str, Any]) -> bool:  # Updated method name
-        """Handle retrieval of embedded chunks."""  # Updated docstring
+    def vector_search_handler(self, params: Dict[str, Any]) -> bool:
+        """Handle retrieval of embedded chunks."""
         vector_search = self.vm.resolve_parameter(params.get('vector_search'))
         output_var = params.get('output_var')
         top_k = params.get('top_k', 5)
@@ -139,7 +139,7 @@ class InstructionHandlers:
         if not prompt or not output_var:
             return self._handle_error("Missing 'prompt' or 'output_var' in parameters.")
 
-        interpolated_prompt = interpolate_variables(prompt, self.vm.state['variables'])
+        interpolated_prompt = self.vm.variable_manager.interpolate_variables(prompt)
         interpolated_context = self.vm.resolve_parameter(params.get('context'))
         response = self.vm.llm_interface.generate(interpolated_prompt, interpolated_context)
         
@@ -174,7 +174,11 @@ class InstructionHandlers:
                 target_seq = jump_if_false
     
             self.vm.logger.info(f"Jumping to seq_no {target_seq} based on condition result: {condition_result}. Explanation: {explanation}")
-            self.vm.state['program_counter'] = self.vm.find_step_index(target_seq)
+            new_pc = self.vm.find_step_index(target_seq)
+            if new_pc is not None:
+                self.vm.state['program_counter'] = new_pc
+                # Perform GC after jump
+                self.vm.garbage_collect()
             return True
         except json.JSONDecodeError:
             return self._handle_error("Failed to parse JSON response from LLM.")
@@ -194,6 +198,8 @@ class InstructionHandlers:
 
             self.vm.logger.info(f"Unconditionally jumping to seq_no {target_seq}.")
             self.vm.state['program_counter'] = target_index
+            # Perform GC after jump
+            self.vm.garbage_collect()
             return True
         except Exception as e:
             return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}", "jmp", params)
@@ -203,6 +209,10 @@ class InstructionHandlers:
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
+            
+            # Decrease reference count for old value if it existed
+            if var_name in self.vm.state['variables']:
+                self.vm.decrease_ref_count(var_name)
         return True
 
     def reasoning_handler(self, params: Dict[str, Any]) -> bool:

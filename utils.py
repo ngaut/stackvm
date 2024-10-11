@@ -11,14 +11,6 @@ class StepType(Enum):
     STEP_EXECUTION = "StepExecution"
     PLAN_UPDATE = "PlanUpdate"
 
-def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
-    """Interpolate variables in the given text."""
-    if not isinstance(text, str):
-        return text
-    for var, value in variables.items():
-        text = text.replace(f"${{{var}}}", str(value))
-    return text
-
 def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
     """Parse the plan response to extract a list of steps."""
     try:
