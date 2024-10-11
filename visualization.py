@@ -189,7 +189,7 @@ def generate_plan(goal, custom_prompt=None):
         return []
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):    
-    prompt = get_plan_update_prompt(vm.state, VM_SPEC_CONTENT, explanation, key_factors)
+    prompt = get_plan_update_prompt(vm, VM_SPEC_CONTENT, explanation, key_factors)
     new_plan = generate_plan(vm.state['goal'], custom_prompt=prompt)
     app.logger.info(f"Generated updated plan: {new_plan}, previous plan: {vm.state['current_plan']}")
     return new_plan
@@ -199,7 +199,7 @@ def should_update_plan(vm: PlanExecutionVM):
         app.logger.info("Plan update triggered due to errors.")
         return True, "Errors detected in VM state", [{"factor": "VM errors", "impact": "Critical"}]
     
-    prompt = get_should_update_plan_prompt(vm.state)
+    prompt = get_should_update_plan_prompt(vm)
     response = llm_interface.generate(prompt)
     
     json_response = find_first_json_object(response)
@@ -274,7 +274,7 @@ def execute_vm():
             if vm.git_manager.create_branch(branch_name) and vm.git_manager.checkout_branch(branch_name):
                 vm.state['current_plan'] = updated_plan
                 commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, vm.state['program_counter'], explanation)
-                save_state(vm.state, repo_path)
+                vm.save_state()
                 
                 new_commit_hash = commit_vm_changes(vm)
                 if new_commit_hash:

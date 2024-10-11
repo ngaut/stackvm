@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from instruction_handlers import InstructionHandlers
-from utils import interpolate_variables, load_state, save_state, StepType
+from utils import load_state, save_state, StepType
 from config import GIT_REPO_PATH
 from git_manager import GitManager
 from commit_message_wrapper import commit_message_wrapper
@@ -82,7 +82,7 @@ class PlanExecutionVM:
         """Set the goal for the VM and save the state."""
         self.state['goal'] = goal
         self.logger.info(f"Goal set: {goal}")
-        save_state(self.state, self.repo_path)
+        self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
         """Resolve a parameter, interpolating variables if it's a string."""
@@ -106,7 +106,7 @@ class PlanExecutionVM:
 
         success = handler(params)
         if success:
-            save_state(self.state, self.repo_path)
+            self.save_state()
             self._log_step_execution(step_type, params, seq_no)
         return success
 
@@ -147,8 +147,8 @@ class PlanExecutionVM:
                 return False
             if step['type'] not in ("jmp_if", "jmp"):
                 self.state['program_counter'] += 1
-                self.garbage_collect()  # Perform GC after each non-jump step
-            save_state(self.state, self.repo_path)
+            self.garbage_collect()
+            self.save_state()
             return True
         except Exception as e:
             self.logger.error(f"Error executing step {self.state['program_counter']}: {str(e)}")
@@ -177,6 +177,11 @@ class PlanExecutionVM:
             self.logger.info(f"State loaded from commit {commit_hash}")
         else:
             self.logger.error(f"Failed to load state from commit {commit_hash}")
+
+    def save_state(self):
+        state_data = self.state.copy()
+        state_data['variables'] = self.variable_manager.get_all_variables()
+        save_state(state_data, self.repo_path)
 
     def find_step_index(self, seq_no: int) -> Optional[int]:
         """Find the index of a step with the given sequence number."""

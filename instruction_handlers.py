@@ -174,11 +174,7 @@ class InstructionHandlers:
                 target_seq = jump_if_false
     
             self.vm.logger.info(f"Jumping to seq_no {target_seq} based on condition result: {condition_result}. Explanation: {explanation}")
-            new_pc = self.vm.find_step_index(target_seq)
-            if new_pc is not None:
-                self.vm.state['program_counter'] = new_pc
-                # Perform GC after jump
-                self.vm.garbage_collect()
+            self.vm.state['program_counter'] = self.vm.find_step_index(target_seq)
             return True
         except json.JSONDecodeError:
             return self._handle_error("Failed to parse JSON response from LLM.")
@@ -198,8 +194,6 @@ class InstructionHandlers:
 
             self.vm.logger.info(f"Unconditionally jumping to seq_no {target_seq}.")
             self.vm.state['program_counter'] = target_index
-            # Perform GC after jump
-            self.vm.garbage_collect()
             return True
         except Exception as e:
             return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}", "jmp", params)
@@ -209,10 +203,6 @@ class InstructionHandlers:
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
-            
-            # Decrease reference count for old value if it existed
-            if var_name in self.vm.state['variables']:
-                self.vm.decrease_ref_count(var_name)
         return True
 
     def reasoning_handler(self, params: Dict[str, Any]) -> bool:
