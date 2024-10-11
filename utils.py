@@ -16,7 +16,7 @@ def interpolate_variables(text: Any, variables: Dict[str, Any]) -> Any:
     if not isinstance(text, str):
         return text
     for var, value in variables.items():
-        text = text.replace(f"{{{{{var}}}}}", str(value))
+        text = text.replace(f"${{{var}}}", str(value))
     return text
 
 def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
