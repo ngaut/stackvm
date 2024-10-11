@@ -16,7 +16,6 @@ The VM executes plans consisting of a sequence of instructions. Each instruction
 ### Key features:
 - **Variable Store**: A key-value store where variables are stored and accessed by name.
 - **Instruction Execution**: Instructions are executed sequentially unless control flow is altered by conditional statements.
-- **Plan Parsing**: Plans are provided in JSON format and parsed by the VM.
 
 ## 2. Instruction Format
 Each instruction in the plan is represented as a JSON object with the following keys:
@@ -227,12 +226,12 @@ Dependencies: Manage dependencies by assigning outputs to variables and referenc
 
 ## 6. Plan Structure
 - Sequential Execution: Instructions are executed in order based on their `seq_no`.
-- Control Flow: Use the `jmp_if` and `jmp` instruction for branching logic.
-- Subplans: Branches in a `jmp_if` instruction are subplans (lists of instructions) with their own `seq_no` values.
+- Control Flow: Use the `jmp_if` and `jmp` instructions for branching logic and conditional loops.
 
 ## 7. Best Practices
-- Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the main plan and any subplans.
+- Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the plan.
 - Variable Naming: Use descriptive variable names to make the plan readable and maintainable.
+- Control Flow: Use `jmp_if` and `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 
 ## 8. Example Plan
 Goal: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
