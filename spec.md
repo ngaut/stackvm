@@ -73,22 +73,25 @@ Example:
   }
 }
 3. retrieve_knowledge_graph
-Purpose: Retrieves information from a knowledge graph based on a query.
+Purpose: Retrieves information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
 
 Parameters:
 
 query: The query string. Can be a direct string or a variable reference.
-output_var: The name of the variable to store the retrieved data.
+output_var: The name of the variable to store the retrieved graph data.
+
 Example:
 
 {
   "seq_no": 2,
   "type": "retrieve_knowledge_graph",
   "parameters": {
-    "query": "Tallest mountain in the world",
-    "output_var": "knowledge_data"
+    "query": "TiDB latest stable version",
+    "output_var": "tidb_version_graph"
   }
 }
+
+Note: This instruction returns a graph structure containing nodes and relationships, not a direct answer. Further processing (e.g., using llm_generate) is typically required to extract specific information from the returned graph data.
 4. vector_search
 Purpose: Retrieves embedded knowledge chunks based on an embedding query.
 
@@ -210,16 +213,16 @@ The plan:
     "seq_no": 1,
     "type": "retrieve_knowledge_graph",
     "parameters": {
-      "query": "What is the latest stable version of TiDB?",
-      "output_var": "latest_tidb_version_info"
+      "query": "TiDB latest stable version",
+      "output_var": "tidb_version_graph"
     }
   },
   {
     "seq_no": 2,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Extract the latest tidb version number from the retrived data.\n{{latest_tidb_version_info}}",
-      "context": NULL,
+      "prompt": "Analyze the following knowledge graph data about TiDB versions:\n{{tidb_version_graph}}\n\nExtract and return the latest stable version number of TiDB. If you can't determine the exact version, return 'Unknown'.",
+      "context": null,
       "output_var": "latest_tidb_version"
     }
   },
