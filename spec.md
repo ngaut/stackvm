@@ -16,7 +16,6 @@ The VM executes plans consisting of a sequence of instructions. Each instruction
 ### Key features:
 - **Variable Store**: A key-value store where variables are stored and accessed by name.
 - **Instruction Execution**: Instructions are executed sequentially unless control flow is altered by conditional statements.
-- **Plan Parsing**: Plans are provided in JSON format and parsed by the VM.
 
 ## 2. Instruction Format
 Each instruction in the plan is represented as a JSON object with the following keys:
@@ -151,21 +150,59 @@ Example:
      }
    }
 7. reasoning
-Purpose: Provides a detailed chain of thoughts of the plan's reasoning, analysis, and steps.
+Purpose: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
 
 Parameters:
 
-chain_of_thoughts: A string containing the reasoning and analysis for the plan.
+chain_of_thoughts: A string containing a comprehensive breakdown of the reasoning process behind the plan. This should include:
+  - The overall strategy for approaching the problem
+  - Key decision points and rationale for choices made
+  - Assumptions and their justifications
+  - Potential alternative approaches considered
+  - Expected outcomes of each major step
+  - How different pieces of information are intended to be combined
+  - Any limitations or potential issues with the chosen approach
+
 dependency_analysis: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
 
 Example:
 
 {
-  "seq_no": 7,
+  "seq_no": 0,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "...",
-    "dependency_analysis": "..."
+    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+
+    1. Overall Strategy:
+       We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+
+    2. Key Decision Points and Rationale:
+       a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
+       b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+
+    3. Assumptions:
+       - The latest stable version of TiDB is the most relevant for current optimization practices.
+       - E-commerce applications have specific performance requirements that may differ from general use cases.
+
+    4. Alternative Approaches Considered:
+       - We could have used only vector search, but this might miss important structured relationships in the data.
+       - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
+
+    5. Expected Outcomes:
+       - Step 1-2: Identification of the latest TiDB version
+       - Step 3-6: Gathering of version-specific and general TiDB information
+       - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
+       - Step 9-10: Synthesis of gathered information into actionable recommendations
+
+    6. Information Combination:
+       The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
+
+    7. Limitations:
+       - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
+       - If no specific version is found, our recommendations may be more general and less tailored.
+
+    This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 1.\nSteps 4-8 depend on the outcome of Step 3.\nStep 9 depends on Steps 4-8.\nStep 10 depends on Step 9."
   }
 }
 
@@ -189,12 +226,12 @@ Dependencies: Manage dependencies by assigning outputs to variables and referenc
 
 ## 6. Plan Structure
 - Sequential Execution: Instructions are executed in order based on their `seq_no`.
-- Control Flow: Use the `jmp_if` and `jmp` instruction for branching logic.
-- Subplans: Branches in a `jmp_if` instruction are subplans (lists of instructions) with their own `seq_no` values.
+- Control Flow: Use the `jmp_if` and `jmp` instructions for branching logic and conditional loops.
 
 ## 7. Best Practices
-- Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the main plan and any subplans.
+- Sequence Numbering: Ensure that `seq_no` values are unique and sequential within the plan.
 - Variable Naming: Use descriptive variable names to make the plan readable and maintainable.
+- Control Flow: Use `jmp_if` and `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 
 ## 8. Example Plan
 Goal: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
@@ -205,8 +242,38 @@ The plan:
     "seq_no": 0,
     "type": "reasoning",
     "parameters": {
-      "chain_of_thoughts": "To answer this question, we will:\n1. Determine the latest stable version of TiDB.\n2. Retrieve general information about the latest TiDB from the knowledge graph.\n3. Use the vector database to find relevant performance optimization techniques for the latest version.\n4. Retrieve specific e-commerce related optimizations from the knowledge graph.\n5. Combine and synthesize the information using the LLM.\n6. Compile the final answer.",
-      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4.\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
+      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+
+      1. Overall Strategy:
+         We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+
+      2. Key Decision Points and Rationale:
+         a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
+         b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+
+      3. Assumptions:
+         - The latest stable version of TiDB is the most relevant for current optimization practices.
+         - E-commerce applications have specific performance requirements that may differ from general use cases.
+
+      4. Alternative Approaches Considered:
+         - We could have used only vector search, but this might miss important structured relationships in the data.
+         - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
+
+      5. Expected Outcomes:
+         - Step 1-2: Identification of the latest TiDB version
+         - Step 3-6: Gathering of version-specific and general TiDB information
+         - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
+         - Step 9-10: Synthesis of gathered information into actionable recommendations
+
+      6. Information Combination:
+         The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
+
+      7. Limitations:
+         - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
+         - If no specific version is found, our recommendations may be more general and less tailored.
+
+      This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 1.\nSteps 4-8 depend on the outcome of Step 3.\nStep 9 depends on Steps 4-8.\nStep 10 depends on Step 9."
     }
   },
   {
