@@ -1,3 +1,7 @@
+"""
+Visualization module for the VM execution and Git repository management.
+"""
+
 import sys
 import os
 import json
@@ -12,7 +16,7 @@ from flask import Flask, render_template, jsonify, request, current_app
 
 from config import GIT_REPO_PATH, VM_SPEC_CONTENT, LLM_MODEL
 from git_manager import GitManager
-from utils import load_state, save_state, parse_commit_message, StepType, find_first_json_object, parse_plan
+from utils import save_state, parse_commit_message, StepType, find_first_json_object, parse_plan
 from vm import PlanExecutionVM
 from llm_interface import LLMInterface
 from prompts import get_plan_update_prompt, get_should_update_plan_prompt, get_generate_plan_prompt
@@ -27,40 +31,45 @@ app = Flask(__name__)
 # Initialize LLM interface
 llm_interface = LLMInterface(LLM_MODEL)
 
-# Configure logging
-def setup_logging():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
-    app.logger.setLevel(logging.INFO)
-    for handler in app.logger.handlers:
-        handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'))
-
-setup_logging()
-
 # Initialize GitManager
 git_manager = GitManager(GIT_REPO_PATH)
 
+def setup_logging():
+    """Configure logging for the application."""
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
+    app.logger.setLevel(logging.INFO)
+    for handler in app.logger.handlers:
+        handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'))
+
+setup_logging()
+
 def get_repo(repo_path):
+    """Initialize and return a Git repository object."""
     try:
         return Repo(repo_path)
-    except Exception as e:
-        app.logger.error(f"Failed to initialize repository at {repo_path}: {str(e)}", exc_info=True)
+    except Exception as exc:
+        app.logger.error("Failed to initialize repository at %s: %s", repo_path, str(exc), exc_info=True)
         return None
 
 def get_commits(repo, branch_name):
+    """Fetch commits for a given branch."""
     try:
         return list(repo.iter_commits(branch_name))
-    except GitCommandError as e:
-        app.logger.error(f"Error fetching commits for branch {branch_name}: {str(e)}", exc_info=True)
+    except GitCommandError as exc:
+        app.logger.error("Error fetching commits for branch %s: %s", branch_name, str(exc), exc_info=True)
         return []
 
 def get_vm_state_for_commit(repo, commit):
+    """Retrieve VM state from a specific commit."""
     try:
         vm_state_content = repo.git.show(f'{commit.hexsha}:vm_state.json')
         return json.loads(vm_state_content)
     except GitCommandError:
-        app.logger.error(f"vm_state.json not found in commit {commit.hexsha}")
+        app.logger.error("vm_state.json not found in commit %s", commit.hexsha)
     except json.JSONDecodeError:
-        app.logger.error(f"Invalid JSON in vm_state.json for commit {commit.hexsha}")
+        app.logger.error("Invalid JSON in vm_state.json for commit %s", commit.hexsha)
     return None
 
 def log_and_return_error(message, error_type, status_code):
