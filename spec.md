@@ -125,7 +125,7 @@ Example:
      "seq_no": 4,
      "type": "jmp_if",
      "parameters": {
-       "condition_prompt": "Is {{number}} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
+       "condition_prompt": "Is ${number} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
        "context": null,
        "jump_if_true": 5,
        "jump_if_false": 6
@@ -207,7 +207,7 @@ Example:
 }
 
 ## 4. Parameters and Variable References
-Parameters can be either direct values or variable references. To reference a variable, use a dictionary with the key "var" and the variable name as the value.
+Parameters can be either direct values or variable references. To reference a variable, use the format ${variable_name}.
 
 Direct Value Example:
 
@@ -215,7 +215,7 @@ Direct Value Example:
 
 Variable Reference Example:
 
-"prompt": { "var": "user_question" }
+"prompt": "${user_question}"
 
 When the VM encounters a variable reference, it will replace it with the value stored in the variable store under that name.
 
@@ -289,7 +289,7 @@ The plan:
   "type": "llm_generate",
   "parameters": {
     "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'Unknown'.",
-    "context": "the retrieved knowledge graph data:\n{{latest_tidb_version_info}}",
+    "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
     "output_var": "latest_tidb_version"
   }
 }
@@ -298,7 +298,7 @@ The plan:
     "type": "jmp_if",
     "parameters": {
       "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
-      "context": "Latest TiDB version: {{latest_tidb_version}}",
+      "context": "Latest TiDB version: ${latest_tidb_version}",
       "jump_if_true": 4,
       "jump_if_false": 6
     }
@@ -307,7 +307,7 @@ The plan:
     "seq_no": 4,
     "type": "vector_search",
     "parameters": {
-      "vector_search": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "vector_search": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
       "top_k": 3,
       "output_var": "tidb_info"
     }
@@ -332,7 +332,7 @@ The plan:
     "seq_no": 7,
     "type": "vector_search",
     "parameters": {
-      "vector_search": "TiDB {{latest_tidb_version}} performance optimization techniques",
+      "vector_search": "TiDB ${latest_tidb_version} performance optimization techniques",
       "top_k": 5,
       "output_var": "performance_techniques"
     }
@@ -341,7 +341,7 @@ The plan:
     "seq_no": 8,
     "type": "vector_search",
     "parameters": {
-      "query": "What are specific considerations for optimizing TiDB {{latest_tidb_version}} for e-commerce applications?",
+      "query": "What are specific considerations for optimizing TiDB ${latest_tidb_version} for e-commerce applications?",
       "output_var": "ecommerce_optimizations"
     }
   },
@@ -349,8 +349,8 @@ The plan:
     "seq_no": 9,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
-      "context": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}",
+      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
+      "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. General Performance Techniques: ${performance_techniques}\n3. E-commerce Specific Optimizations: ${ecommerce_optimizations}",
       "output_var": "final_recommendations"
     }
   },
@@ -358,7 +358,7 @@ The plan:
     "seq_no": 10,
     "type": "assign",
     "parameters": {
-      "value": "Best practices for optimizing TiDB {{latest_tidb_version}} performance for a high-volume e-commerce application:\n\n{{final_recommendations}}",
+      "value": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}",
       "var_name": "final_answer"
     }
   }
