@@ -411,9 +411,16 @@
                 const description = state.details.description || 'No description available';
                 return `
                     <div class="step-item" id="step-${state.commit_hash}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong>${state.title}: ${description}</strong>
-                            <small class="text-muted">${moment(state.time).format('YYYY-MM-DD HH:mm:ss')}</small>
+                        <div>
+                            <strong style="font-size: 0.9em;">${state.title}</strong>
+                        </div>
+                        <div>
+                            <small class="text-muted" style="font-size: 0.85em;">${state.details?.description || 'No description available'}</small>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted" style="display: block; word-break: break-word;">
+                                ${state.time ? moment(state.time).format('YYYY-MM-DD HH:mm:ss') : 'No timestamp available'}
+                            </small>
                         </div>
                         <div class="mt-2">
                             <button onclick="executeFromStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
@@ -421,8 +428,8 @@
                             </button>
                         </div>
                         <div class="mt-2">
-                            <small>SeqNo:[${state.seq_no}], PC:[${state.vm_state.program_counter}]</small>
-                            ${state.vm_state.goal_completed ? '<span class="badge bg-success ms-2">Completed</span>' : ''}
+                            <small>SeqNo:[${state.seq_no || 'N/A'}], PC:[${state.vm_state?.program_counter || 'N/A'}]</small>
+                            ${state.vm_state?.goal_completed ? '<span class="badge bg-success ms-2">Completed</span>' : ''}
                         </div>
                     </div>
                 `;

@@ -140,7 +140,8 @@ class InstructionHandlers:
             return self._handle_error("Missing 'prompt' or 'output_var' in parameters.")
 
         interpolated_prompt = interpolate_variables(prompt, self.vm.state['variables'])
-        response = self.vm.llm_interface.generate(interpolated_prompt)
+        interpolated_context = self.vm.resolve_parameter(params.get('context'))
+        response = self.vm.llm_interface.generate(interpolated_prompt, interpolated_context)
         
         if response:
             self.vm.set_variable(output_var, response)

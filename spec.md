@@ -285,14 +285,14 @@ The plan:
     }
   },
   {
-    "seq_no": 2,
-    "type": "llm_generate",
-    "parameters": {
-      "prompt": "Analyze the following knowledge graph data about TiDB versions:\n{{tidb_version_graph}}\n\nExtract and return the latest stable version number of TiDB. If you can't determine the exact version, return 'Unknown'.",
-      "context": null,
-      "output_var": "latest_tidb_version"
-    }
-  },
+  "seq_no": 2,
+  "type": "llm_generate",
+  "parameters": {
+    "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'Unknown'.",
+    "context": "the retrieved knowledge graph data:\n{{latest_tidb_version_info}}",
+    "output_var": "latest_tidb_version"
+  }
+}
   {
     "seq_no": 3,
     "type": "jmp_if",
@@ -307,7 +307,8 @@ The plan:
     "seq_no": 4,
     "type": "vector_search",
     "parameters": {
-      "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "vector_search": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "top_k": 3,
       "output_var": "tidb_info"
     }
   },
@@ -320,7 +321,7 @@ The plan:
   },
   {
     "seq_no": 6,
-    "type": "retrieve_knowledge_graph",
+    "type": "vector_search",
     "parameters": {
       "vector_search": "Latest TiDB version and its key features",
       "top_k": 3,
@@ -348,8 +349,8 @@ The plan:
     "seq_no": 9,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}\n\nProvide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
-      "context": null,
+      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
+      "context": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}",
       "output_var": "final_recommendations"
     }
   },
