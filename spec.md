@@ -203,7 +203,7 @@ The plan:
     "type": "reasoning",
     "parameters": {
       "chain_of_thoughts": "To answer this question, we will:\n1. Determine the latest stable version of TiDB.\n2. Retrieve general information about the latest TiDB from the knowledge graph.\n3. Use the vector database to find relevant performance optimization techniques for the latest version.\n4. Retrieve specific e-commerce related optimizations from the knowledge graph.\n5. Combine and synthesize the information using the LLM.\n6. Compile the final answer.",
-      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 1.\nStep 5 depends on Steps 2, 3, and 4.\nStep 6 depends on Step 5."
+      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4.\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
     }
   },
   {
@@ -215,14 +215,14 @@ The plan:
     }
   },
   {
-    "seq_no": 2,
-    "type": "llm_generate",
-    "parameters": {
-      "prompt": "Extract the latest tidb version number from the retrived data.\n{{latest_tidb_version_info}}",
-      "context": NULL,
-      "output_var": "latest_tidb_version"
-    }
-  },
+  "seq_no": 2,
+  "type": "llm_generate",
+  "parameters": {
+    "prompt": "Extract the latest TiDB version number from the retrieved data. Assume that the latest version is the highest version number present.",
+    "context": "the retrieved data:\n{{latest_tidb_version_info}}",
+    "output_var": "latest_tidb_version"
+  }
+}
   {
     "seq_no": 3,
     "type": "jmp_if",
@@ -237,7 +237,8 @@ The plan:
     "seq_no": 4,
     "type": "vector_search",
     "parameters": {
-      "query": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "vector_search": "What are the key features and improvements in TiDB version {{latest_tidb_version}}?",
+      "top_k": 3,
       "output_var": "tidb_info"
     }
   },
@@ -250,7 +251,7 @@ The plan:
   },
   {
     "seq_no": 6,
-    "type": "retrieve_knowledge_graph",
+    "type": "vector_search",
     "parameters": {
       "vector_search": "Latest TiDB version and its key features",
       "top_k": 3,
@@ -278,8 +279,8 @@ The plan:
     "seq_no": 9,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}\n\nProvide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
-      "context": null,
+      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version {{latest_tidb_version}}.",
+      "context": "Based on the following information for TiDB version {{latest_tidb_version}}:\n1. TiDB Overview: {{tidb_info}}\n2. General Performance Techniques: {{performance_techniques}}\n3. E-commerce Specific Optimizations: {{ecommerce_optimizations}}",
       "output_var": "final_recommendations"
     }
   },
