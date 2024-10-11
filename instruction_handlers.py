@@ -200,14 +200,9 @@ class InstructionHandlers:
 
     def assign_handler(self, params: Dict[str, Any]) -> bool:
         """Handle variable assignment."""
-        value = params.get('value')
-        var_name = params.get('var_name')
-        
-        if not var_name:
-            return self._handle_error("Missing 'var_name' in parameters.")
-
-        value_resolved = self.vm.resolve_parameter(value)
-        self.vm.set_variable(var_name, value_resolved)
+        for var_name, value in params.items():
+            value_resolved = self.vm.resolve_parameter(value)
+            self.vm.set_variable(var_name, value_resolved)
         return True
 
     def reasoning_handler(self, params: Dict[str, Any]) -> bool:

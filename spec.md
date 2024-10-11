@@ -36,20 +36,18 @@ Each instruction in the plan is represented as a JSON object with the following 
 
 ## 3. Supported Instructions
 1. assign
-Purpose: Assigns a value to a variable.
+Purpose: Assigns values to one or more variables.
 
 Parameters:
+An object where each key is a variable name and each value is either a direct value or a variable reference.
 
-value: The value to assign. Can be a direct value or a variable reference.
-var_name: The name of the variable to assign the value to.
 Example:
-
 {
   "seq_no": 0,
   "type": "assign",
   "parameters": {
-    "value": 42,
-    "var_name": "number"
+    "number": 42,
+    "doubled_number": "${number}"
   }
 }
 2. llm_generate
@@ -358,8 +356,7 @@ The plan:
     "seq_no": 10,
     "type": "assign",
     "parameters": {
-      "value": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}",
-      "var_name": "final_answer"
+      "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}"
     }
   }
 ]
