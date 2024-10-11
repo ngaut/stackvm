@@ -161,6 +161,19 @@ class PlanExecutionVM:
         if var_name == 'result':
             self.state['goal_completed'] = True
             self.logger.info("Goal has been marked as completed.")
+            return
+
+        reference_count = 0
+        for i in range(self.state['program_counter'] + 1, len(self.state['current_plan'])):
+            step = self.state['current_plan'][i]
+            for param_name, param_value in step.get('parameters', {}).items():
+                referenced_vars = self.variable_manager.find_referenced_variables(param_value)
+                if var_name in referenced_vars:
+                    reference_count += 1
+
+        print(f"Reference count for {var_name}: {reference_count}")
+
+        self.variable_manager.set_reference_count(var_name, reference_count)
 
     def get_variable(self, var_name: str) -> Any:
         return self.variable_manager.get(var_name)
@@ -173,7 +186,10 @@ class PlanExecutionVM:
         loaded_state = load_state(commit_hash, self.repo_path)
         if loaded_state:
             self.state = loaded_state
-            self.variable_manager.set_all_variables(loaded_state.get('variables', {}))
+            self.variable_manager.set_all_variables(
+                loaded_state.get('variables', {}),
+                loaded_state.get('variables_refs', {})
+            )
             self.logger.info(f"State loaded from commit {commit_hash}")
         else:
             self.logger.error(f"Failed to load state from commit {commit_hash}")
@@ -181,6 +197,7 @@ class PlanExecutionVM:
     def save_state(self):
         state_data = self.state.copy()
         state_data['variables'] = self.variable_manager.get_all_variables()
+        state_data['variables_refs'] = self.variable_manager.get_all_variables_reference_count()
         save_state(state_data, self.repo_path)
 
     def find_step_index(self, seq_no: int) -> Optional[int]:
