@@ -288,7 +288,7 @@ The plan:
     "seq_no": 2,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'latest stable version'.",
+      "prompt": "Please extract the latest stable version number of TiDB from the knowledge graph data provided.\n\n- If a specific tidb version number is found, return only that version.\n- If you cannot determine the exact version, return exactly \"latest stable version\".\n\n**Do not include any additional text, explanations, or commentary. Only return the version string as specified.**\n\nlatest_tidb_version=",
       "context": "the retrieved knowledge graph data:\n{{latest_tidb_version_info}}",
       "output_var": "latest_tidb_version"
     }
