@@ -123,10 +123,10 @@ def get_vm_state(commit_hash):
         commit = repo.commit(commit_hash)
         vm_state = get_vm_state_for_commit(repo, commit)
         if vm_state is None:
-            return log_and_return_error(f"VM state not found for commit {commit_hash}", 'warning', 404)
+            return log_and_return_error(f"VM state not found for commit {commit_hash} for {repo}", 'warning', 404)
         return jsonify(vm_state)
     except Exception as e:
-        return log_and_return_error(f"Unexpected error fetching VM state for commit {commit_hash}: {str(e)}", 'error', 500)
+        return log_and_return_error(f"Unexpected error fetching VM state for commit {commit_hash} for {repo}: {str(e)}", 'error', 500)
 
 @app.route('/code_diff/<commit_hash>')
 def code_diff(commit_hash):
@@ -164,7 +164,7 @@ def commit_details(commit_hash):
         }
         return jsonify(details)
     except Exception as e:
-        return log_and_return_error(f"Error fetching commit details for {commit_hash}: {str(e)}", 'error', 404)
+        return log_and_return_error(f"Error fetching commit details for {commit_hash} for repo {repo}: {str(e)}", 'error', 404)
 
 def generate_plan(goal, custom_prompt=None):
     if not goal:
@@ -308,21 +308,22 @@ def vm_state_details(commit_hash):
         vm_state = get_vm_state_for_commit(repo, commit)
         
         if vm_state is None:
-            return log_and_return_error(f"vm_state.json not found for commit: {commit_hash}", 'warning', 404)
+            return log_and_return_error(f"vm_state.json not found for commit: {commit_hash} for repo {repo}", 'warning', 404)
         
         variables = vm_state.get('variables', {})
-        parameters = vm_state.get('parameters', {})
         
-        return jsonify({'variables': variables, 'parameters': parameters})
+        return jsonify({'variables': variables})
     except git.exc.BadName:
-        return log_and_return_error(f"Invalid commit hash: {commit_hash}", 'error', 404)
+        return log_and_return_error(f"Invalid commit hash: {commit_hash} for repo {repo}", 'error', 404)
     except Exception as e:
-        return log_and_return_error(f"Unexpected error: {str(e)}", 'error', 500)
+        return log_and_return_error(f"Unexpected error: {str(e)} for repo {repo}", 'error', 500)
 
 @app.route('/get_directories')
 def get_directories():
     try:
         directories = [d for d in os.listdir(GIT_REPO_PATH) if os.path.isdir(os.path.join(GIT_REPO_PATH, d))]
+        # filter out .git directories
+        directories = [d for d in directories if not d.endswith('.git')]
         return jsonify(directories)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
