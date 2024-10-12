@@ -419,10 +419,9 @@ def run_vm_with_goal(goal, repo_path):
         
         while True:
             success = vm.step()
+            commit_vm_changes(vm)
             if not success:
                 break
-            
-            commit_vm_changes(vm)
             
             if vm.state.get('goal_completed'):
                 logging.info("Goal completed during plan execution.")
