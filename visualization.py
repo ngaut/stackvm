@@ -429,8 +429,8 @@ def run_vm_with_goal(goal, repo_path):
                 break
 
         if vm.state.get('goal_completed'):
-            result = vm.get_variable('final_answer')
-            if result:
+            final_answer = vm.get_variable('final_answer')
+            if final_answer:
                 logging.info(f"\nfinal_answer: {final_answer}")
             else:
                 logging.info("\nNo result was generated.")

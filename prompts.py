@@ -127,7 +127,7 @@ VM Specification:{vm_spec_content}
    - Include a 'reasoning' step at the beginning of the plan that outlines the chain of thought and dependency analysis of the steps.
 
 
-The final step of the plan must be assign the result to the 'result' variable.
+The final step of the plan must be assign the final output result to the 'final_answer' variable.
 Please provide only the JSON array for the action plan without any additional text, explanations, or markdown. 
 Ensure the JSON is properly formatted and encapsulated within a ```json code block.
 
