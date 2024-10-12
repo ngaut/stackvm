@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
@@ -10,6 +11,7 @@ except ImportError:
     sys.exit(1)
 
 import logging
+
 
 class GitManager:
     def __init__(self, repo_path):
@@ -22,22 +24,24 @@ class GitManager:
             os.makedirs(self.repo_path)
             self.logger.info(f"Created directory: {self.repo_path}")
 
-        if not os.path.exists(os.path.join(self.repo_path, '.git')):
+        if not os.path.exists(os.path.join(self.repo_path, ".git")):
             repo = Repo.init(self.repo_path)
             self.logger.info(f"Initialized new Git repository in {self.repo_path}")
-            
+
             # Create and commit an initial README.md file
-            readme_path = os.path.join(self.repo_path, 'README.md')
-            with open(readme_path, 'w') as f:
-                f.write('# VM Execution Repository\n\nThis repository contains the execution history of the VM.')
+            readme_path = os.path.join(self.repo_path, "README.md")
+            with open(readme_path, "w") as f:
+                f.write(
+                    "# VM Execution Repository\n\nThis repository contains the execution history of the VM."
+                )
             self.logger.info(f"Created README.md at {readme_path}")
-            
-            repo.index.add(['README.md'])
+
+            repo.index.add(["README.md"])
             # add a empty vm_state.json
-            vm_state_path = os.path.join(self.repo_path, 'vm_state.json')
-            with open(vm_state_path, 'w') as f:
-                f.write('{}')
-            repo.index.add(['vm_state.json'])
+            vm_state_path = os.path.join(self.repo_path, "vm_state.json")
+            with open(vm_state_path, "w") as f:
+                f.write("{}")
+            repo.index.add(["vm_state.json"])
             repo.index.commit("Initial commit")
         else:
             repo = Repo(self.repo_path)
@@ -53,8 +57,12 @@ class GitManager:
                 return commit.hexsha  # Return the commit hash as a string
             else:
                 # If there are no changes to commit, return the latest commit hash
-                self.logger.info(f"No changes to commit, returning the latest commit hash {self.repo.head.commit.hexsha}")
-                return self.repo.head.commit.hexsha  # Return the commit hash as a string
+                self.logger.info(
+                    f"No changes to commit, returning the latest commit hash {self.repo.head.commit.hexsha}"
+                )
+                return (
+                    self.repo.head.commit.hexsha
+                )  # Return the commit hash as a string
         except Exception as e:
             self.logger.error(f"Error committing changes: {str(e)}")
             return None
@@ -80,3 +88,19 @@ class GitManager:
 
     def get_current_branch(self):
         return self.repo.active_branch.name
+
+    def create_branch_from_commit(self, branch_name, commit_hash=None):
+        try:
+            # If commit_hash is None, use the latest commit of the current branch
+            if not commit_hash:
+                commit_hash = self.repo.head.commit.hexsha
+
+            # Create a new branch from the specified commit hash
+            self.repo.git.branch(branch_name, commit_hash)
+            self.logger.info(f"Created branch {branch_name} from commit {commit_hash}")
+            return True
+        except git.GitCommandError as e:
+            self.logger.error(
+                f"Failed to create branch {branch_name} from commit {commit_hash}: {str(e)}"
+            )
+            return False

@@ -245,14 +245,15 @@ def execute_vm():
     vm.set_state(commit_hash)
     repo = git.Repo(repo_path)
 
-    if new_branch:
-        app.logger.info(f"Switching to new branch: {new_branch}")
-        repo.git.checkout(new_branch)
-    current_branch = repo.active_branch.name
-    app.logger.info(f"Using branch: {current_branch}")
-
     steps_executed = 0
     last_commit_hash = commit_hash
+
+    if not new_branch:
+        new_branch = f"re_execute_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    vm.git_manager.create_branch_from_commit(new_branch, commit_hash)
+    vm.git_manager.checkout_branch(new_branch)
+    current_branch = repo.active_branch.name
+    app.logger.info(f"Using branch: {current_branch}")
 
     for _ in range(steps):
         try:
