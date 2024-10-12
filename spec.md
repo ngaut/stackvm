@@ -198,6 +198,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Sequence Numbering**: Ensure that `seq_no` values are unique and sequential within the plan.
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp_if` and `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
+- **Final answer**: The name of output var of The last instruction MUST be "final_answer"
 
 ## 8. Example Plan
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
@@ -295,7 +296,7 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 10,
     "type": "assign",
     "parameters": {
-      "result": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}"
+      "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}"
     }
   }
 ]

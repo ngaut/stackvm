@@ -163,7 +163,7 @@ class PlanExecutionVM:
     def set_variable(self, var_name: str, value: Any) -> None:
         self.variable_manager.set(var_name, value)
         
-        if var_name in ('result', 'final_answer'):
+        if var_name in ('final_answer'):
             self.state['goal_completed'] = True
             self.logger.info("Goal has been marked as completed.")
             return
