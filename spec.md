@@ -263,9 +263,9 @@ Parameters can be either direct values or variable references. To reference a va
   "seq_no": 2,
   "type": "llm_generate",
   "parameters": {
-    "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR'). Return only the main version number (e.g., 'v8.3.0').\n- If no specific version number is found, return exactly 'latest stable version tidb'.\n\nSince we need to return only the main version number, the latest stable version number of TiDB is:",
-    "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
-    "output_var": "latest_tidb_version"
+      "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number, with no additional text or explanation, (e.g., 'v8.1.0')\n- If no specific stable version number is found, respond exactly 'latest stable version tidb'.",
+      "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
+      "output_var": "latest_tidb_version"
   }
 }
   {

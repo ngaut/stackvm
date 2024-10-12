@@ -96,7 +96,6 @@ class InstructionHandlers:
             "error_message": message,
             "instruction": instruction,
             "params": params,
-            "current_step": self.vm.state.get('current_step'),
             "program_counter": self.vm.state.get('program_counter'),
         }
         
@@ -174,7 +173,7 @@ class InstructionHandlers:
         
             if not isinstance(condition_result, bool):
                 return self._handle_error(
-                    f"Invalid condition result type: {type(condition_result)}. Expected boolean.",
+                    f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
                     instruction="jmp_if",
                     params=params
                 )
