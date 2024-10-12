@@ -42,11 +42,9 @@ class VariableManager:
         """Interpolate variables in the given text."""
         if not isinstance(text, str):
             return text
-        vars = self.find_referenced_variables(text)
-        for var in vars:
-            text = text.replace(f"${{{var}}}", str(self.variables.get(var)))
-            self.decrease_ref_count(var)
 
+        for var, value in self.variables.items():
+            text = text.replace(f"${{{var}}}", str(value))
         return text
 
     def find_referenced_variables(self, text: Any) -> list:
