@@ -86,6 +86,9 @@ class PlanExecutionVM:
 
     def resolve_parameter(self, param: Any) -> Any:
         """Resolve a parameter, interpolating variables if it's a string."""
+        vars = self.variable_manager.find_referenced_variables(param)
+        for var in vars:
+            self.variable_manager.decrease_ref_count(var)
         return self.variable_manager.interpolate_variables(param)
 
     def execute_step_handler(self, step: Dict[str, Any]) -> bool:

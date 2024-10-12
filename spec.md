@@ -286,7 +286,7 @@ The plan:
   "seq_no": 2,
   "type": "llm_generate",
   "parameters": {
-    "prompt": "Extract the latest TiDB version number from the knowledge graph data. Return the latest stable version number of TiDB. If you can't determine the exact version, return 'latest version tidb'.",
+    "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR'). Return only the main version number (e.g., 'v8.3.0').\n- If no specific version number is found, return exactly 'latest stable version tidb'.\n\nSince we need to return only the main version number, the latest stable version number of TiDB is:",
     "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
     "output_var": "latest_tidb_version"
   }
