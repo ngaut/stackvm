@@ -295,7 +295,7 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 10,
     "type": "assign",
     "parameters": {
-      "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}"
+      "result": "Best practices for optimizing TiDB ${latest_tidb_version} performance for a high-volume e-commerce application:\n\n${final_recommendations}"
     }
   }
 ]
