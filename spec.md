@@ -113,7 +113,13 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.5 jmp_if
 - **Purpose**: Conditionally jumps to specified sequence numbers based on the evaluation of a condition using the LLM.
 - **Parameters**:
-  - `condition_prompt`: The prompt to evaluate the condition. Can be a direct string or a variable reference.
+  - `condition_prompt`: The prompt to evaluate the condition. **Must respond with a JSON object in the following format:**
+    ```json
+    {
+      "result": boolean,
+      "explanation": string
+    }
+    ```
   - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
   - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true.
   - `jump_if_false`: The `seq_no` to jump to if the condition evaluates to false.
@@ -228,7 +234,7 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 3,
     "type": "jmp_if",
     "parameters": {
-      "condition_prompt": "Was a specific latest stable version of TiDB found?...",
+      "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
       "context": "Latest TiDB version: ${latest_tidb_version}",
       "jump_if_true": 4,
       "jump_if_false": 6
