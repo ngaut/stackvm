@@ -176,6 +176,12 @@
             select.innerHTML = data.map(dir => `<option value="${dir}">${dir}</option>`).join('');
             select.style.display = 'block';
             document.getElementById('setRepoButton').style.display = 'block';
+
+            // Automatically select the first directory and set the repository
+            if (data.length > 0) {
+                select.value = data[0];
+                await setRepo();
+            }
         }
 
         async function setRepo() {
