@@ -158,6 +158,13 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Purpose**: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
 - **Parameters**:
   - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
+    - The overall strategy for approaching the problem
+    - Key decision points and rationale for choices made
+    - Assumptions and their justifications
+    - Potential alternative approaches considered
+    - Expected outcomes of each major step
+    - How different pieces of information are intended to be combined
+    - Any limitations or potential issues with the chosen approach
   - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
 
 **Example:**
@@ -198,7 +205,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Sequence Numbering**: Ensure that `seq_no` values are unique and sequential within the plan.
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp_if` and `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
-- **Final answer**: The name of output var of The last instruction MUST be "final_answer"
+- **Final answer**: The name of output var of The last instruction MUST be "final_answer".
 
 ## 8. Example Plan
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
@@ -210,8 +217,38 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 0,
     "type": "reasoning",
     "parameters": {
-      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach...",
-      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2..."
+      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+
+      1. Overall Strategy:
+         We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+
+      2. Key Decision Points and Rationale:
+         a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
+         b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+
+      3. Assumptions:
+         - The latest stable version of TiDB is the most relevant for current optimization practices.
+         - E-commerce applications have specific performance requirements that may differ from general use cases.
+
+      4. Alternative Approaches Considered:
+         - We could have used only vector search, but this might miss important structured relationships in the data.
+         - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
+
+      5. Expected Outcomes:
+         - Step 1-2: Identification of the latest TiDB version
+         - Step 3-6: Gathering of version-specific and general TiDB information
+         - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
+         - Step 9-10: Synthesis of gathered information into actionable recommendations
+
+      6. Information Combination:
+         The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
+
+      7. Limitations:
+         - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
+         - If no specific version is found, our recommendations may be more general and less tailored.
+
+      This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
     }
   },
   {
@@ -223,14 +260,14 @@ Parameters can be either direct values or variable references. To reference a va
     }
   },
   {
-    "seq_no": 2,
-    "type": "llm_generate",
-    "parameters": {
-      "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB...",
-      "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
-      "output_var": "latest_tidb_version"
-    }
-  },
+  "seq_no": 2,
+  "type": "llm_generate",
+  "parameters": {
+    "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR'). Return only the main version number (e.g., 'v8.3.0').\n- If no specific version number is found, return exactly 'latest stable version tidb'.\n\nSince we need to return only the main version number, the latest stable version number of TiDB is:",
+    "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
+    "output_var": "latest_tidb_version"
+  }
+}
   {
     "seq_no": 3,
     "type": "jmp_if",
@@ -287,7 +324,7 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 9,
     "type": "llm_generate",
     "parameters": {
-      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application...",
+      "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
       "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. General Performance Techniques: ${performance_techniques}\n3. E-commerce Specific Optimizations: ${ecommerce_optimizations}",
       "output_var": "final_recommendations"
     }
@@ -300,3 +337,4 @@ Parameters can be either direct values or variable references. To reference a va
     }
   }
 ]
+```
