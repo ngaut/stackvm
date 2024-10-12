@@ -103,7 +103,7 @@ Example:
   "seq_no": 3,
   "type": "vector_search",
   "parameters": {
-    "vector_search": "Information about Mount Everest",
+    "query": "Information about Mount Everest",
     "top_k": 3,
     "output_var": "embedded_chunks"
   }
@@ -305,7 +305,7 @@ The plan:
     "seq_no": 4,
     "type": "vector_search",
     "parameters": {
-      "vector_search": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
+      "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
       "top_k": 3,
       "output_var": "tidb_info"
     }
@@ -330,7 +330,7 @@ The plan:
     "seq_no": 7,
     "type": "vector_search",
     "parameters": {
-      "vector_search": "TiDB ${latest_tidb_version} performance optimization techniques",
+      "query": "TiDB ${latest_tidb_version} performance optimization techniques",
       "top_k": 5,
       "output_var": "performance_techniques"
     }

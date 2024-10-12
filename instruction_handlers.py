@@ -118,18 +118,18 @@ class InstructionHandlers:
 
     def vector_search_handler(self, params: Dict[str, Any]) -> bool:
         """Handle retrieval of embedded chunks."""
-        vector_search = self.vm.resolve_parameter(params.get('vector_search'))
+        query = self.vm.resolve_parameter(params.get('query'))
         output_var = params.get('output_var')
         top_k = params.get('top_k', 5)
 
-        if not isinstance(vector_search, str) or not isinstance(output_var, str):
+        if not isinstance(query, str) or not isinstance(output_var, str):
             return self._handle_error("Invalid parameters for 'vector_search'.", "vector_search", params)
 
-        result = embedding_retrieve(vector_search, top_k)
+        result = embedding_retrieve(query, top_k)
         if result is not None:
             self.vm.set_variable(output_var, result)
             return True
-        return self._handle_error(f"Failed to retrieve embedded chunks for query '{vector_search}'.", "vector_search", params)
+        return self._handle_error(f"Failed to retrieve embedded chunks for query '{query}'.", "vector_search", params)
 
     def llm_generate_handler(self, params: Dict[str, Any]) -> bool:
         """Handle LLM generation."""
