@@ -150,7 +150,9 @@ class PlanExecutionVM:
                 return False
             if step['type'] not in ("jmp_if", "jmp"):
                 self.state['program_counter'] += 1
-            self.garbage_collect()
+
+            if self.state['program_counter'] < len(self.state['current_plan']):
+                self.garbage_collect()
             self.save_state()
             return True
         except Exception as e:
@@ -161,7 +163,7 @@ class PlanExecutionVM:
     def set_variable(self, var_name: str, value: Any) -> None:
         self.variable_manager.set(var_name, value)
         
-        if var_name == 'result':
+        if var_name in ('result', 'final_answer'):
             self.state['goal_completed'] = True
             self.logger.info("Goal has been marked as completed.")
             return
@@ -177,6 +179,29 @@ class PlanExecutionVM:
         print(f"Reference count for {var_name}: {reference_count}")
 
         self.variable_manager.set_reference_count(var_name, reference_count)
+
+    def recalculate_variable_refs(self) -> None:
+        """Recalculate the reference counts for all variables in the current plan."""
+        # Reset all reference counts to zero
+        variables_refs = {}
+        for var_name in self.variable_manager.get_all_variables():
+            variables_refs[var_name] = 0
+
+        # Recalculate reference counts based on the current plan
+        for i in range(self.state['program_counter'], len(self.state['current_plan'])):
+            step = self.state['current_plan'][i]
+            for param_name, param_value in step.get('parameters', {}).items():
+                referenced_vars = self.variable_manager.find_referenced_variables(param_value)
+                for var_name in variables_refs.keys():
+                    if var_name in referenced_vars:
+                        variables_refs[var_name] = variables_refs[var_name] + 1
+
+        self.variable_manager.set_all_variables(
+            self.variable_manager.get_all_variables(),
+            variables_refs
+        )
+
+        self.logger.info("Variable reference counts recalculated.")
 
     def get_variable(self, var_name: str) -> Any:
         return self.variable_manager.get(var_name)

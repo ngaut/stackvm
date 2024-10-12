@@ -274,6 +274,7 @@ def execute_vm():
             branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             if vm.git_manager.create_branch(branch_name) and vm.git_manager.checkout_branch(branch_name):
                 vm.state['current_plan'] = updated_plan
+                vm.recalculate_variable_refs()  # Recalculate variable references
                 commit_message_wrapper.set_commit_message(StepType.PLAN_UPDATE, vm.state['program_counter'], explanation)
                 vm.save_state()
                 
