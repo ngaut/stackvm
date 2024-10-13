@@ -16,8 +16,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
-        .chart-container, .step-list { height: 500px; overflow-y: auto; padding: 20px; }
-        .step-list { border-right: 1px solid #e9ecef; }
+        .chart-container { 
+            height: 400px; 
+            padding: 20px; 
+        }
+        .step-list { 
+            height: 500px; 
+            overflow-y: auto; 
+            padding: 20px; 
+            border-top: 1px solid #e9ecef;
+        }
         .step-item {
             cursor: pointer;
             padding: 15px;
@@ -84,45 +92,49 @@
         </div>
         <div id="notification" class="alert" style="display: none;"></div>
         <div class="row">
-            <div class="col-md-3">
+            <div class="col-12">
+                <div class="chart-container">
+                    <canvas id="executionChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-12">
                 <div class="step-list">
                     <h2 class="step-list-title">Execution Steps</h2>
                     <input type="text" id="stepSearch" class="form-control mb-3" placeholder="Search steps...">
                     <div id="stepList"></div>
                 </div>
             </div>
-            <div class="col-md-9">
-                <div class="chart-container">
-                    <canvas id="executionChart"></canvas>
-                </div>
-                <div class="mt-4">
-                    <ul class="nav nav-tabs" id="detailsTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="commit-tab" data-bs-toggle="tab" data-bs-target="#commit" type="button" role="tab" aria-controls="commit" aria-selected="true">Commit Details</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="vm-state-tab" data-bs-toggle="tab" data-bs-target="#vm-state" type="button" role="tab" aria-controls="vm-state" aria-selected="false">VM State</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="code-diff-tab" data-bs-toggle="tab" data-bs-target="#code-diff" type="button" role="tab" aria-controls="code-diff" aria-selected="false">Code Diff</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="vm-variables-tab" data-bs-toggle="tab" data-bs-target="#vm-variables" type="button" role="tab" aria-controls="vm-variables" aria-selected="false">VM Variables</button>
-                        </li>
-                    </ul>
-                    <div class="tab-content mt-2" id="detailsTabContent">
-                        <div class="tab-pane fade show active" id="commit" role="tabpanel" aria-labelledby="commit-tab">
-                            <div id="commitDetails"></div>
-                        </div>
-                        <div class="tab-pane fade" id="vm-state" role="tabpanel" aria-labelledby="vm-state-tab">
-                            <div id="vmState"></div>
-                        </div>
-                        <div class="tab-pane fade" id="code-diff" role="tabpanel" aria-labelledby="code-diff-tab">
-                            <div id="codeDiff"></div>
-                        </div>
-                        <div class="tab-pane fade" id="vm-variables" role="tabpanel" aria-labelledby="vm-variables-tab">
-                            <div id="vmVariables"></div>
-                        </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-12">
+                <ul class="nav nav-tabs" id="detailsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="commit-tab" data-bs-toggle="tab" data-bs-target="#commit" type="button" role="tab" aria-controls="commit" aria-selected="true">Commit Details</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="vm-state-tab" data-bs-toggle="tab" data-bs-target="#vm-state" type="button" role="tab" aria-controls="vm-state" aria-selected="false">VM State</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="code-diff-tab" data-bs-toggle="tab" data-bs-target="#code-diff" type="button" role="tab" aria-controls="code-diff" aria-selected="false">Code Diff</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="vm-variables-tab" data-bs-toggle="tab" data-bs-target="#vm-variables" type="button" role="tab" aria-controls="vm-variables" aria-selected="false">VM Variables</button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-2" id="detailsTabContent">
+                    <div class="tab-pane fade show active" id="commit" role="tabpanel" aria-labelledby="commit-tab">
+                        <div id="commitDetails"></div>
+                    </div>
+                    <div class="tab-pane fade" id="vm-state" role="tabpanel" aria-labelledby="vm-state-tab">
+                        <div id="vmState"></div>
+                    </div>
+                    <div class="tab-pane fade" id="code-diff" role="tabpanel" aria-labelledby="code-diff-tab">
+                        <div id="codeDiff"></div>
+                    </div>
+                    <div class="tab-pane fade" id="vm-variables" role="tabpanel" aria-labelledby="vm-variables-tab">
+                        <div id="vmVariables"></div>
                     </div>
                 </div>
             </div>
