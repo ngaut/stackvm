@@ -149,14 +149,21 @@ class InstructionHandlers:
 
     def jmp_handler(self, params: Dict[str, Any]) -> bool:
         """Handle both conditional and unconditional jumps."""
-        condition_prompt = params.get('condition_prompt')
-        context = params.get('context')
+        condition_prompt = self.vm.resolve_parameter(params.get('condition_prompt'))
+        context = self.vm.resolve_parameter(params.get('context'))
         jump_if_true = params.get('jump_if_true')
         jump_if_false = params.get('jump_if_false')
         target_seq = params.get('target_seq')
 
         if condition_prompt:
             # Conditional jump
+            if jump_if_true is None or jump_if_false is None:
+                return self._handle_error(
+                    "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
+                    instruction="jmp_if",
+                    params=params
+                )
+
             response = self.vm.llm_interface.generate(condition_prompt, context)
             
             try:
