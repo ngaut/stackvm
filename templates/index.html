@@ -432,6 +432,9 @@
                             <button onclick="executeFromStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
                                 <i class="bi bi-play-fill"></i> Execute
                             </button>
+                            <button onclick="updateStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="Update this step">
+                                <i class="bi bi-pencil-fill"></i> Update
+                            </button>
                         </div>
                         <div class="mt-2">
                             <small>SeqNo:[${state.seq_no || 'N/A'}], PC:[${state.vm_state?.program_counter || 'N/A'}]</small>
@@ -659,6 +662,40 @@
                 item.style.display = item.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
             });
         });
+
+        async function updateStep() {
+            const commitHash = getSelectedCommitHash(); // Function to get the selected commit hash
+            const seqNo = getCurrentSeqNo(); // Function to get the current sequence number
+            const suggestion = prompt("Enter your suggestion for improving the step:");
+
+            if (!commitHash || !seqNo || !suggestion) {
+                alert("Please ensure all fields are filled out.");
+                return;
+            }
+
+            const response = await fetch('/update_step', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    suggestion: suggestion,
+                    seq_no: seqNo,
+                    repo: getCurrentRepoName() // Function to get the current repository name
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                alert("Step updated successfully!");
+                // Optionally, refresh the UI to reflect the updated step
+                updateUIAfterExecution(result.newBranch, result.commit_hash);
+            } else {
+                const error = await response.json();
+                alert(`Failed to update step: ${error.message}`);
+            }
+        }
 
         loadDirectories();
         window.addEventListener('resize', () => { if (chart) chart.resize(); });
