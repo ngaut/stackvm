@@ -147,74 +147,64 @@ class InstructionHandlers:
             return True
         return self._handle_error("LLM failed to generate a response.")
 
-    def jmp_if_handler(self, params: Dict[str, Any]) -> bool:
-        """Handle conditional jumps based on LLM evaluation."""
-        condition_prompt = self.vm.resolve_parameter(params.get('condition_prompt'))
-        context = self.vm.resolve_parameter(params.get('context'))
+    def jmp_handler(self, params: Dict[str, Any]) -> bool:
+        """Handle both conditional and unconditional jumps."""
+        condition_prompt = params.get('condition_prompt')
+        context = params.get('context')
         jump_if_true = params.get('jump_if_true')
         jump_if_false = params.get('jump_if_false')
-        
-        if not condition_prompt or jump_if_true is None or jump_if_false is None:
-            return self._handle_error(
-                "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
-                instruction="jmp_if",
-                params=params
-            )
-        
-        response = self.vm.llm_interface.generate(condition_prompt, context)
-        
-        try:
-            json_object = find_first_json_object(response)
-            if json_object is None:
-                raise ValueError(f"No JSON object found in the response: {response}.")
-            parsed_response = json.loads(json_object)
-            condition_result = parsed_response.get('result')
-            explanation = parsed_response.get('explanation', '')
-        
-            if not isinstance(condition_result, bool):
+        target_seq = params.get('target_seq')
+
+        if condition_prompt:
+            # Conditional jump
+            response = self.vm.llm_interface.generate(condition_prompt, context)
+            
+            try:
+                json_object = find_first_json_object(response)
+                if json_object is None:
+                    raise ValueError(f"No JSON object found in the response: {response}.")
+                parsed_response = json.loads(json_object)
+                condition_result = parsed_response.get('result')
+                explanation = parsed_response.get('explanation', '')
+            
+                if not isinstance(condition_result, bool):
+                    return self._handle_error(
+                        f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
+                        instruction="jmp",
+                        params=params
+                    )
+            
+                if condition_result:
+                    target_seq = jump_if_true
+                else:
+                    target_seq = jump_if_false
+            
+                self.vm.logger.info(
+                    f"Jumping to seq_no {target_seq} based on condition result: {condition_result}. "
+                    f"Explanation: {explanation}"
+                )
+            except json.JSONDecodeError:
                 return self._handle_error(
-                    f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
-                    instruction="jmp_if",
+                    "Failed to parse JSON response from LLM.",
+                    instruction="jmp",
                     params=params
                 )
-        
-            if condition_result:
-                target_seq = jump_if_true
-            else:
-                target_seq = jump_if_false
-        
-            self.vm.logger.info(
-                f"Jumping to seq_no {target_seq} based on condition result: {condition_result}. "
-                f"Explanation: {explanation}"
-            )
-            self.vm.state['program_counter'] = self.vm.find_step_index(target_seq)
-            return True
-        except json.JSONDecodeError:
-            return self._handle_error(
-                "Failed to parse JSON response from LLM.",
-                instruction="jmp_if",
-                params=params
-            )
-        except Exception as e:
-            return self._handle_error(
-                f"Unexpected error in jmp_if_handler: {str(e)}",
-                instruction="jmp_if",
-                params=params
-            )
-
-    def jmp_handler(self, params: Dict[str, Any]) -> bool:
-        """Handle unconditional jumps to a specified sequence number."""
-        target_seq = params.get('target_seq')
-        if target_seq is None:
-            return self._handle_error("Missing 'target_seq' in parameters.", "jmp", params)
+            except Exception as e:
+                return self._handle_error(
+                    f"Unexpected error in jmp_handler: {str(e)}",
+                    instruction="jmp",
+                    params=params
+                )
+        elif target_seq is None:
+            return self._handle_error("Missing 'target_seq' for unconditional jump.", "jmp", params)
 
         try:
             target_index = self.vm.find_step_index(target_seq)
             if target_index is None:
                 return self._handle_error(f"Target sequence number {target_seq} not found in the plan.", "jmp", params)
 
-            self.vm.logger.info(f"Unconditionally jumping to seq_no {target_seq}.")
             self.vm.state['program_counter'] = target_index
+            self.vm.logger.info(f"Jumped to seq_no {target_seq}")
             return True
         except Exception as e:
             return self._handle_error(f"Unexpected error in jmp_handler: {str(e)}", "jmp", params)

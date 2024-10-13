@@ -110,10 +110,10 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
-### 3.5 jmp_if
-- **Purpose**: Conditionally jumps to specified sequence numbers based on the evaluation of a condition using the LLM.
+### 3.5 jmp
+- **Purpose**: Jumps to a specified sequence number based on an optional condition.
 - **Parameters**:
-  - `condition_prompt`: The prompt to evaluate the condition. **Must respond with a JSON object in the following format:**
+  - `condition_prompt` (optional): The prompt to evaluate the condition. If provided, the LLM evaluates whether to jump. **Must respond with a JSON object in the following format:**
     ```json
     {
       "result": boolean,
@@ -121,14 +121,15 @@ Each instruction in the plan is represented as a JSON object with the following 
     }
     ```
   - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
-  - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true.
-  - `jump_if_false`: The `seq_no` to jump to if the condition evaluates to false.
+  - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true. Required if `condition_prompt` is provided.
+  - `jump_if_false` (optional): The `seq_no` to jump to if the condition evaluates to false. Required if `condition_prompt` is provided.
+  - `target_seq` (optional): The `seq_no` to jump to if no condition is provided (unconditional jump).
 
-**Example:**
+**Example (Conditional Jump):**
 ```json
 {
   "seq_no": 4,
-  "type": "jmp_if",
+  "type": "jmp",
   "parameters": {
     "condition_prompt": "Is ${number} even? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if the number is even, false otherwise, and 'explanation' provides a brief reason for the result.",
     "context": null,
@@ -138,12 +139,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
-### 3.6 jmp
-- **Purpose**: Unconditionally jumps to a specified sequence number.
-- **Parameters**:
-  - `target_seq`: The seq_no to jump to.
-
-**Example:**
+**Example (Unconditional Jump):**
 ```json
 {
   "seq_no": 5,
@@ -154,7 +150,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
-### 3.7 reasoning
+### 3.6 reasoning
 - **Purpose**: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
 - **Parameters**:
   - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
@@ -173,8 +169,38 @@ Each instruction in the plan is represented as a JSON object with the following 
   "seq_no": 0,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach...",
-    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2..."
+    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+
+    1. Overall Strategy:
+       We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+
+    2. Key Decision Points and Rationale:
+       a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
+       b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+
+    3. Assumptions:
+       - The latest stable version of TiDB is the most relevant for current optimization practices.
+       - E-commerce applications have specific performance requirements that may differ from general use cases.
+
+    4. Alternative Approaches Considered:
+       - We could have used only vector search, but this might miss important structured relationships in the data.
+       - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
+
+    5. Expected Outcomes:
+       - Step 1-2: Identification of the latest TiDB version
+       - Step 3-6: Gathering of version-specific and general TiDB information
+       - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
+       - Step 9-10: Synthesis of gathered information into actionable recommendations
+
+    6. Information Combination:
+       The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
+
+    7. Limitations:
+       - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
+       - If no specific version is found, our recommendations may be more general and less tailored.
+
+    This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
   }
 }
 ```
@@ -199,12 +225,12 @@ Parameters can be either direct values or variable references. To reference a va
 
 ## 6. Plan Structure
 - **Sequential Execution**: Instructions are executed in order based on their `seq_no`.
-- **Control Flow**: Use the `jmp_if` and `jmp` instructions for branching logic and conditional loops.
+- **Control Flow**: Use the `jmp` instruction for branching logic and conditional loops.
 
 ## 7. Best Practices
 - **Sequence Numbering**: Ensure that `seq_no` values are unique and sequential within the plan.
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
-- **Control Flow**: Use `jmp_if` and `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
+- **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
 
 ## 8. Example Plan
@@ -270,7 +296,7 @@ Parameters can be either direct values or variable references. To reference a va
 }
   {
     "seq_no": 3,
-    "type": "jmp_if",
+    "type": "jmp",
     "parameters": {
       "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
       "context": "Latest TiDB version: ${latest_tidb_version}",
