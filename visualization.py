@@ -22,6 +22,7 @@ from utils import (
     StepType,
     find_first_json_object,
     parse_plan,
+    parse_step,
 )
 from vm import PlanExecutionVM
 from llm_interface import LLMInterface
@@ -374,19 +375,20 @@ def execute_vm():
     )
 
 
-@app.route("/update_step", methods=["POST"])
-def update_step():
+@app.route("/optimize_step", methods=["POST"])
+def optimize_step():
     data = request.json
     app.logger.info(f"Received update_step request with data: {data}")
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
-    seq_no = data.get("seq_no")
+    seq_no_str = data.get("seq_no")
     repo_name = data.get("repo")
 
-    if not all([commit_hash, suggestion, seq_no, repo_name]):
+    if not all([commit_hash, suggestion, seq_no_str, repo_name]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
+    seq_no = int(seq_no_str)
     repo_path = get_current_repo_path()
 
     try:
@@ -397,15 +399,6 @@ def update_step():
     vm.set_state(commit_hash)
     repo = git.Repo(repo_path)
 
-    branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    if not vm.git_manager.create_branch(
-        branch_name
-    ) or not vm.git_manager.checkout_branch(branch_name):
-        return log_and_return_error(
-            f"Failed to create or checkout branch '{branch_name}'", "error", 500
-        )
-    last_commit_hash = commit_hash
-
     # Generate the updated step using LLM
     prompt = get_step_update_prompt(vm, seq_no, suggestion)
     updated_step_response = llm_interface.generate(prompt)
@@ -413,13 +406,45 @@ def update_step():
     if not updated_step_response:
         return log_and_return_error("Failed to generate updated step", "error", 500)
 
-    updated_step = parse_plan(updated_step_response)
+    updated_step = parse_step(updated_step_response)
     if not updated_step:
-        return log_and_return_error("Failed to parse updated step", "error", 500)
+        return log_and_return_error(f"Failed to parse updated step {updated_step_response}", "error", 500)
+    
+    print(f"Updated step: {updated_step}")
+    print(f"Current plan: {vm.state['current_plan'][vm.state['program_counter']]}")
+    print("program_counter", vm.state['program_counter'])
 
-    # Update the plan and set the program counter
-    vm.state["current_plan"][seq_no] = updated_step
-    vm.state["program_counter"] = seq_no
+    current_commit =  repo.commit(commit_hash)
+    if current_commit.parents:
+        previous_commit_hash = current_commit.parents[0].hexsha
+    else:
+        log_and_return_error("Cannot update the first commit", "error", 400)
+    
+    # checkout from the previous commit of specified seq_no
+    vm.set_state(previous_commit_hash)
+    branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if vm.git_manager.create_branch_from_commit(branch_name, previous_commit_hash) and vm.git_manager.checkout_branch(branch_name):
+        vm.state["current_plan"][seq_no] = updated_step
+        vm.state["program_counter"] = seq_no
+        vm.recalculate_variable_refs()  # Recalculate variable references
+        commit_message_wrapper.set_commit_message(
+            StepType.STEP_OPTIMIZATION, vm.state["program_counter"], suggestion
+        )
+        vm.save_state()
+
+        new_commit_hash = commit_vm_changes(vm)
+        if new_commit_hash:
+            last_commit_hash = new_commit_hash
+            app.logger.info(
+                f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
+            )
+        else:
+            log_and_return_error("Failed to commit step optimization", "error", 500)
+    else:
+        log_and_return_error(f"Failed to create or checkout branch '{branch_name}'", "error", 500)
+
+    print(f"Current plan: {vm.state['current_plan'][vm.state['program_counter']]}")
+    print("program_counter", vm.state['program_counter'])
 
     # Re-execute the plan from the updated step
     while True:
@@ -445,7 +470,11 @@ def update_step():
         logging.error(vm.state.get("errors"))
 
     return jsonify(
-        {"success": True, "updated_step": updated_step, "commit_hash": last_commit_hash}
+        {
+            "success": True,
+            "current_branch": vm.git_manager.get_current_branch(),
+            "last_commit_hash": last_commit_hash,
+        }
     )
 
 

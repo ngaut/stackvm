@@ -432,8 +432,8 @@
                             <button onclick="executeFromStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-success" data-bs-toggle="tooltip" title="Execute from here">
                                 <i class="bi bi-play-fill"></i> Execute
                             </button>
-                            <button onclick="updateStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="Update this step">
-                                <i class="bi bi-pencil-fill"></i> Update
+                            <button onclick="optimizeStep('${state.commit_hash}', '${state.seq_no}')" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="Update this step">
+                                <i class="bi bi-pencil-fill"></i> Optimize Step
                             </button>
                         </div>
                         <div class="mt-2">
@@ -663,38 +663,72 @@
             });
         });
 
-        async function updateStep() {
-            const commitHash = getSelectedCommitHash(); // Function to get the selected commit hash
-            const seqNo = getCurrentSeqNo(); // Function to get the current sequence number
-            const suggestion = prompt("Enter your suggestion for improving the step:");
+        function optimizeStep(commitHash, seqNo) {
+            // Create a modal dialog for user input
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.left = '50%';
+            modal.style.top = '50%';
+            modal.style.transform = 'translate(-50%, -50%)';
+            modal.style.backgroundColor = 'white';
+            modal.style.padding = '20px';
+            modal.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+            modal.style.zIndex = '1000';
 
-            if (!commitHash || !seqNo || !suggestion) {
-                alert("Please ensure all fields are filled out.");
-                return;
-            }
+            const commitInfo = document.createElement('p');
+            commitInfo.textContent = `Commit Hash: ${commitHash}, Sequence No: ${seqNo}`;
+            modal.appendChild(commitInfo);
 
-            const response = await fetch('/update_step', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    commit_hash: commitHash,
-                    suggestion: suggestion,
-                    seq_no: seqNo,
-                    repo: getCurrentRepoName() // Function to get the current repository name
-                })
-            });
+            const suggestionLabel = document.createElement('label');
+            suggestionLabel.textContent = 'Enter your suggestion:';
+            modal.appendChild(suggestionLabel);
 
-            if (response.ok) {
-                const result = await response.json();
-                alert("Step updated successfully!");
-                // Optionally, refresh the UI to reflect the updated step
-                updateUIAfterExecution(result.newBranch, result.commit_hash);
-            } else {
-                const error = await response.json();
-                alert(`Failed to update step: ${error.message}`);
-            }
+            const suggestionInput = document.createElement('textarea');
+            suggestionInput.style.width = '100%';
+            suggestionInput.style.height = '100px';
+            modal.appendChild(suggestionInput);
+
+            const submitButton = document.createElement('button');
+            submitButton.textContent = 'Submit';
+            submitButton.onclick = async function() {
+                const suggestion = suggestionInput.value;
+                if (!suggestion) {
+                    alert("Please enter a suggestion.");
+                    return;
+                }
+
+                const executeData = await fetch('/optimize_step', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        commit_hash: commitHash,
+                        suggestion: suggestion,
+                        seq_no: seqNo,
+                        repo: currentRepo // Assuming this function is defined elsewhere
+                    })
+                });
+
+                if (executeData.success) {
+                    await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                    showNotification('Execution completed successfully', 'success');
+                } else {
+                    showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+                }
+
+                document.body.removeChild(modal);
+            };
+            modal.appendChild(submitButton);
+
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = 'Cancel';
+            cancelButton.onclick = function() {
+                document.body.removeChild(modal);
+            };
+            modal.appendChild(cancelButton);
+
+            document.body.appendChild(modal);
         }
 
         loadDirectories();
