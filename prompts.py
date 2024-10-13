@@ -1,6 +1,7 @@
 import json
 import datetime
 
+
 def get_plan_update_prompt(vm, vm_spec_content, explanation=None, key_factors=None):
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
@@ -59,11 +60,12 @@ Analyze the current VM execution state and update the plan.
 Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification. The updated plan should effectively address any identified issues and continue execution towards the goal without introducing redundancy.
 After the updated plan, provide a summary of the changes made to the plan and the diff with the previous plan.
     """
-    
+
     return prompt
 
+
 def get_should_update_plan_prompt(vm):
-    json_format = '''
+    json_format = """
     {{
         "should_update": boolean,
         "explanation": string,
@@ -74,7 +76,7 @@ def get_should_update_plan_prompt(vm):
             }}
         ]
     }}
-    '''
+    """
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and determine if the plan needs to be updated.
@@ -144,4 +146,30 @@ Ensure the JSON is properly formatted and encapsulated within a ```json code blo
       ...
     ]
     ```
+"""
+
+
+def get_step_update_prompt(vm, seq_no, suggestion):
+    current_step = vm.state["current_plan"][seq_no]
+    current_variables = json.dumps(vm.get_all_variables(), indent=2)
+
+    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+You are tasked with updating a specific step in the VM execution plan.
+
+Current Step (seq_no: {seq_no}):
+{json.dumps(current_step, indent=2)}
+
+Current VM Variables:
+{current_variables}
+
+Suggestion for Improvement:
+{suggestion}
+
+**Instructions**:
+1. Analyze the current step, the provided suggestion, and the current VM variables.
+2. Modify the step to incorporate the suggestion while ensuring it aligns with the overall goal and plan structure.
+3. Ensure the updated step is consistent with the VM's current state and does not introduce redundancy.
+
+**Output**:
+Provide only the updated step in JSON format.
 """
