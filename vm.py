@@ -60,7 +60,6 @@ class PlanExecutionVM:
                 'retrieve_knowledge_graph',
                 'vector_search',
                 'llm_generate',
-                'jmp_if',
                 'jmp',
                 'assign',
                 'reasoning'
