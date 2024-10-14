@@ -8,6 +8,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 gitpython = "^3.1.43"
+flask = "^3.0.3"
+openai = "^1.51.2"
+requests = "^2.32.3"
 
 
 [build-system]
