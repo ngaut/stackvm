@@ -240,16 +240,13 @@ def generate_plan(goal, custom_prompt=None):
     if plan:
         return plan
     else:
-        app.logger.error("Failed to parse the generated plan.")
+        app.logger.error(f"Failed to parse the generated plan: {plan_response}")
         return []
 
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
     prompt = get_plan_update_prompt(vm, VM_SPEC_CONTENT, explanation, key_factors)
     new_plan = generate_plan(vm.state["goal"], custom_prompt=prompt)
-    app.logger.info(
-        f"Generated updated plan: {new_plan}, previous plan: {vm.state['current_plan']}"
-    )
     return new_plan
 
 
@@ -334,6 +331,7 @@ def execute_vm():
         should_update, explanation, key_factors = should_update_plan(vm)
         if should_update:
             updated_plan = generate_updated_plan(vm, explanation, key_factors)
+            app.logger.info(f"Generated updated plan: {updated_plan}")
 
             branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             if vm.git_manager.create_branch(
