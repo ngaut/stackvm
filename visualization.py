@@ -14,25 +14,24 @@ from git import Repo, NULL_TREE
 from git.exc import GitCommandError
 from flask import Flask, render_template, jsonify, request, current_app
 
-from config import GIT_REPO_PATH, VM_SPEC_CONTENT, LLM_MODEL
-from git_manager import GitManager
-from utils import (
-    save_state,
+from app.config.settings import GIT_REPO_PATH, VM_SPEC_CONTENT, LLM_MODEL
+from app.services import GitManager
+from app.services import (
     parse_commit_message,
     StepType,
     find_first_json_object,
     parse_plan,
     parse_step,
 )
-from vm import PlanExecutionVM
-from llm_interface import LLMInterface
-from prompts import (
+from app.services import PlanExecutionVM
+from app.services import LLMInterface
+from app.services import (
     get_plan_update_prompt,
     get_should_update_plan_prompt,
     get_generate_plan_prompt,
     get_step_update_prompt,
 )
-from commit_message_wrapper import commit_message_wrapper
+from app.services import commit_message_wrapper
 
 # Add the current directory to the Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

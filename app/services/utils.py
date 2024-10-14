@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 from enum import Enum
 import git
 
+from app.utils import find_first_json_object, extract_json
+
 
 class StepType(Enum):
     GENERATE_PLAN = "Generate Plan"
@@ -60,23 +62,6 @@ def parse_step(step_response: str) -> Optional[Dict[str, Any]]:
     except (json.JSONDecodeError, ValueError) as e:
         logging.error(f"Failed to parse step: {e}")
         return None
-
-
-def extract_json(plan_response: str) -> str:
-    """Extract JSON from the plan response."""
-    json_code_block_pattern = re.compile(
-        r"```json\s*(\[\s*{.*?}\s*\])\s*```", re.DOTALL
-    )
-    match = json_code_block_pattern.search(plan_response)
-    if match:
-        return match.group(1)
-
-    json_str = find_first_json_array(plan_response)
-    if not json_str:
-        raise ValueError("No valid JSON array found in the response.")
-
-    return json_str
-
 
 def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
     """Load the state from a file based on the specific commit point."""
@@ -139,37 +124,3 @@ def parse_commit_message(message: str) -> tuple:
         commit_type = "General"
 
     return seq_no, title, details, commit_type
-
-
-def find_first_json_array(text: str) -> Optional[str]:
-    """Find the first JSON array in the given text."""
-    stack = []
-    start = -1
-    for i, char in enumerate(text):
-        if char == "[":
-            if not stack:
-                start = i
-            stack.append(i)
-        elif char == "]":
-            if stack:
-                stack.pop()
-                if not stack:
-                    return text[start : i + 1]
-    return None
-
-
-def find_first_json_object(text: str) -> Optional[str]:
-    """Find the first JSON object in the given text."""
-    stack = []
-    start = -1
-    for i, char in enumerate(text):
-        if char == "{":
-            if not stack:
-                start = i
-            stack.append(i)
-        elif char == "}":
-            if stack:
-                stack.pop()
-                if not stack:
-                    return text[start : i + 1]
-    return None
