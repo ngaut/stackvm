@@ -408,9 +408,7 @@ def optimize_step():
     if not updated_step:
         return log_and_return_error(f"Failed to parse updated step {updated_step_response}", "error", 500)
     
-    print(f"Updated step: {updated_step}")
-    print(f"Current plan: {vm.state['current_plan'][vm.state['program_counter']]}")
-    print("program_counter", vm.state['program_counter'])
+    logging.info(f"Updating step: {updated_step}, program_counter: {vm.state['program_counter']}")
 
     current_commit =  repo.commit(commit_hash)
     if current_commit.parents:
@@ -441,8 +439,7 @@ def optimize_step():
     else:
         log_and_return_error(f"Failed to create or checkout branch '{branch_name}'", "error", 500)
 
-    print(f"Current plan: {vm.state['current_plan'][vm.state['program_counter']]}")
-    print("program_counter", vm.state['program_counter'])
+    logging.info(f"Updated step: {vm.state['current_plan'][vm.state['program_counter']]}, program_counter: {vm.state['program_counter']}")
 
     # Re-execute the plan from the updated step
     while True:

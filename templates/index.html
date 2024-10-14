@@ -709,7 +709,24 @@
                     return;
                 }
 
-                const executeData = await fetch('/optimize_step', {
+                // Disable the input and buttons
+                suggestionInput.disabled = true;
+                submitButton.disabled = true;
+                cancelButton.disabled = true;
+
+                // Create and show a loading spinner
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                spinner.style.border = '4px solid #f3f3f3';
+                spinner.style.borderTop = '4px solid #3498db';
+                spinner.style.borderRadius = '50%';
+                spinner.style.width = '30px';
+                spinner.style.height = '30px';
+                spinner.style.animation = 'spin 1s linear infinite';
+                spinner.style.margin = '10px auto';
+                modal.appendChild(spinner);
+
+                const executeData = await fetchWithErrorHandling('/optimize_step', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -721,6 +738,14 @@
                         repo: currentRepo // Assuming this function is defined elsewhere
                     })
                 });
+
+                // Remove the spinner
+                modal.removeChild(spinner);
+
+                // Re-enable the input and buttons
+                suggestionInput.disabled = false;
+                submitButton.disabled = false;
+                cancelButton.disabled = false;
 
                 if (executeData.success) {
                     await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
@@ -742,6 +767,16 @@
 
             document.body.appendChild(modal);
         }
+
+        // Add CSS for spinner animation
+        const style = document.createElement('style');
+        style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        `;
+        document.head.appendChild(style);
 
         loadDirectories();
         window.addEventListener('resize', () => { if (chart) chart.resize(); });
