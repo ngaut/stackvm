@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 LLM_MODEL = os.environ.get('LLM_MODEL', 'gpt-4o-mini')
 # must use tmp path, DO NOT EDIT

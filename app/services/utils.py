@@ -88,24 +88,6 @@ def save_state(state: Dict[str, Any], repo_path: str) -> None:
         logging.error(f"Error saving state: {str(e)}")
 
 
-def get_commit_message_schema(
-    step_type: str,
-    seq_no: str,
-    description: str,
-    input_parameters: Dict[str, Any],
-    output_variables: Dict[str, Any],
-) -> str:
-    """Generate a commit message schema in JSON format."""
-    commit_info = {
-        "type": step_type,
-        "seq_no": seq_no,
-        "description": description,
-        "input_parameters": input_parameters,
-        "output_variables": output_variables,
-    }
-    return json.dumps(commit_info)
-
-
 def parse_commit_message(message: str) -> tuple:
     """Parse a commit message and return its components."""
     seq_no = "Unknown"

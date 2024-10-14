@@ -6,24 +6,6 @@ from typing import Optional, Dict, Any
 from .utils import StepType
 
 
-def get_commit_message_schema(
-    step_type: str,
-    seq_no: str,
-    description: str,
-    input_parameters: Dict[str, Any],
-    output_variables: Dict[str, Any],
-) -> str:
-    """Generate a commit message schema in JSON format."""
-    commit_info = {
-        "type": step_type,
-        "seq_no": seq_no,
-        "description": description,
-        "input_parameters": input_parameters,
-        "output_variables": output_variables,
-    }
-    return json.dumps(commit_info)
-
-
 class CommitMessageWrapper:
     def __init__(self):
         self.commit_message: Optional[str] = None

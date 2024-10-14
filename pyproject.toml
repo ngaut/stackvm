@@ -11,6 +11,7 @@ gitpython = "^3.1.43"
 flask = "^3.0.3"
 openai = "^1.51.2"
 requests = "^2.32.3"
+python-dotenv = "^1.0.1"
 
 
 [build-system]
