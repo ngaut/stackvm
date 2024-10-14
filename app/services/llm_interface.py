@@ -24,12 +24,15 @@ class LLMInterface:
                 print(f"API request failed. Retrying in {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
 
-    def generate(self, prompt: str, context: Optional[str] = None) -> Optional[str]:
+    def generate(self, prompt: str, context: Optional[str] = None, response_format: Optional[str] = None) -> Optional[str]:
         try:
             if context:
                 full_prompt = f"{context}\n{prompt}"
             else:
                 full_prompt = prompt
+
+            if response_format:
+                full_prompt += f"\nResponse format: {response_format}"
 
             response = self._retry_with_exponential_backoff(
                 self.client.chat.completions.create,

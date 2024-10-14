@@ -20,9 +20,10 @@ The VM executes plans consisting of a sequence of instructions. Each instruction
 ## 2. Instruction Format
 Each instruction in the plan is represented as a JSON object with the following keys:
 
-- `seq_no`: A unique and AUTO-INCREMENT integer identifying the instruction's sequence within the plan, starts from 0.
+- `seq_no`: A unique and AUTO-INCREMENT integer identifying the instruction's sequence within the plan, starting from 0.
 - `type`: A string indicating the instruction type.
 - `parameters`: An object containing parameters required by the instruction.
+- `output_vars` (optional): Each entry in `output_vars` maps a variable name to a specific part of the instruction's output, storing these variables in the VM's variable store for use in subsequent instructions.
 
 ```json
 {
@@ -31,6 +32,10 @@ Each instruction in the plan is represented as a JSON object with the following 
   "parameters": {
     "param1": "value_or_variable_reference",
     "param2": "value_or_variable_reference"
+  },
+  "output_vars": {
+    "variable_name_1": "instruction_return_variable_1",
+    "variable_name_2": "instruction_return_variable_2"
   }
 }
 ```
@@ -39,6 +44,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.1 assign
 - **Purpose**: Assigns values to one or more variables.
 - **Parameters**: An object where each key is a variable name and each value is either a direct value or a variable reference.
+- **Output**: No output.
 
 **Example:**
 ```json
@@ -57,7 +63,8 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Parameters**: 
   - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
   - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
-  - `output_var`: The name of the variable to store the LLM's output.
+  - `response_format` (optional): Specifies the format of the LLM's response (e.g., `json`), only `json` and `text` are supported.
+- **Output**: When `response_format` is `json`, `output_vars` can map to specific keys within the JSON response; when `response_format` is `text`, `output_vars` should contain only a single key-value pair, which will hold the entire text response.
 
 **Example:**
 ```json
@@ -67,7 +74,27 @@ Each instruction in the plan is represented as a JSON object with the following 
   "parameters": {
     "prompt": "Simulate the step-by-step execution of the following Python code to count the occurrences of the character 'r' in the word 'strawberry'. Provide a detailed explanation of each step and the final numerical result.\n\nword = 'strawberry'\ncount = 0\nfor char in word:\n    if char == 'r':\n        count += 1\nprint(count)\n\n Example output:To count the occurrences of the character 'r' in the word 'strawberry' using the provided pseudo Python code, we can break it down step by step:\n\n1. Initialization:\n   - Set word = 'strawberry' and char_to_count = 'r'.\n\n2. Convert to Lowercase:\n   - Both word and char_to_count are already in lowercase:\n     word = 'strawberry'\n     char_to_count = 'r'\n\n3. Count Occurrences:\n   We iterate through each character c in word and check if c is equal to char_to_count ('r'):\n   - 's' → not 'r' (count = 0)\n   - 't' → not 'r' (count = 0)\n   - 'r' → is 'r' (count = 1)\n   - 'a' → not 'r' (count = 1)\n   - 'w' → not 'r' (count = 1)\n   - 'b' → not 'r' (count = 1)\n   - 'e' → not 'r' (count = 1)\n   - 'r' → is 'r' (count = 2)\n   - 'r' → is 'r' (count = 3)\n   - 'y' → not 'r' (count = 3)\n\n4. Final Count:\n   The total count of 'r' in 'strawberry' is 3.\n\nThus, the numerical result is 3.",
     "context": null,
-    "output_var": "r_count_by_pseudo_python_simulation"
+    "response_format": "text"
+  },
+  "output_vars": {
+    "r_count_by_pseudo_python_simulation": "${llm_response}"
+  }
+}
+```
+
+another example with json response:
+```json
+{
+  "seq_no": 1,
+  "type": "llm_generate",
+  "parameters": {
+    "prompt": "Analyze the sales data and provide summary and insights.",
+    "context": "${sales_data}",
+    "response_format": "json"
+  },
+  "output_vars": {
+    "summary": "${llm_json_response.summary}",
+    "insights": "${llm_json_response.insights}"
   }
 }
 ```
@@ -76,7 +103,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Purpose**: Retrieves information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
 - **Parameters**:
   - `query`: The query string. Can be a direct string or a variable reference.
-  - `output_var`: The name of the variable to store the retrieved graph data.
+- **Output**: only single output var is supported.
 
 **Example:**
 ```json
@@ -84,8 +111,10 @@ Each instruction in the plan is represented as a JSON object with the following 
   "seq_no": 2,
   "type": "retrieve_knowledge_graph",
   "parameters": {
-    "query": "TiDB latest stable version",
-    "output_var": "tidb_version_graph"
+    "query": "TiDB latest stable version"
+  },
+  "output_vars": {
+    "tidb_version_graph": "${knowledge_graph_response}"
   }
 }
 ```
@@ -95,7 +124,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Parameters**:
   - `query`: The query string. Can be a direct string or a variable reference.
   - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
-  - `output_var`: The name of the variable to store the retrieved chunks.
+- **Output**: only single output var is supported.
 
 **Example:**
 ```json
@@ -104,8 +133,10 @@ Each instruction in the plan is represented as a JSON object with the following 
   "type": "vector_search",
   "parameters": {
     "query": "Information about Mount Everest",
-    "top_k": 3,
-    "output_var": "embedded_chunks"
+    "top_k": 3
+  },
+  "output_vars": {
+    "embedded_chunks": "${vector_search_response}"
   }
 }
 ```
@@ -124,6 +155,8 @@ Each instruction in the plan is represented as a JSON object with the following 
   - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true. Required if `condition_prompt` is provided.
   - `jump_if_false` (optional): The `seq_no` to jump to if the condition evaluates to false. Required if `condition_prompt` is provided.
   - `target_seq` (optional): The `seq_no` to jump to if no condition is provided (unconditional jump).
+- **Output**: No output.
+
 
 **Example (Conditional Jump):**
 ```json
@@ -162,6 +195,7 @@ Each instruction in the plan is represented as a JSON object with the following 
     - How different pieces of information are intended to be combined
     - Any limitations or potential issues with the chosen approach
   - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
+- **Output**: No output.
 
 **Example:**
 ```json
@@ -281,19 +315,23 @@ Parameters can be either direct values or variable references. To reference a va
     "seq_no": 1,
     "type": "retrieve_knowledge_graph",
     "parameters": {
-      "query": "TiDB latest stable version",
-      "output_var": "latest_tidb_version_info"
+      "query": "TiDB latest stable version"
+    },
+    "output_vars": {
+      "latest_tidb_version_info": "${knowledge_graph_response}"
     }
   },
   {
-  "seq_no": 2,
-  "type": "llm_generate",
-  "parameters": {
-      "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number, with no additional text or explanation, (e.g., 'v8.1.0')\n- If no specific stable version number is found, respond exactly 'latest stable version tidb'.",
-      "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}",
-      "output_var": "latest_tidb_version"
-  }
-}
+    "seq_no": 2,
+    "type": "llm_generate",
+    "parameters": {
+        "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number, with no additional text or explanation, (e.g., 'v8.1.0')\n- If no specific stable version number is found, respond exactly 'latest stable version tidb'.",
+        "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}"
+    },
+    "output_vars": {
+      "latest_tidb_version": "${llm_response}"
+    }
+  },
   {
     "seq_no": 3,
     "type": "jmp",
@@ -309,8 +347,10 @@ Parameters can be either direct values or variable references. To reference a va
     "type": "vector_search",
     "parameters": {
       "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
-      "top_k": 3,
-      "output_var": "tidb_info"
+      "top_k": 3
+    },
+    "output_vars": {
+      "tidb_info": "${vector_search_response}"
     }
   },
   {
@@ -325,8 +365,10 @@ Parameters can be either direct values or variable references. To reference a va
     "type": "vector_search",
     "parameters": {
       "query": "Latest TiDB version and its key features",
-      "top_k": 3,
-      "output_var": "tidb_info"
+      "top_k": 3
+    },
+    "output_vars": {
+      "tidb_info": "${vector_search_response}"
     }
   },
   {
@@ -334,8 +376,10 @@ Parameters can be either direct values or variable references. To reference a va
     "type": "vector_search",
     "parameters": {
       "query": "TiDB ${latest_tidb_version} performance optimization techniques",
-      "top_k": 5,
-      "output_var": "performance_techniques"
+      "top_k": 5
+    },
+    "output_vars": {
+      "performance_techniques": "${vector_search_response}"
     }
   },
   {
@@ -343,7 +387,10 @@ Parameters can be either direct values or variable references. To reference a va
     "type": "vector_search",
     "parameters": {
       "query": "What are specific considerations for optimizing TiDB ${latest_tidb_version} for e-commerce applications?",
-      "output_var": "ecommerce_optimizations"
+      "top_k": 5
+    },
+    "output_vars": {
+      "ecommerce_optimizations": "${vector_search_response}"
     }
   },
   {
@@ -351,8 +398,10 @@ Parameters can be either direct values or variable references. To reference a va
     "type": "llm_generate",
     "parameters": {
       "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
-      "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. General Performance Techniques: ${performance_techniques}\n3. E-commerce Specific Optimizations: ${ecommerce_optimizations}",
-      "output_var": "final_recommendations"
+      "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. General Performance Techniques: ${performance_techniques}\n3. E-commerce Specific Optimizations: ${ecommerce_optimizations}"
+    },
+    "output_vars": {
+      "final_recommendations": "${llm_response}"
     }
   },
   {

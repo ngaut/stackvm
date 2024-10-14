@@ -80,6 +80,7 @@ class PlanExecutionVM:
         """Execute a single step in the plan."""
         step_type = step.get('type')
         params = step.get('parameters', {})
+        output_vars = step.get('output_vars', None)
         seq_no = step.get('seq_no', 'Unknown')
 
         if not isinstance(step_type, str):
@@ -92,7 +93,7 @@ class PlanExecutionVM:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
 
-        success = handler(params)
+        success = handler(params, output_vars)
         if success:
             self.save_state()
             self._log_step_execution(step_type, params, seq_no)
