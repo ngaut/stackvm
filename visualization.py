@@ -331,8 +331,7 @@ def execute_vm():
         should_update, explanation, key_factors = should_update_plan(vm)
         if should_update:
             updated_plan = generate_updated_plan(vm, explanation, key_factors)
-            app.logger.info(f"Generated updated plan: {updated_plan}")
-
+            app.logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
             branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             if vm.git_manager.create_branch(
                 branch_name
