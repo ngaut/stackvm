@@ -1,9 +1,7 @@
 import os
 import time
-from typing import Optional, Dict, List, Any
+from typing import Optional
 import openai
-from config import LLM_MODEL
-from utils import parse_plan
 
 class LLMInterface:
     def __init__(self, model: str, max_retries: int = 3, retry_delay: float = 1.0):

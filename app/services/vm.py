@@ -1,31 +1,17 @@
 import json
 import logging
 import os
-import sys
-from typing import Any, Dict, List, Optional
-
-# Add the parent directory to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from instruction_handlers import InstructionHandlers
-from utils import load_state, save_state, StepType
-from config import GIT_REPO_PATH
-from git_manager import GitManager
-from commit_message_wrapper import commit_message_wrapper
-from variable_manager import VariableManager  # New import
-
-try:
-    import git
-except ImportError:
-    print("GitPython is not installed. Please install it using: pip install GitPython")
-    sys.exit(1)
+from typing import Any, Dict, Optional
+from app.tools import InstructionHandlers
+from app.services import load_state, save_state, StepType
+from app.services import GitManager, commit_message_wrapper, VariableManager
 
 # Constants
 DEFAULT_LOGGING_LEVEL = logging.INFO
 VARIABLE_PREVIEW_LENGTH = 50
 
 class PlanExecutionVM:
-    def __init__(self, repo_path: Optional[str] = None, llm_interface: Any = None):
+    def __init__(self, repo_path: str, llm_interface: Any = None):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
             'errors': [],
@@ -38,7 +24,7 @@ class PlanExecutionVM:
 
         self.logger = self._setup_logger()
         self.llm_interface = llm_interface
-        self.repo_path = repo_path or GIT_REPO_PATH
+        self.repo_path = repo_path
         self.git_manager = GitManager(self.repo_path)
 
         os.chdir(self.repo_path)

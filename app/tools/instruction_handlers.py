@@ -1,7 +1,7 @@
 import os
 import requests
-from typing import Any, Dict, Optional, List
-from utils import find_first_json_object
+from typing import Any, Dict, Optional
+from app.utils import find_first_json_object
 
 # Add these imports at the top of the file
 import logging

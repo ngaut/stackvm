@@ -1,16 +1,41 @@
-import sys
 import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-try:
-    import git
-    from git import Repo
-except ImportError:
-    print("GitPython is not installed. Please install it using: pip install GitPython")
-    sys.exit(1)
-
+from git import Repo, GitCommandError
 import logging
+import json
+from typing import Optional, Dict, Any
+from .utils import StepType
+
+
+class CommitMessageWrapper:
+    def __init__(self):
+        self.commit_message: Optional[str] = None
+
+    def set_commit_message(
+        self,
+        step_type: StepType,
+        seq_no: str,
+        description: str,
+        input_parameters: Dict[str, Any],
+        output_variables: Dict[str, Any],
+    ) -> None:
+        commit_info = {
+            "type": step_type.value,
+            "seq_no": seq_no,
+            "description": description,
+            "input_parameters": input_parameters,
+            "output_variables": output_variables,
+        }
+        # Set the commit message using the commit_info dictionary
+        self.commit_message = json.dumps(commit_info)
+
+    def get_commit_message(self) -> Optional[str]:
+        return self.commit_message
+
+    def clear_commit_message(self) -> None:
+        self.commit_message = None
+
+
+commit_message_wrapper = CommitMessageWrapper()
 
 
 class GitManager:
@@ -74,7 +99,7 @@ class GitManager:
         try:
             self.repo.create_head(branch_name)
             return True
-        except git.GitCommandError as e:
+        except GitCommandError as e:
             self.logger.error(f"Failed to create branch {branch_name}: {str(e)}")
             return False
 
@@ -82,7 +107,7 @@ class GitManager:
         try:
             self.repo.git.checkout(branch_name)
             return True
-        except git.GitCommandError as e:
+        except GitCommandError as e:
             self.logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
             return False
 
@@ -99,7 +124,7 @@ class GitManager:
             self.repo.git.branch(branch_name, commit_hash)
             self.logger.info(f"Created branch {branch_name} from commit {commit_hash}")
             return True
-        except git.GitCommandError as e:
+        except GitCommandError as e:
             self.logger.error(
                 f"Failed to create branch {branch_name} from commit {commit_hash}: {str(e)}"
             )

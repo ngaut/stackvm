@@ -276,14 +276,25 @@ function updateStepList(data) {
         return;
     }
     stepList.innerHTML = filteredData.map((state, index) => {
-        const description = state.details.description || 'No description available';
         return `
             <div class="step-item" id="step-${state.commit_hash}">
                 <div>
                     <strong style="font-size: 0.9em;">${state.title}</strong>
                 </div>
                 <div>
-                    <small class="text-muted" style="font-size: 0.85em;">${state.details?.description || 'No description available'}</small>
+                    <small class="text-muted" style="font-size: 0.85em;">
+                        ${state.details?.input_parameters ?
+                            `<pre>${JSON.stringify(state.details.input_parameters, null, 2)}</pre>`
+                            : 'No input parameters available'}
+                    </small>
+                </div>
+                <hr style="margin: 5px 0; border-top: 1px solid #ccc;">
+                <div>
+                    <small class="text-muted" style="font-size: 0.85em;">
+                        ${state.details?.output_variables ?
+                            `<pre>${JSON.stringify(state.details.output_variables, null, 2)}</pre>`
+                            : 'No output variables available'}
+                    </small>
                 </div>
                 <div class="mt-2">
                     <small class="text-muted" style="display: block; word-break: break-word;">
