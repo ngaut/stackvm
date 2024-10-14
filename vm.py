@@ -119,12 +119,19 @@ class PlanExecutionVM:
         output_vars = [output_vars] if isinstance(output_vars, str) else output_vars
         output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars}
 
-        description = f"Executed seq_no: {seq_no}, step: '{step_type}' with parameters: {json.dumps(input_parameters)}"
-        if output_variables:
-            description += f" Output variables: {json.dumps(output_variables)}"
+        description = f"Executed seq_no: {seq_no}, step: '{step_type}'"
         
-        self.logger.info(description)  
-        commit_message_wrapper.set_commit_message(StepType.STEP_EXECUTION, str(seq_no), description)
+        self.logger.info(f"{description} with parameters: {json.dumps(input_parameters)}")
+        if output_variables:
+            self.logger.info(f"Output variables: {json.dumps(output_variables)}")
+        
+        commit_message_wrapper.set_commit_message(
+            StepType.STEP_EXECUTION,
+            str(seq_no),
+            description,
+            input_parameters,
+            output_variables
+        )
 
     @staticmethod
     def _preview_value(value: Any) -> str:

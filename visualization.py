@@ -339,7 +339,11 @@ def execute_vm():
                 vm.state["current_plan"] = updated_plan
                 vm.recalculate_variable_refs()  # Recalculate variable references
                 commit_message_wrapper.set_commit_message(
-                    StepType.PLAN_UPDATE, vm.state["program_counter"], explanation
+                    StepType.PLAN_UPDATE,
+                    str(vm.state["program_counter"]),
+                    explanation,
+                    {"updated_plan": updated_plan},
+                    {}  # No output variables for this operation
                 )
                 vm.save_state()
 
@@ -423,7 +427,11 @@ def optimize_step():
         vm.state["program_counter"] = seq_no
         vm.recalculate_variable_refs()  # Recalculate variable references
         commit_message_wrapper.set_commit_message(
-            StepType.STEP_OPTIMIZATION, vm.state["program_counter"], suggestion
+            StepType.STEP_OPTIMIZATION,
+            str(vm.state["program_counter"]),
+            suggestion,
+            {"updated_step": updated_step},
+            {}  # No output variables for this operation
         )
         vm.save_state()
 
