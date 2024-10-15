@@ -24,7 +24,7 @@ class LLMInterface:
                 print(f"API request failed. Retrying in {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
 
-    def generate(self, prompt: str, context: Optional[str] = None) -> Optional[str]:
+    def generate(self, prompt: str, context: Optional[str] = None, **kwargs) -> Optional[str]:
         try:
             if context:
                 full_prompt = f"{context}\n{prompt}"
@@ -38,7 +38,8 @@ class LLMInterface:
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": full_prompt}
                 ],
-                temperature=0
+                temperature=0,
+                **kwargs  # Ensure kwargs are passed as keyword arguments
             )
             return response.choices[0].message.content.strip()
         except Exception as e:

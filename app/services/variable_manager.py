@@ -44,17 +44,31 @@ class VariableManager:
             return text
 
         for var, value in self.variables.items():
+            # Replace simple variable references
             text = text.replace(f"${{{var}}}", str(value))
+
+            # Replace structured variable references if the value is a dictionary
+            if isinstance(value, dict):
+                for sub_var, sub_value in value.items():
+                    text = text.replace(f"${{{var}.{sub_var}}}", str(sub_value))
+
         return text
 
     def find_referenced_variables(self, text: Any) -> list:
-        """Find and return a list of variables referenced in the given text."""
+        """Find and return a list of top-level variables referenced in the given text."""
         if not isinstance(text, str):
             return []
 
-        referenced_vars = []
+        referenced_vars = set()
         for var in self.variables.keys():
+            # Check for simple variable reference
             if f"${{{var}}}" in text:
-                referenced_vars.append(var)
+                referenced_vars.add(var)
+            # Check for structured variable reference
+            elif isinstance(self.variables.get(var), dict) and any(
+                f"${{{var}.{sub_var}}}" in text
+                for sub_var in self.variables[var].keys()
+            ):
+                referenced_vars.add(var)
 
-        return referenced_vars
+        return list(referenced_vars)
