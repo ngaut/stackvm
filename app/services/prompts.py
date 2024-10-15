@@ -2,7 +2,7 @@ import json
 import datetime
 
 
-def get_plan_update_prompt(vm, vm_spec_content, explanation=None, key_factors=None):
+def get_plan_update_prompt(vm, vm_spec_content, tools_instruction_content, explanation=None, key_factors=None):
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
 
@@ -56,6 +56,9 @@ Analyze the current VM execution state and update the plan.
 **VM Specification**:
 {vm_spec_content}
 
+**Tools Instruction**:
+{tools_instruction_content}
+
 **Output**:
 Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification. The updated plan should effectively address any identified issues and continue execution towards the goal without introducing redundancy.
 After the updated plan, provide a summary of the changes made to the plan and the diff with the previous plan.
@@ -107,12 +110,19 @@ Analyze the current VM execution state and determine if the plan needs to be upd
     """
 
 
-def get_generate_plan_prompt(goal, vm_spec_content):
+def get_generate_plan_prompt(goal, vm_spec_content, tools_instruction_content, plan_example_content):
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Your task is to generate a detailed action plan to achieve the following goal:
 Goal: {goal}
-VM Specification:{vm_spec_content}
 
+**VM Specification**:
+{vm_spec_content}
+
+**Tools Instruction**:
+{tools_instruction_content}
+
+**Plan Example**:
+{plan_example_content}
 
 1. **Analyze the Request**:
    - Determine the primary intent behind the goal.
