@@ -5,7 +5,7 @@ Visualization module for the VM execution and Git repository management.
 import json
 import logging
 
-from app.config.settings import VM_SPEC_CONTENT, LLM_MODEL
+from app.config.settings import VM_SPEC_CONTENT, LLM_MODEL, PLAN_EXAMPLE_CONTENT, TOOLS_INSTRUCTION_CONTENT
 from app.services import (
     find_first_json_object,
     parse_plan,
@@ -35,7 +35,7 @@ def generate_plan(goal, custom_prompt=None):
         logging.error("No goal is set.")
         return []
 
-    prompt = custom_prompt or get_generate_plan_prompt(goal, VM_SPEC_CONTENT)
+    prompt = custom_prompt or get_generate_plan_prompt(goal, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, PLAN_EXAMPLE_CONTENT)
     plan_response = llm_interface.generate(prompt)
 
     logging.info(f"Generating plan using LLM: {plan_response}")
@@ -54,7 +54,7 @@ def generate_plan(goal, custom_prompt=None):
 
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
-    prompt = get_plan_update_prompt(vm, VM_SPEC_CONTENT, explanation, key_factors)
+    prompt = get_plan_update_prompt(vm, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, explanation, key_factors)
     new_plan = generate_plan(vm.state["goal"], custom_prompt=prompt)
     return new_plan
 
