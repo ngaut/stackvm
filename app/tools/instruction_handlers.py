@@ -119,19 +119,30 @@ class InstructionHandlers:
         if not output_vars:
             return True  # No output_vars to set
 
-        print(f"output_vars: {output_vars}")
-        print(f"instruction_output: {instruction_output}")
-        print(f"response_format: {response_format}")
+        self.vm.logger.debug(f"output_vars: {output_vars}")
+        instruction_output_str = self.vm._preview_value(instruction_output)
+        self.vm.logger.debug(f"instruction_output: {instruction_output_str}")
+        self.vm.logger.debug(f"response_format: {response_format}")
 
         try:
             if response_format == "json":
                 if isinstance(instruction_output, str):
                     # Attempt to parse JSON string
-                    instruction_output = json.loads(instruction_output)
+                    json_object = find_first_json_object(instruction_output)
+                    if json_object is None:
+                        raise ValueError(
+                            f"No JSON object found in the instruction output: {instruction_output}."
+                        )
+                    instruction_output = json.loads(json_object)
                 for var_name, var_expr in output_vars.items():
-                    # Extract the key from the expression, e.g., "${llm_json_response.summary}" -> "summary"
-                    key = var_expr.strip("${}").split(".")[-1]
-                    var_value = instruction_output.get(key)
+                    # Determine if the expression is for the entire JSON object
+                    stripped_expr = var_expr.strip("${}")
+                    if "." not in stripped_expr:
+                        var_value = instruction_output
+                    else:
+                        # Extract the key from the expression, e.g., "${response.key}" -> "key"
+                        key = stripped_expr.split(".")[-1]
+                        var_value = instruction_output.get(key)
                     self.vm.set_variable(var_name, var_value)
             elif response_format == "text":
                 if len(output_vars) != 1:
@@ -199,17 +210,19 @@ class InstructionHandlers:
         if not prompt or not output_vars:
             return self._handle_error("Missing 'prompt' or 'output_var' in parameters.")
 
+        """
         # Construct response format example from output_vars
         response_format_example = (
             self._construct_response_format_example(output_vars)
             if response_format == "json"
             else None
         )
+        """
 
         interpolated_prompt = self.vm.resolve_parameter(prompt)
         interpolated_context = self.vm.resolve_parameter(params.get("context"))
         response = self.vm.llm_interface.generate(
-            interpolated_prompt, interpolated_context, response_format_example
+            interpolated_prompt, interpolated_context
         )
 
         if response:
@@ -366,3 +379,4 @@ class InstructionHandlers:
             }
         )
         return True
+

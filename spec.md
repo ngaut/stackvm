@@ -64,7 +64,9 @@ Each instruction in the plan is represented as a JSON object with the following 
   - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
   - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
   - `response_format` (optional): Specifies the format of the LLM's response (e.g., `json`), only `json` and `text` are supported.
-- **Output**: When `response_format` is `json`, `output_vars` can map to specific keys within the JSON response; when `response_format` is `text`, `output_vars` should contain only a single key-value pair, which will hold the entire text response.
+- **Output**:
+  - When `response_format` is `json`, `output_vars` maps each key within the JSON response to a corresponding variable.
+  - When `response_format` is `text`, `output_vars` contains only a single key-value pair, which holds the entire text response.
 
 **Example:**
 ```json
@@ -82,13 +84,13 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
-another example with json response:
+Example with json response:
 ```json
 {
   "seq_no": 1,
   "type": "llm_generate",
   "parameters": {
-    "prompt": "Analyze the sales data and provide summary and insights.",
+    "prompt": "Analyze the sales data and provide summary and insights. Respond with a JSON object containing 'sumary' and 'insights' keys, e.g., {\"sumary\": \"The summary of ...\", \"insights\": \"Focus on ...\"}.",
     "context": "${sales_data}",
     "response_format": "json"
   },
