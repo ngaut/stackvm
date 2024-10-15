@@ -119,6 +119,10 @@ class InstructionHandlers:
         if not output_vars:
             return True  # No output_vars to set
 
+        print(f"output_vars: {output_vars}")
+        print(f"instruction_output: {instruction_output}")
+        print(f"response_format: {response_format}")
+
         try:
             if response_format == "json":
                 if isinstance(instruction_output, str):
@@ -210,12 +214,12 @@ class InstructionHandlers:
 
         if response:
             try:
-                if isinstance(response, str):
-                    response = json.loads(response)
                 success = self._set_output_vars(response, output_vars, response_format)
                 return success
             except json.JSONDecodeError:
-                return self._handle_error(f"Failed to parse JSON response from LLM: {response}.")
+                return self._handle_error(
+                    f"Failed to parse JSON response from LLM: {response}."
+                )
 
         return self._handle_error("LLM failed to generate a response.")
 
@@ -235,7 +239,9 @@ class InstructionHandlers:
 
         return json.dumps(example_structure, indent=2)
 
-    def jmp_handler(self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None) -> bool:
+    def jmp_handler(
+        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+    ) -> bool:
         """Handle both conditional and unconditional jumps."""
         condition_prompt = self.vm.resolve_parameter(params.get("condition_prompt"))
         context = self.vm.resolve_parameter(params.get("context"))
@@ -244,7 +250,9 @@ class InstructionHandlers:
         target_seq = params.get("target_seq")
 
         if output_vars:
-            self.vm.logger.info(f"Not allowed to use output variables in jmp instruction : {output_vars}")
+            self.vm.logger.info(
+                f"Not allowed to use output variables in jmp instruction : {output_vars}"
+            )
 
         if condition_prompt:
             # Conditional jump
@@ -317,16 +325,22 @@ class InstructionHandlers:
                 f"Unexpected error in jmp_handler: {str(e)}", "jmp", params
             )
 
-    def assign_handler(self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None) -> bool:
+    def assign_handler(
+        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+    ) -> bool:
         """Handle variable assignment."""
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
         if output_vars:
-            self.vm.logger.info(f"Not allowed to use output variables in assign instruction : {output_vars}")
+            self.vm.logger.info(
+                f"Not allowed to use output variables in assign instruction : {output_vars}"
+            )
         return True
 
-    def reasoning_handler(self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None) -> bool:
+    def reasoning_handler(
+        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+    ) -> bool:
         """Handle reasoning steps."""
         chain_of_thoughts = params.get("chain_of_thoughts")
         dependency_analysis = params.get("dependency_analysis")
@@ -337,11 +351,13 @@ class InstructionHandlers:
             return self._handle_error("Invalid parameters for 'reasoning'.")
 
         self.vm.logger.info(
-            "Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
+            f"Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
         )
 
         if output_vars:
-            self.vm.logger.info(f"Not allowed to use output variables in reasoning instruction : {output_vars}")
+            self.vm.logger.info(
+                f"Not allowed to use output variables in reasoning instruction : {output_vars}"
+            )
 
         self.vm.state["msgs"].append(
             {

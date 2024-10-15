@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import traceback
 from typing import Any, Dict, Optional
 from app.tools import InstructionHandlers
 from app.services import load_state, save_state, StepType
@@ -96,15 +97,15 @@ class PlanExecutionVM:
         success = handler(params, output_vars)
         if success:
             self.save_state()
-            self._log_step_execution(step_type, params, seq_no)
+            self._log_step_execution(step_type, params, output_vars, seq_no)
         return success
 
-    def _log_step_execution(self, step_type: str, params: Dict[str, Any], seq_no: str) -> None:
+    def _log_step_execution(self, step_type: str, params: Dict[str, Any], output_vars: Optional[Dict[str, str]], seq_no: str) -> None:
         """Log the execution of a step and prepare commit message."""
         input_parameters = {k: self._preview_value(v) for k, v in params.items()}
-        output_vars = params.get('output_var', [])
-        output_vars = [output_vars] if isinstance(output_vars, str) else output_vars
-        output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars}
+        output_variables = {}
+        if output_vars is not None:
+            output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars.keys()}
 
         description = f"Executed seq_no: {seq_no}, step: '{step_type}'"
         
@@ -149,6 +150,7 @@ class PlanExecutionVM:
             self.save_state()
             return True
         except Exception as e:
+            traceback.print_exc()
             self.logger.error(f"Error executing step {self.state['program_counter']}: {str(e)}")
             self.state['errors'].append(f"Error in step {self.state['program_counter']}: {str(e)}")
             return False
@@ -169,7 +171,7 @@ class PlanExecutionVM:
                 if var_name in referenced_vars:
                     reference_count += 1
 
-        print(f"Reference count for {var_name}: {reference_count}")
+        self.logger.info(f"Reference count for {var_name}: {reference_count}")
 
         self.variable_manager.set_reference_count(var_name, reference_count)
 
