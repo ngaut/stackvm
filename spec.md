@@ -221,3 +221,4 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
+- **Instruction selection**: DO NOT USE other instruction type that not list above.

@@ -8,17 +8,16 @@ from typing import Optional
 
 from app.controller.api_routes import api_blueprint
 from app.controller.engine import run_vm_with_goal
-from app.config.settings import GIT_REPO_PATH
+from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL, OPENAI_API_KEY, OLLAMA_BASE_URL
 from app.services import PlanExecutionVM
-from app.services import LLMInterface
-from app.config.settings import LLM_MODEL
+from app.services.llm_interface import LLMInterface
 from app.tools import global_tools_hub
 
 # Initialize Flask app
 app = Flask(__name__)
 app.register_blueprint(api_blueprint)
 
-
+# Setup logging
 def setup_logging(app):
     """Configure logging for the application."""
     logging.basicConfig(
@@ -33,8 +32,6 @@ def setup_logging(app):
             )
         )
 
-
-# Setup logging
 setup_logging(app)
 
 # Read the API key from environment variables
@@ -42,8 +39,8 @@ API_KEY = os.environ.get("TIDB_AI_API_KEY")
 if not API_KEY:
     app.logger.error("TIDB_AI_API_KEY not found in environment variables")
 
-llm_client = LLMInterface(LLM_MODEL)
-
+# Initialize LLM interface based on settings
+llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 def retrieve_knowledge_graph(query):
     """
@@ -172,7 +169,6 @@ def llm_generate(
     }
     ```
     """
-
     if response_format:
         prompt = prompt + "\n" + response_format
 

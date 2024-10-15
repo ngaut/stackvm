@@ -3,7 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-LLM_MODEL = os.environ.get('LLM_MODEL', 'gpt-4o-mini')
+# LLM settings
+LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'ollama')
+LLM_MODEL = os.environ.get('LLM_MODEL', 'qwen2.5:7b')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+
+# Existing settings
 # must use tmp path, DO NOT EDIT
 GIT_REPO_PATH = os.environ.get('GIT_REPO_PATH', '/tmp/stack_vm/runtime/')
 VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")

@@ -34,7 +34,7 @@ class ToolsHub:
 
     def get_tools_description(self) -> str:
         """Get the description of all registered tools."""
-        description = "# Tools calling\n\nBelow are the supported tools for calling instruction.\n\n"
+        description = "# Tools calling\n\nBelow are the ONLY avaiable tools for calling instruction.\n\n"
         for tool_name, docstring in self.tools_docstrings.items():
             description += f"## {tool_name}\n\n{docstring}\n\n"
         return description
@@ -46,7 +46,7 @@ global_tools_hub = ToolsHub()
 
 class InstructionHandlers:
     def __init__(self, vm):
-        self.vm = vm
+        self.vm = vm  # Store the vm instance
         self.tools_calling = ToolsHub()
 
     def _handle_error(
