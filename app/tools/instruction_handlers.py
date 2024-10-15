@@ -109,8 +109,7 @@ class InstructionHandlers:
 
         Args:
             instruction_output (Any): The raw output from the instruction.
-            output_vars (Dict[str, str]): Mapping of variable names to expressions referencing the instruction's output.
-            response_format (str): The format of the instruction's output ('json' or 'text').
+            output_vars (Optional[Union[str, List[str]]]]): Mapping of variable names to expressions referencing the instruction's output.
 
         Returns:
             bool: True if all variables are set successfully, False otherwise.
