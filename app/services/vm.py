@@ -44,9 +44,7 @@ class PlanExecutionVM:
         if not self.handlers_registered:
             self.instruction_handlers = InstructionHandlers(self)
             handler_methods = [
-                'retrieve_knowledge_graph',
-                'vector_search',
-                'llm_generate',
+                'calling',
                 'jmp',
                 'assign',
                 'reasoning'
@@ -54,6 +52,11 @@ class PlanExecutionVM:
             for method in handler_methods:
                 self.register_instruction(method, getattr(self.instruction_handlers, f"{method}_handler"))
             self.handlers_registered = True
+
+    def register_tool(self, tool_method: callable) -> None:
+        """Register a tool with its corresponding handler in InstructionHandlers."""
+        tool_name = tool_method.__name__
+        self.instruction_handlers.register_tool(tool_name, tool_method)
 
     def register_instruction(self, instruction_name: str, handler_method: callable) -> None:
         """Register an individual instruction handler."""
@@ -81,7 +84,6 @@ class PlanExecutionVM:
         """Execute a single step in the plan."""
         step_type = step.get('type')
         params = step.get('parameters', {})
-        output_vars = step.get('output_vars', None)
         seq_no = step.get('seq_no', 'Unknown')
 
         if not isinstance(step_type, str):
@@ -94,15 +96,24 @@ class PlanExecutionVM:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
 
-        success = handler(params, output_vars)
+        success = handler(params)
         if success:
             self.save_state()
-            self._log_step_execution(step_type, params, output_vars, seq_no)
+            self._log_step_execution(step_type, params, seq_no)
         return success
 
-    def _log_step_execution(self, step_type: str, params: Dict[str, Any], output_vars: Optional[Dict[str, str]], seq_no: str) -> None:
+    def _log_step_execution(self, step_type: str, params: Dict[str, Any], seq_no: str) -> None:
         """Log the execution of a step and prepare commit message."""
-        input_parameters = {k: self._preview_value(v) for k, v in params.items()}
+        if step_type == 'calling':
+            input_vars = params.get('params', {})
+            output_vars = params.get('output_vars', None)
+            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool', 'Unknown')}"
+        else:
+            input_vars = params
+            output_vars = None
+            description = f"Executed seq_no: {seq_no}, step: {step_type}"
+
+        input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
         output_variables = {}
         if output_vars is not None:
             if isinstance(output_vars, list):
@@ -111,10 +122,8 @@ class PlanExecutionVM:
                 output_variables = {output_vars: self._preview_value(self.variable_manager.get(output_vars))}
             else:
                 self.logger.error(f"Invalid output_vars type: {type(output_vars), {output_vars}}")
-
-        description = f"Executed seq_no: {seq_no}, step: '{step_type}'"
         
-        self.logger.info(f"{description} with parameters: {json.dumps(input_parameters)}")
+        self.logger.info(f"{description} with parameters: {json.dumps(params)}")
         if output_variables:
             self.logger.info(f"Output variables: {json.dumps(output_variables)}")
         
@@ -171,10 +180,13 @@ class PlanExecutionVM:
         reference_count = 0
         for i in range(self.state['program_counter'] + 1, len(self.state['current_plan'])):
             step = self.state['current_plan'][i]
-            for param_name, param_value in step.get('parameters', {}).items():
-                referenced_vars = self.variable_manager.find_referenced_variables(param_value)
-                if var_name in referenced_vars:
-                    reference_count += 1
+            parameters = step.get('parameters', {})
+            if step['type'] == 'calling':
+                parameters = parameters.get('params', {})
+            for param_name, param_value in parameters.items():
+                    referenced_vars = self.variable_manager.find_referenced_variables(param_value)
+                    if var_name in referenced_vars:
+                        reference_count += 1
 
         self.logger.info(f"Reference count for {var_name}: {reference_count}")
 

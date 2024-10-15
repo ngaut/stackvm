@@ -1,6 +1,6 @@
-# Tool calling Instructions
+# Tool calling
 
-Below are the instructions for calling the tools.
+Below are the supported tools for calling instruction.
 
 ## llm_generate
 - **Purpose**: Generates a response using the Language Model (LLM).

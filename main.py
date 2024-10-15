@@ -1,12 +1,17 @@
 import os
+import requests
 import logging
 from flask import Flask
 import argparse
 from datetime import datetime
+from typing import Optional
 
 from app.controller.api_routes import api_blueprint
 from app.controller.engine import run_vm_with_goal
 from app.config.settings import GIT_REPO_PATH
+from app.services import PlanExecutionVM
+from app.services import LLMInterface
+from app.config.settings import LLM_MODEL
 
 
 # Initialize Flask app
@@ -30,6 +35,74 @@ def setup_logging(app):
 # Setup logging
 setup_logging(app)
 
+# Read the API key from environment variables
+API_KEY = os.environ.get("TIDB_AI_API_KEY")
+if not API_KEY:
+    app.logger.error("TIDB_AI_API_KEY not found in environment variables")
+
+llm_client = LLMInterface(LLM_MODEL)
+
+def retrieve_knowledge_graph(query):
+    """
+    Searches the graph based on the provided query.
+    Args:
+        query (str): The search query.
+    Returns:
+        dict: JSON response from the API or an error message.
+    """
+    url = "https://tidb.ai/api/v1/admin/graph/search"
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}",
+    }
+    data = {"query": query, "include_meta": False, "depth": 2, "with_degree": False}
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request to search_graph failed: {e}")
+        return {"error": "Failed to perform search_graph request."}
+    except ValueError:
+        logging.error("Invalid JSON response received from search_graph.")
+        return {"error": "Invalid response format."}
+
+
+def vector_search(query, top_k=5):
+    """
+    Retrieves embeddings based on the provided query.
+    Args:
+        query (str): The input question for embedding retrieval.
+        top_k (int): Number of top results to retrieve.
+    Returns:
+        dict: JSON response from the API or an error message.
+    """
+    url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
+    params = {"question": query, "chat_engine": "default", "top_k": top_k}
+    headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()  # Raises HTTPError for bad responses
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request to retrieve_embedding failed: {e}")
+        return {"error": "Failed to perform retrieve_embedding request."}
+    except ValueError:
+        logging.error("Invalid JSON response received from retrieve_embedding.")
+        return {"error": "Invalid response format."}
+
+
+def llm_generate(
+    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+) -> bool:
+    """Handle LLM generation."""
+    if response_format:
+        prompt = prompt + "\n" + response_format
+
+    response =  llm_client.generate(prompt, context)
+    return response
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -47,7 +120,11 @@ if __name__ == "__main__":
 
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
-        run_vm_with_goal(args.goal, repo_path)
+        vm = PlanExecutionVM(repo_path, llm_client)
+        vm.register_tool(llm_generate)
+        vm.register_tool(retrieve_knowledge_graph)
+        vm.register_tool(vector_search)
+        run_vm_with_goal(vm, args.goal)
         logging.info("VM execution completed")
     elif args.server:
         logging.info("Starting visualization server...")

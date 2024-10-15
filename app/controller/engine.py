@@ -94,10 +94,8 @@ def should_update_plan(vm: PlanExecutionVM):
     return should_update, explanation, key_factors
 
 
-def run_vm_with_goal(goal, repo_path):
-    vm = PlanExecutionVM(repo_path, llm_interface)
+def run_vm_with_goal(vm, goal):
     vm.set_goal(goal)
-
     plan = generate_plan(goal)
     if plan:
         logging.info("Generated Plan:")

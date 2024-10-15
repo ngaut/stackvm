@@ -1,75 +1,22 @@
-import os
-import requests
-from typing import Any, Dict, Optional, List, Union
-from app.utils import find_first_json_object
-
-# Add these imports at the top of the file
-import logging
 import json
+from typing import Any, Dict, Optional, List, Union
+from inspect import signature
 
-# Set up logging
-logger = logging.getLogger(__name__)
-
-# Read the API key from environment variables
-API_KEY = os.environ.get("TIDB_AI_API_KEY")
-if not API_KEY:
-    logger.error("TIDB_AI_API_KEY not found in environment variables")
-
-
-def search_graph(query):
-    """
-    Searches the graph based on the provided query.
-    Args:
-        query (str): The search query.
-    Returns:
-        dict: JSON response from the API or an error message.
-    """
-    url = "https://tidb.ai/api/v1/admin/graph/search"
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}",
-    }
-    data = {"query": query, "include_meta": False, "depth": 2, "with_degree": False}
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request to search_graph failed: {e}")
-        return {"error": "Failed to perform search_graph request."}
-    except ValueError:
-        logger.error("Invalid JSON response received from search_graph.")
-        return {"error": "Invalid response format."}
-
-
-def embedding_retrieve(query, top_k=5):
-    """
-    Retrieves embeddings based on the provided query.
-    Args:
-        query (str): The input question for embedding retrieval.
-        top_k (int): Number of top results to retrieve.
-    Returns:
-        dict: JSON response from the API or an error message.
-    """
-    url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
-    params = {"question": query, "chat_engine": "default", "top_k": top_k}
-    headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Request to retrieve_embedding failed: {e}")
-        return {"error": "Failed to perform retrieve_embedding request."}
-    except ValueError:
-        logger.error("Invalid JSON response received from retrieve_embedding.")
-        return {"error": "Invalid response format."}
-
+from app.utils import find_first_json_object
 
 class InstructionHandlers:
     def __init__(self, vm):
         self.vm = vm
+        self.tools_calling = {}  # Dictionary to store tool handlers
+
+    def register_tool(self, tool_name: str, handler_method: callable) -> None:
+        """Register a tool with its corresponding handler."""
+        if not isinstance(tool_name, str) or not callable(handler_method):
+            self.vm.logger.error("Invalid tool registration.")
+            self.vm.state["errors"].append("Invalid tool registration.")
+            return
+        self.tools_calling[tool_name] = handler_method
+        self.vm.logger.info(f"Registered handler for tool: {tool_name}")
 
     def _handle_error(
         self,
@@ -102,7 +49,7 @@ class InstructionHandlers:
     def _set_output_vars(
         self,
         instruction_output: Any,
-        output_vars: Optional[Union[str, List[str]]] = None
+        output_vars: Optional[Union[str, List[str]]] = None,
     ) -> bool:
         """
         Sets multiple output variables based on the instruction's output and the output_vars mapping.
@@ -141,80 +88,56 @@ class InstructionHandlers:
             self.vm.logger.error(f"Failed to set output_vars: {e}")
             return False
 
-    def retrieve_knowledge_graph_handler(
-        self, params: Dict[str, Any], output_vars: Optional[str] = None
-    ) -> bool:
-        """Handle retrieval from knowledge graph."""
-        query = params.get("query")
-
-        if not query or not output_vars:
+    def calling_handler(self, params: Dict[str, Any]) -> bool:
+        tool_name = params.get("tool")
+        if tool_name is None:
             return self._handle_error(
-                "Missing 'query' in in parameters or 'output_var' is not defined.",
-                "retrieve_knowledge_graph",
-                params,
+                "Missing 'tool' in calling parameters", "calling", params
             )
 
-        result = search_graph(query)
-
-        success = self._set_output_vars(result, output_vars)
-        return success
-
-    def vector_search_handler(
-        self, params: Dict[str, Any], output_vars: Optional[str] = None
-    ) -> bool:
-        """Handle retrieval of embedded chunks."""
-        query = self.vm.resolve_parameter(params.get("query"))
-        top_k = params.get("top_k", 5)
-
-        if not isinstance(query, str) or not output_vars:
+        # Retrieve the tool handler from the tools_calling dictionary
+        tool_handler = self.tools_calling.get(tool_name)
+        if tool_handler is None:
             return self._handle_error(
-                "Invalid parameters for 'vector_search'.", "vector_search", params
+                f"Tool '{tool_name}' is not registered.", "calling", params
             )
 
-        result = embedding_retrieve(query, top_k)
+        tool_parameters = {
+            k: self.vm.resolve_parameter(v) for k, v in params.get("params", {}).items()
+        }
+        output_vars = params.get("output_vars", None)
+        if isinstance(output_vars, list):
+            tool_parameters["response_format"] = self._construct_response_format_example(
+                output_vars
+            )
+
+        # Get the parameters required by the tool_handler
+        handler_signature = signature(tool_handler)
+        required_params = handler_signature.parameters.keys()
+
+        # Filter tool_parameters to include only those required by tool_handler
+        filtered_tool_parameters = {
+            k: v for k, v in tool_parameters.items() if k in required_params
+        }
+
+        # Call the tool handler with the filtered parameters
+        result = tool_handler(**filtered_tool_parameters)
         if result is not None:
             success = self._set_output_vars(result, output_vars)
             return success
+
         return self._handle_error(
-            f"Failed to retrieve embedded chunks for query '{query}'.",
-            "vector_search",
+            f"Failed to fetch response from tool '{tool_name}'.",
+            "calling",
             params,
         )
 
-    def llm_generate_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
-    ) -> bool:
-        """Handle LLM generation."""
-        prompt = params.get("prompt")
-
-        if not prompt or not output_vars:
-            return self._handle_error("Missing 'prompt' or 'output_var' in parameters.")
-
-        # Construct response format example from output_vars
-        if isinstance(output_vars, list):
-            prompt += self._construct_response_format_example(output_vars)
-
-        interpolated_prompt = self.vm.resolve_parameter(prompt)
-        interpolated_context = self.vm.resolve_parameter(params.get("context"))
-        response = self.vm.llm_interface.generate(
-            interpolated_prompt, interpolated_context
-        )
-
-        if response:
-            try:
-                success = self._set_output_vars(response, output_vars)
-                return success
-            except json.JSONDecodeError:
-                return self._handle_error(
-                    f"Failed to parse JSON response from LLM: {response}."
-                )
-
-        return self._handle_error("LLM failed to generate a response.")
-
     def _construct_response_format_example(
-        self, output_vars: List[str]
+        self, output_vars: Optional[Union[str, List[str]]] = None
     ) -> Optional[str]:
         """Construct a response format example based on output variables."""
+        if not output_vars and not isinstance(output_vars, list):
+            return None
 
         example_structure = {}
         for key in output_vars:
@@ -222,20 +145,13 @@ class InstructionHandlers:
 
         return json.dumps(example_structure, indent=2)
 
-    def jmp_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
-    ) -> bool:
+    def jmp_handler(self, params: Dict[str, Any]) -> bool:
         """Handle both conditional and unconditional jumps."""
         condition_prompt = self.vm.resolve_parameter(params.get("condition_prompt"))
         context = self.vm.resolve_parameter(params.get("context"))
         jump_if_true = params.get("jump_if_true")
         jump_if_false = params.get("jump_if_false")
         target_seq = params.get("target_seq")
-
-        if output_vars:
-            self.vm.logger.info(
-                f"Not allowed to use output variables in jmp instruction : {output_vars}"
-            )
 
         if condition_prompt:
             # Conditional jump
@@ -246,8 +162,13 @@ class InstructionHandlers:
                     params=params,
                 )
 
-            condition_prompt_with_response_format = condition_prompt + "\nRespond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}"
-            response = self.vm.llm_interface.generate(condition_prompt_with_response_format, context)
+            condition_prompt_with_response_format = (
+                condition_prompt
+                + '\nRespond with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
+            )
+            response = self.vm.llm_interface.generate(
+                condition_prompt_with_response_format, context
+            )
 
             try:
                 json_object = find_first_json_object(response)
@@ -309,22 +230,14 @@ class InstructionHandlers:
                 f"Unexpected error in jmp_handler: {str(e)}", "jmp", params
             )
 
-    def assign_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
-    ) -> bool:
+    def assign_handler(self, params: Dict[str, Any]) -> bool:
         """Handle variable assignment."""
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
-        if output_vars:
-            self.vm.logger.info(
-                f"Not allowed to use output variables in assign instruction : {output_vars}"
-            )
         return True
 
-    def reasoning_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
-    ) -> bool:
+    def reasoning_handler(self, params: Dict[str, Any]) -> bool:
         """Handle reasoning steps."""
         chain_of_thoughts = params.get("chain_of_thoughts")
         dependency_analysis = params.get("dependency_analysis")
@@ -338,11 +251,6 @@ class InstructionHandlers:
             f"Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
         )
 
-        if output_vars:
-            self.vm.logger.info(
-                f"Not allowed to use output variables in reasoning instruction : {output_vars}"
-            )
-
         self.vm.state["msgs"].append(
             {
                 "chain_of_thoughts": chain_of_thoughts,
@@ -350,4 +258,3 @@ class InstructionHandlers:
             }
         )
         return True
-
