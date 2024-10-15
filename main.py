@@ -47,12 +47,27 @@ llm_client = LLMInterface(LLM_MODEL)
 
 def retrieve_knowledge_graph(query):
     """
-    Searches the graph based on the provided query.
-    Args:
-        query (str): The search query.
-    Returns:
-        dict: JSON response from the API or an error message.
+    Retrieves information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
+
+    Arguments:
+    - `query`: The query string. Can be a direct string or a variable reference.
+
+    Example to call this tool:
+    **Example:**
+    ```json
+    {
+        "seq_no": 2,
+        "type": "calling",
+        "parameters": {
+            "tool": "retrieve_knowledge_graph",
+                "params": {
+                "query": "TiDB latest stable version"
+            },
+            "output_vars": "tidb_version_graph"
+        }
+    }
     """
+
     url = "https://tidb.ai/api/v1/admin/graph/search"
     headers = {
         "accept": "application/json",
@@ -74,13 +89,31 @@ def retrieve_knowledge_graph(query):
 
 def vector_search(query, top_k=5):
     """
-    Retrieves embeddings based on the provided query.
-    Args:
-        query (str): The input question for embedding retrieval.
-        top_k (int): Number of top results to retrieve.
-    Returns:
-        dict: JSON response from the API or an error message.
+    Retrieves embedded knowledge chunks based on an embedding query.
+
+    Arguments:
+    - `query`: The query string. Can be a direct string or a variable reference.
+    - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
+
+    Example to call this tool:
+
+    **Example:**
+    ```json
+    {
+        "seq_no": 3,
+        "type": "calling",
+        "parameters": {
+            "tool": "vector_search",
+            "params": {
+                "query": "Information about Mount Everest",
+                "top_k": 3
+            },
+            "output_vars": "embedded_chunks"
+        }
+    }
+    ```
     """
+
     url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
     params = {"question": query, "chat_engine": "default", "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
@@ -98,8 +131,48 @@ def vector_search(query, top_k=5):
 
 def llm_generate(
     prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
-) -> bool:
-    """Handle LLM generation."""
+):
+    """
+    Generates a response using the Language Model (LLM).
+
+    Arguments:
+    - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
+    - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
+
+    Example to call this tool:
+    **Example:**
+    ```json
+    {
+        "seq_no": 1,
+        "type": "calling",
+        "parameters": {
+            "tool": "llm_generate",
+            "params": {
+                "prompt": "Simulate the step-by-step execution of the following Python code to count the occurrences of the character 'r' in the word 'strawberry'. Provide a detailed explanation of each step and the final numerical result.\n\nword = 'strawberry'\ncount = 0\nfor char in word:\n    if char == 'r':\n        count += 1\nprint(count)\n\n Example output:To count the occurrences of the character 'r' in the word 'strawberry' using the provided pseudo Python code, we can break it down step by step:\n\n1. Initialization:\n   - Set word = 'strawberry' and char_to_count = 'r'.\n\n2. Convert to Lowercase:\n   - Both word and char_to_count are already in lowercase:\n     word = 'strawberry'\n     char_to_count = 'r'\n\n3. Count Occurrences:\n   We iterate through each character c in word and check if c is equal to char_to_count ('r'):\n   - 's' → not 'r' (count = 0)\n   - 't' → not 'r' (count = 0)\n   - 'r' → is 'r' (count = 1)\n   - 'a' → not 'r' (count = 1)\n   - 'w' → not 'r' (count = 1)\n   - 'b' → not 'r' (count = 1)\n   - 'e' → not 'r' (count = 1)\n   - 'r' → is 'r' (count = 2)\n   - 'r' → is 'r' (count = 3)\n   - 'y' → not 'r' (count = 3)\n\n4. Final Count:\n   The total count of 'r' in 'strawberry' is 3.\n\nThus, the numerical result is 3.",
+                "context": null
+            },
+            "output_vars": "r_count_by_pseudo_python_simulation"
+        }
+    }
+    ```
+
+    Example with json response:
+    ```json
+    {
+        "seq_no": 1,
+        "type": "calling",
+        "parameters": {
+            "tool": "llm_generate",
+            "params": {
+                "prompt": "Analyze the sales data and provide summary and insights.",
+                "context": "${sales_data}",
+            },
+            "output_vars": ["summary", "insights"]
+        }
+    }
+    ```
+    """
+
     if response_format:
         prompt = prompt + "\n" + response_format
 

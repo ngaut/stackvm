@@ -97,12 +97,12 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Purpose**: Invokes a specific tool or function with the provided parameters.
 - **Parameters**: Defines the specifications required to call a tool.
   - `tool`: The name of the tool to be called (e.g., "llm_generate", "retrieve_knowledge_graph", "vector_search").
-  - `params`: An object containing key-value pairs that represent the parameters required by the specified tool.
-    - Keys: Must match the parameter names expected by the tool.
+  - `params`: An object containing key-value pairs that represent the arguments required by the specified tool.
+    - Keys: Must match the argument names expected by the tool.
     - Values: Can be either a direct value or a variable reference.
   - `output_vars` (optional): Specifies how the output from the tool should be stored in the VM’s variable store for later use. The type of output_vars can either be a string or an array.
-    - If it is a string, its value will be the variable name used to store the entire output of the tool.
-    - If it is an array, each entry specifies a variable name for storing a specific part of the tool's output.
+    - If it is a string: The entire tool's response (whether text or JSON) will be stored under the specified variable name.
+    - If it is an array: It specifies that the tool's response must be a valid JSON object and contain specific keys. Each entry in the array corresponds to a key in the JSON response, and the value associated with each key will be extracted and stored as a variable.
     These variables are stored in the VM’s variable store and can be used in subsequent instructions.
 
 **Example:**

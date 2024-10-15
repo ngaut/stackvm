@@ -8,7 +8,6 @@ import logging
 from app.config.settings import (
     VM_SPEC_CONTENT,
     PLAN_EXAMPLE_CONTENT,
-    TOOLS_INSTRUCTION_CONTENT,
 )
 from app.services import (
     find_first_json_object,
@@ -21,6 +20,7 @@ from app.services import (
     get_should_update_plan_prompt,
     get_generate_plan_prompt,
 )
+from app.tools import global_tools_hub
 from .plan_repo import commit_vm_changes
 
 # Configure logging
@@ -29,14 +29,13 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
 )
 
-
 def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     if not goal:
         logging.error("No goal is set.")
         return []
 
     prompt = custom_prompt or get_generate_plan_prompt(
-        goal, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, PLAN_EXAMPLE_CONTENT
+        goal, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), PLAN_EXAMPLE_CONTENT
     )
     plan_response = llm_interface.generate(prompt)
 
@@ -57,7 +56,7 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
     prompt = get_plan_update_prompt(
-        vm, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, explanation, key_factors
+        vm, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), explanation, key_factors
     )
     new_plan = generate_plan(vm.llm_interface, vm.state["goal"], custom_prompt=prompt)
     return new_plan
