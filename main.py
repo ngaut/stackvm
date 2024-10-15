@@ -12,7 +12,7 @@ from app.config.settings import GIT_REPO_PATH
 from app.services import PlanExecutionVM
 from app.services import LLMInterface
 from app.config.settings import LLM_MODEL
-from app.tools import global_tools_hub
+from app.instructions import global_tools_hub
 
 # Initialize Flask app
 app = Flask(__name__)

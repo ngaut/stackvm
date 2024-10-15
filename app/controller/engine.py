@@ -20,7 +20,7 @@ from app.services import (
     get_should_update_plan_prompt,
     get_generate_plan_prompt,
 )
-from app.tools import global_tools_hub
+from app.instructions import global_tools_hub
 from .plan_repo import commit_vm_changes
 
 # Configure logging
