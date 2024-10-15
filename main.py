@@ -1,5 +1,6 @@
 import os
-import requests
+import importlib.util
+import inspect
 import logging
 from flask import Flask
 import argparse
@@ -43,90 +44,6 @@ if not API_KEY:
     app.logger.error("TIDB_AI_API_KEY not found in environment variables")
 
 llm_client = LLMInterface(LLM_MODEL)
-
-
-def retrieve_knowledge_graph(query):
-    """
-    Retrieves information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
-
-    Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
-
-    Example to call this tool:
-    **Example:**
-    ```json
-    {
-        "seq_no": 2,
-        "type": "calling",
-        "parameters": {
-            "tool": "retrieve_knowledge_graph",
-                "params": {
-                "query": "TiDB latest stable version"
-            },
-            "output_vars": "tidb_version_graph"
-        }
-    }
-    """
-
-    url = "https://tidb.ai/api/v1/admin/graph/search"
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {API_KEY}",
-    }
-    data = {"query": query, "include_meta": False, "depth": 2, "with_degree": False}
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request to search_graph failed: {e}")
-        return {"error": "Failed to perform search_graph request."}
-    except ValueError:
-        logging.error("Invalid JSON response received from search_graph.")
-        return {"error": "Invalid response format."}
-
-
-def vector_search(query, top_k=5):
-    """
-    Retrieves embedded knowledge chunks based on an embedding query.
-
-    Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
-    - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
-
-    Example to call this tool:
-
-    **Example:**
-    ```json
-    {
-        "seq_no": 3,
-        "type": "calling",
-        "parameters": {
-            "tool": "vector_search",
-            "params": {
-                "query": "Information about Mount Everest",
-                "top_k": 3
-            },
-            "output_vars": "embedded_chunks"
-        }
-    }
-    ```
-    """
-
-    url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
-    params = {"question": query, "chat_engine": "default", "top_k": top_k}
-    headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request to retrieve_embedding failed: {e}")
-        return {"error": "Failed to perform retrieve_embedding request."}
-    except ValueError:
-        logging.error("Invalid JSON response received from retrieve_embedding.")
-        return {"error": "Invalid response format."}
 
 
 def llm_generate(
@@ -181,8 +98,51 @@ def llm_generate(
 
 
 global_tools_hub.register_tool(llm_generate)
-global_tools_hub.register_tool(retrieve_knowledge_graph)
-global_tools_hub.register_tool(vector_search)
+
+
+def load_tools(tools_package: str, hub):
+    """
+    Dynamically load and register all tool functions from the specified package.
+
+    Args:
+        tools_package (str): The package name containing tool modules.
+        hub: The global_tools_hub instance used to register tools.
+    """
+    try:
+        # Import the tools package
+        package = importlib.import_module(tools_package)
+    except ImportError as e:
+        app.logger.error(f"Failed to import tools package '{tools_package}': {e}")
+        return
+
+    # Get the directory of the tools package
+    package_dir = os.path.dirname(package.__file__)
+
+    for filename in os.listdir(package_dir):
+        if filename.endswith(".py") and filename != "__init__.py":
+            module_name = filename[:-3]
+            full_module_name = f"{tools_package}.{module_name}"
+            try:
+                app.logger.info(f"Loading module {module_name} from {filename}")
+                module = importlib.import_module(full_module_name)
+                # Iterate through all members of the module
+                for name, obj in inspect.getmembers(module, inspect.isfunction):
+                    # Option 1: Use naming convention (functions starting with 'tool_')
+                    if name.startswith("tool_"):
+                        hub.register_tool(obj)
+                        app.logger.info(f"Registered tool '{name}' from {filename}")
+                    # Option 2: Use decorator to identify tool functions
+                    elif hasattr(obj, "is_tool") and obj.is_tool:
+                        hub.register_tool(obj)
+                        app.logger.info(f"Registered tool '{name}' from {filename}")
+            except Exception as e:
+                app.logger.error(f"Failed to load module {full_module_name}: {e}")
+
+
+# Define the tools package name
+tools_package = "tools"
+# Load and register tools from the tools package
+load_tools(tools_package, global_tools_hub)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
