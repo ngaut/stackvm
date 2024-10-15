@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Union
 from app.utils import find_first_json_object
 
 # Add these imports at the top of the file
@@ -102,8 +102,7 @@ class InstructionHandlers:
     def _set_output_vars(
         self,
         instruction_output: Any,
-        output_vars: Dict[str, str],
-        response_format: str = "text",
+        output_vars: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """
         Sets multiple output variables based on the instruction's output and the output_vars mapping.
@@ -122,10 +121,9 @@ class InstructionHandlers:
         self.vm.logger.debug(f"output_vars: {output_vars}")
         instruction_output_str = self.vm._preview_value(instruction_output)
         self.vm.logger.debug(f"instruction_output: {instruction_output_str}")
-        self.vm.logger.debug(f"response_format: {response_format}")
 
         try:
-            if response_format == "json":
+            if isinstance(output_vars, list):
                 if isinstance(instruction_output, str):
                     # Attempt to parse JSON string
                     json_object = find_first_json_object(instruction_output)
@@ -134,34 +132,18 @@ class InstructionHandlers:
                             f"No JSON object found in the instruction output: {instruction_output}."
                         )
                     instruction_output = json.loads(json_object)
-                for var_name, var_expr in output_vars.items():
-                    # Determine if the expression is for the entire JSON object
-                    stripped_expr = var_expr.strip("${}")
-                    if "." not in stripped_expr:
-                        var_value = instruction_output
-                    else:
-                        # Extract the key from the expression, e.g., "${response.key}" -> "key"
-                        key = stripped_expr.split(".")[-1]
-                        var_value = instruction_output.get(key)
+                for var_name in output_vars:
+                    var_value = instruction_output.get(var_name)
                     self.vm.set_variable(var_name, var_value)
-            elif response_format == "text":
-                if len(output_vars) != 1:
-                    self.vm.logger.error(
-                        "For 'text' response_format, 'output_vars' must contain exactly one key."
-                    )
-                    return False
-                var_name, _ = next(iter(output_vars.items()))
-                self.vm.set_variable(var_name, instruction_output)
-            else:
-                self.vm.logger.error(f"Unsupported response_format: {response_format}")
-                return False
+            elif isinstance(output_vars, str):
+                self.vm.set_variable(output_vars, instruction_output)
             return True
         except Exception as e:
             self.vm.logger.error(f"Failed to set output_vars: {e}")
             return False
 
     def retrieve_knowledge_graph_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[str] = None
     ) -> bool:
         """Handle retrieval from knowledge graph."""
         query = params.get("query")
@@ -179,7 +161,7 @@ class InstructionHandlers:
         return success
 
     def vector_search_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[str] = None
     ) -> bool:
         """Handle retrieval of embedded chunks."""
         query = self.vm.resolve_parameter(params.get("query"))
@@ -201,23 +183,17 @@ class InstructionHandlers:
         )
 
     def llm_generate_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """Handle LLM generation."""
         prompt = params.get("prompt")
-        response_format = params.get("response_format", "text")
 
         if not prompt or not output_vars:
             return self._handle_error("Missing 'prompt' or 'output_var' in parameters.")
 
-        """
         # Construct response format example from output_vars
-        response_format_example = (
-            self._construct_response_format_example(output_vars)
-            if response_format == "json"
-            else None
-        )
-        """
+        if isinstance(output_vars, list):
+            prompt += self._construct_response_format_example(output_vars)
 
         interpolated_prompt = self.vm.resolve_parameter(prompt)
         interpolated_context = self.vm.resolve_parameter(params.get("context"))
@@ -227,7 +203,7 @@ class InstructionHandlers:
 
         if response:
             try:
-                success = self._set_output_vars(response, output_vars, response_format)
+                success = self._set_output_vars(response, output_vars)
                 return success
             except json.JSONDecodeError:
                 return self._handle_error(
@@ -237,23 +213,18 @@ class InstructionHandlers:
         return self._handle_error("LLM failed to generate a response.")
 
     def _construct_response_format_example(
-        self, output_vars: Optional[Dict[str, str]] = None
+        self, output_vars: List[str]
     ) -> Optional[str]:
         """Construct a response format example based on output variables."""
-        # Extract keys from output_vars and create a JSON-like structure
-        if not output_vars:
-            return None
 
         example_structure = {}
-        for key, value in output_vars.items():
-            # Extract the JSON path from the value, assuming format "${llm_json_response.key}"
-            json_key = value.split(".")[-1].strip("}")
-            example_structure[json_key] = f"<{json_key}_example>"
+        for key in output_vars:
+            example_structure[key] = f"<to be filled>"
 
         return json.dumps(example_structure, indent=2)
 
     def jmp_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """Handle both conditional and unconditional jumps."""
         condition_prompt = self.vm.resolve_parameter(params.get("condition_prompt"))
@@ -276,7 +247,8 @@ class InstructionHandlers:
                     params=params,
                 )
 
-            response = self.vm.llm_interface.generate(condition_prompt, context)
+            condition_prompt_with_response_format = condition_prompt + "\nRespond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}"
+            response = self.vm.llm_interface.generate(condition_prompt_with_response_format, context)
 
             try:
                 json_object = find_first_json_object(response)
@@ -339,7 +311,7 @@ class InstructionHandlers:
             )
 
     def assign_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """Handle variable assignment."""
         for var_name, value in params.items():
@@ -352,7 +324,7 @@ class InstructionHandlers:
         return True
 
     def reasoning_handler(
-        self, params: Dict[str, Any], output_vars: Optional[Dict[str, str]] = None
+        self, params: Dict[str, Any], output_vars: Optional[Union[str, List[str]]] = None
     ) -> bool:
         """Handle reasoning steps."""
         chain_of_thoughts = params.get("chain_of_thoughts")

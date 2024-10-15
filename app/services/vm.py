@@ -105,7 +105,12 @@ class PlanExecutionVM:
         input_parameters = {k: self._preview_value(v) for k, v in params.items()}
         output_variables = {}
         if output_vars is not None:
-            output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars.keys()}
+            if isinstance(output_vars, list):
+                output_variables = {k: self._preview_value(self.variable_manager.get(k)) for k in output_vars}
+            elif isinstance(output_vars, str):
+                output_variables = {output_vars: self._preview_value(self.variable_manager.get(output_vars))}
+            else:
+                self.logger.error(f"Invalid output_vars type: {type(output_vars), {output_vars}}")
 
         description = f"Executed seq_no: {seq_no}, step: '{step_type}'"
         

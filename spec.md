@@ -24,8 +24,8 @@ Each instruction in the plan is represented as a JSON object with the following 
 - `type`: A string indicating the instruction type.
 - `parameters`: An object containing parameters required by the instruction.
 - `output_vars` (optional): The type of output_vars can either be a string or an array.
-	- If it is a string, its value will be the variable name used to store the entire output of the instruction.
-	- If it is an array, each entry specifies a variable name for storing a specific part of the instruction’s output.
+  - If it is a string, its value will be the variable name used to store the entire output of the instruction.
+  - If it is an array, each entry specifies a variable name for storing a specific part of the instruction’s output.
   These variables are stored in the VM’s variable store and can be used in subsequent instructions.
 
 ```json
