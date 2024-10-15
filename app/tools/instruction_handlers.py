@@ -4,19 +4,37 @@ from inspect import signature
 
 from app.utils import find_first_json_object
 
+
+class ToolsHub:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ToolsHub, cls).__new__(cls, *args, **kwargs)
+            cls._instance.tools = {}
+        return cls._instance
+
+    def register_tool(self, handler_method: callable) -> None:
+        """Register a tool with its corresponding handler."""
+        tool_name = handler_method.__name__
+        if not isinstance(tool_name, str) or not callable(handler_method):
+            raise ValueError(f"Invalid tool registration: {tool_name} is not callable")
+        self.tools[tool_name] = handler_method
+        return True
+
+    def get_tool_handler(self, tool_name: str) -> Optional[callable]:
+        """Retrieve the handler for a registered tool."""
+        return self.tools.get(tool_name)
+
+
+# Create a global instance of ToolsHub
+global_tools_hub = ToolsHub()
+
+
 class InstructionHandlers:
     def __init__(self, vm):
         self.vm = vm
-        self.tools_calling = {}  # Dictionary to store tool handlers
-
-    def register_tool(self, tool_name: str, handler_method: callable) -> None:
-        """Register a tool with its corresponding handler."""
-        if not isinstance(tool_name, str) or not callable(handler_method):
-            self.vm.logger.error("Invalid tool registration.")
-            self.vm.state["errors"].append("Invalid tool registration.")
-            return
-        self.tools_calling[tool_name] = handler_method
-        self.vm.logger.info(f"Registered handler for tool: {tool_name}")
+        self.tools_calling = ToolsHub()
 
     def _handle_error(
         self,
@@ -96,7 +114,7 @@ class InstructionHandlers:
             )
 
         # Retrieve the tool handler from the tools_calling dictionary
-        tool_handler = self.tools_calling.get(tool_name)
+        tool_handler = self.tools_calling.get_tool_handler(tool_name)
         if tool_handler is None:
             return self._handle_error(
                 f"Tool '{tool_name}' is not registered.", "calling", params
@@ -107,8 +125,8 @@ class InstructionHandlers:
         }
         output_vars = params.get("output_vars", None)
         if isinstance(output_vars, list):
-            tool_parameters["response_format"] = self._construct_response_format_example(
-                output_vars
+            tool_parameters["response_format"] = (
+                self._construct_response_format_example(output_vars)
             )
 
         # Get the parameters required by the tool_handler

@@ -5,7 +5,11 @@ Visualization module for the VM execution and Git repository management.
 import json
 import logging
 
-from app.config.settings import VM_SPEC_CONTENT, LLM_MODEL, PLAN_EXAMPLE_CONTENT, TOOLS_INSTRUCTION_CONTENT
+from app.config.settings import (
+    VM_SPEC_CONTENT,
+    PLAN_EXAMPLE_CONTENT,
+    TOOLS_INSTRUCTION_CONTENT,
+)
 from app.services import (
     find_first_json_object,
     parse_plan,
@@ -26,16 +30,14 @@ logging.basicConfig(
 )
 
 
-# Initialize LLM interface
-llm_interface = LLMInterface(LLM_MODEL)
-
-
-def generate_plan(goal, custom_prompt=None):
+def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     if not goal:
         logging.error("No goal is set.")
         return []
 
-    prompt = custom_prompt or get_generate_plan_prompt(goal, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, PLAN_EXAMPLE_CONTENT)
+    prompt = custom_prompt or get_generate_plan_prompt(
+        goal, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, PLAN_EXAMPLE_CONTENT
+    )
     plan_response = llm_interface.generate(prompt)
 
     logging.info(f"Generating plan using LLM: {plan_response}")
@@ -54,8 +56,10 @@ def generate_plan(goal, custom_prompt=None):
 
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
-    prompt = get_plan_update_prompt(vm, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, explanation, key_factors)
-    new_plan = generate_plan(vm.state["goal"], custom_prompt=prompt)
+    prompt = get_plan_update_prompt(
+        vm, VM_SPEC_CONTENT, TOOLS_INSTRUCTION_CONTENT, explanation, key_factors
+    )
+    new_plan = generate_plan(vm.llm_interface, vm.state["goal"], custom_prompt=prompt)
     return new_plan
 
 
@@ -69,7 +73,7 @@ def should_update_plan(vm: PlanExecutionVM):
         )
 
     prompt = get_should_update_plan_prompt(vm)
-    response = llm_interface.generate(prompt)
+    response = vm.llm_interface.generate(prompt)
 
     json_response = find_first_json_object(response)
     if json_response:
@@ -85,9 +89,7 @@ def should_update_plan(vm: PlanExecutionVM):
     if should_update:
         logging.info(f"LLM suggests updating the plan: {explanation}")
         for factor in key_factors:
-            logging.info(
-                f"Factor: {factor['factor']}, Impact: {factor['impact']}"
-            )
+            logging.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
     else:
         logging.info(f"LLM suggests keeping the current plan: {explanation}")
 
@@ -96,7 +98,7 @@ def should_update_plan(vm: PlanExecutionVM):
 
 def run_vm_with_goal(vm, goal):
     vm.set_goal(goal)
-    plan = generate_plan(goal)
+    plan = generate_plan(vm.llm_interface, goal)
     if plan:
         logging.info("Generated Plan:")
         vm.state["current_plan"] = plan

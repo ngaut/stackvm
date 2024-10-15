@@ -12,11 +12,12 @@ from app.config.settings import GIT_REPO_PATH
 from app.services import PlanExecutionVM
 from app.services import LLMInterface
 from app.config.settings import LLM_MODEL
-
+from app.tools import global_tools_hub
 
 # Initialize Flask app
 app = Flask(__name__)
 app.register_blueprint(api_blueprint)
+
 
 def setup_logging(app):
     """Configure logging for the application."""
@@ -32,6 +33,7 @@ def setup_logging(app):
             )
         )
 
+
 # Setup logging
 setup_logging(app)
 
@@ -41,6 +43,7 @@ if not API_KEY:
     app.logger.error("TIDB_AI_API_KEY not found in environment variables")
 
 llm_client = LLMInterface(LLM_MODEL)
+
 
 def retrieve_knowledge_graph(query):
     """
@@ -100,9 +103,13 @@ def llm_generate(
     if response_format:
         prompt = prompt + "\n" + response_format
 
-    response =  llm_client.generate(prompt, context)
+    response = llm_client.generate(prompt, context)
     return response
 
+
+global_tools_hub.register_tool(llm_generate)
+global_tools_hub.register_tool(retrieve_knowledge_graph)
+global_tools_hub.register_tool(vector_search)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -121,9 +128,6 @@ if __name__ == "__main__":
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         vm = PlanExecutionVM(repo_path, llm_client)
-        vm.register_tool(llm_generate)
-        vm.register_tool(retrieve_knowledge_graph)
-        vm.register_tool(vector_search)
         run_vm_with_goal(vm, args.goal)
         logging.info("VM execution completed")
     elif args.server:

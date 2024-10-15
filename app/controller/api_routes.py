@@ -12,13 +12,18 @@ from git import NULL_TREE
 from git.exc import GitCommandError
 from flask import Blueprint, render_template, jsonify, request, current_app
 
-from app.config.settings import GIT_REPO_PATH
+from app.config.settings import GIT_REPO_PATH, LLM_MODEL
 from app.services import (
     parse_commit_message,
     StepType,
     parse_step,
 )
-from app.services import PlanExecutionVM, commit_message_wrapper, get_step_update_prompt
+from app.services import (
+    LLMInterface,
+    PlanExecutionVM,
+    commit_message_wrapper,
+    get_step_update_prompt,
+)
 from .plan_repo import (
     global_repo,
     get_commits,
@@ -27,10 +32,11 @@ from .plan_repo import (
     commit_vm_changes,
     repo_exists,
 )
-from .engine import generate_updated_plan, should_update_plan, llm_interface
+from .engine import generate_updated_plan, should_update_plan
 
 
 api_blueprint = Blueprint("api", __name__)
+
 
 def log_and_return_error(message, error_type, status_code):
     if error_type == "warning":
@@ -40,6 +46,7 @@ def log_and_return_error(message, error_type, status_code):
     else:
         current_app.logger.info(message)
     return jsonify({"error": message}), status_code
+
 
 @api_blueprint.route("/")
 def index():
@@ -163,7 +170,7 @@ def execute_vm():
     repo_path = global_repo.get_current_repo_path()
 
     try:
-        vm = PlanExecutionVM(repo_path, llm_interface)
+        vm = PlanExecutionVM(repo_path, LLMInterface(LLM_MODEL))
     except ImportError as e:
         return log_and_return_error(str(e), "error", 500)
 
@@ -261,7 +268,7 @@ def optimize_step():
     repo_path = global_repo.get_current_repo_path()
 
     try:
-        vm = PlanExecutionVM(repo_path, llm_interface)
+        vm = PlanExecutionVM(repo_path, LLMInterface(LLM_MODEL))
     except ImportError as e:
         return log_and_return_error(str(e), "error", 500)
 
@@ -270,7 +277,7 @@ def optimize_step():
 
     # Generate the updated step using LLM
     prompt = get_step_update_prompt(vm, seq_no, suggestion)
-    updated_step_response = llm_interface.generate(prompt)
+    updated_step_response = vm.llm_interface.generate(prompt)
 
     if not updated_step_response:
         return log_and_return_error("Failed to generate updated step", "error", 500)
