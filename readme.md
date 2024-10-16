@@ -19,7 +19,7 @@ StackVM now supports local Language Models through Ollama integration:
 - **Ollama Base URL**: By default, it's set to 'http://localhost:11434'.
 
 To use Ollama:
-1. Ensure Ollama is installed and running on your local machine.
+1. Ensure Ollama is installed and running(OLLAMA_DEBUG=1 ollama serve) on your local machine.
 2. The system will use Ollama by default. If you want to explicitly set it:
    ```bash
    export LLM_PROVIDER=ollama
