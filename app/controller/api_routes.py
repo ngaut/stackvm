@@ -13,6 +13,7 @@ from git.exc import GitCommandError
 from flask import Blueprint, render_template, jsonify, request, current_app
 
 from app.config.settings import (
+    LLM_PROVIDER,
     GIT_REPO_PATH,
     LLM_MODEL,
     VM_SPEC_CONTENT,
@@ -276,7 +277,7 @@ def optimize_step():
     repo_path = global_repo.get_current_repo_path()
 
     try:
-        vm = PlanExecutionVM(repo_path, LLMInterface(LLM_MODEL))
+        vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
     except ImportError as e:
         return log_and_return_error(str(e), "error", 500)
 
