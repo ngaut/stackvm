@@ -62,7 +62,6 @@ class ToolsHub:
 
         # Get the directory of the tools package
         package_dir = os.path.dirname(package.__file__)
-        print(package_dir)
 
         for filename in os.listdir(package_dir):
             if filename.endswith(".py") and filename != "__init__.py":
