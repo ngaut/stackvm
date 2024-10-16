@@ -43,6 +43,8 @@ from .engine import generate_updated_plan, should_update_plan
 
 api_blueprint = Blueprint("api", __name__)
 
+logger = logging.getLogger(__name__)
+
 
 def log_and_return_error(message, error_type, status_code):
     if error_type == "warning":
@@ -294,7 +296,7 @@ def optimize_step():
             f"Failed to parse updated step {updated_step_response}", "error", 500
         )
 
-    logging.info(
+    logger.info(
         f"Updating step: {updated_step}, program_counter: {vm.state['program_counter']}"
     )
 
@@ -335,7 +337,7 @@ def optimize_step():
             f"Failed to create or checkout branch '{branch_name}'", "error", 500
         )
 
-    logging.info(
+    logger.info(
         f"Updated step: {vm.state['current_plan'][vm.state['program_counter']]}, program_counter: {vm.state['program_counter']}"
     )
 
@@ -349,18 +351,18 @@ def optimize_step():
             break
 
         if vm.state.get("goal_completed"):
-            logging.info("Goal completed during plan execution.")
+            logger.info("Goal completed during plan execution.")
             break
 
     if vm.state.get("goal_completed"):
         final_answer = vm.get_variable("final_answer")
         if final_answer:
-            logging.info(f"\nfinal_answer: {final_answer}")
+            logger.info(f"\nfinal_answer: {final_answer}")
         else:
-            logging.info("\nNo result was generated.")
+            logger.info("\nNo result was generated.")
     else:
-        logging.warning("Plan execution failed or did not complete.")
-        logging.error(vm.state.get("errors"))
+        logger.warning("Plan execution failed or did not complete.")
+        logger.error(vm.state.get("errors"))
 
     return jsonify(
         {
