@@ -159,7 +159,7 @@ Ensure the JSON is properly formatted and encapsulated within a ```json code blo
 """
 
 
-def get_step_update_prompt(vm, seq_no, suggestion):
+def get_step_update_prompt(vm, seq_no, vm_spec_content, tools_instruction_content, suggestion):
     current_step = vm.state["current_plan"][seq_no]
     current_variables = json.dumps(vm.get_all_variables(), indent=2)
 
@@ -174,6 +174,12 @@ Current VM Variables:
 
 Suggestion for Improvement:
 {suggestion}
+
+The VM specification is as follows:
+{vm_spec_content}
+
+The tools instruction is as follows:
+{tools_instruction_content}
 
 **Instructions**:
 1. Analyze the current step, the provided suggestion, and the current VM variables.
