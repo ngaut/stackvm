@@ -7,17 +7,16 @@ from typing import Optional
 
 from app.controller.api_routes import api_blueprint
 from app.controller.engine import run_vm_with_goal
-from app.config.settings import GIT_REPO_PATH
+from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL, OPENAI_API_KEY, OLLAMA_BASE_URL
 from app.services import PlanExecutionVM
 from app.services import LLMInterface
-from app.config.settings import LLM_MODEL
 from app.instructions import global_tools_hub
 
 # Initialize Flask app
 app = Flask(__name__)
 app.register_blueprint(api_blueprint)
 
-
+# Setup logging
 def setup_logging(app):
     """Configure logging for the application."""
     logging.basicConfig(
@@ -32,12 +31,9 @@ def setup_logging(app):
             )
         )
 
-
-# Setup logging
 setup_logging(app)
 
-llm_client = LLMInterface(LLM_MODEL)
-
+llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 def llm_generate(
     prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
@@ -82,7 +78,6 @@ def llm_generate(
     }
     ```
     """
-
     if response_format:
         prompt = prompt + "\n" + response_format
 

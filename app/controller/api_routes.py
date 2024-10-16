@@ -15,7 +15,8 @@ from flask import Blueprint, render_template, jsonify, request, current_app
 from app.config.settings import (
     GIT_REPO_PATH,
     LLM_MODEL,
-    VM_SPEC_CONTENT
+    VM_SPEC_CONTENT,
+    LLM_PROVIDER
 )
 from app.services import (
     parse_commit_message,
@@ -175,7 +176,7 @@ def execute_vm():
     repo_path = global_repo.get_current_repo_path()
 
     try:
-        vm = PlanExecutionVM(repo_path, LLMInterface(LLM_MODEL))
+        vm = PlanExecutionVM(repo_path, LLMInterface(model=LLM_MODEL, provider=LLM_PROVIDER))
     except ImportError as e:
         return log_and_return_error(str(e), "error", 500)
 

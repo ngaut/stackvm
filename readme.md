@@ -9,15 +9,30 @@ To run this project, you need to install the required dependencies. You can do t
 poetry install
 ```
 
-## Configuration
 
-Before running the project, make sure to set up your OpenAI API key and TiDB AI API key:
+## LLM Configuration
 
+StackVM now supports local Language Models through Ollama integration:
 
-```bash
-export OPENAI_API_KEY=your_openai_api_key_here
-export TIDB_AI_API_KEY=your_tidb_ai_api_key_here
-```
+- **Default LLM Provider**: The default LLM provider is now set to 'ollama'.
+- **Default Model**: The default model is set to 'qwen2.5-coder:latest'.
+- **Ollama Base URL**: By default, it's set to 'http://localhost:11434'.
+
+To use Ollama:
+1. Ensure Ollama is installed and running(OLLAMA_DEBUG=1 ollama serve) on your local machine.
+2. The system will use Ollama by default. If you want to explicitly set it:
+   ```bash
+   export LLM_PROVIDER=ollama
+   export LLM_MODEL=your_preferred_ollama_model
+   ```
+
+To switch back to OpenAI:
+1. Set the LLM provider to 'openai':
+   ```bash
+   export LLM_PROVIDER=openai
+   export LLM_MODEL="gpt-4o-mini"
+   export OPENAI_API_KEY=your_openai_api_key
+   ```
 
 ## Usage
 
@@ -52,7 +67,7 @@ export TIDB_AI_API_KEY=your_tidb_ai_api_key_here
 - `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.
 
 ## Features
-
+- Local LLM support.
 - Dynamic plan generation and execution using a language model.
 - Automatic plan updates based on execution progress and errors.
 - Web interface for visualizing VM states, commit history, and code diffs.

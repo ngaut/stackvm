@@ -8,7 +8,7 @@ from .tools import ToolsHub
 
 class InstructionHandlers:
     def __init__(self, vm):
-        self.vm = vm
+        self.vm = vm  # Store the vm instance
         self.tools_calling = ToolsHub()
 
     def _handle_error(
