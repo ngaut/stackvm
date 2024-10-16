@@ -3,7 +3,7 @@ import logging
 import os
 import traceback
 from typing import Any, Dict, Optional
-from app.tools import InstructionHandlers
+from app.instructions import InstructionHandlers
 from app.services import load_state, save_state, StepType
 from app.services import GitManager, commit_message_wrapper, VariableManager
 
