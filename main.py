@@ -1,6 +1,4 @@
 import os
-import importlib.util
-import inspect
 import logging
 from flask import Flask
 import argparse
@@ -37,11 +35,6 @@ def setup_logging(app):
 
 # Setup logging
 setup_logging(app)
-
-# Read the API key from environment variables
-API_KEY = os.environ.get("TIDB_AI_API_KEY")
-if not API_KEY:
-    app.logger.error("TIDB_AI_API_KEY not found in environment variables")
 
 llm_client = LLMInterface(LLM_MODEL)
 
@@ -98,51 +91,7 @@ def llm_generate(
 
 
 global_tools_hub.register_tool(llm_generate)
-
-
-def load_tools(tools_package: str, hub):
-    """
-    Dynamically load and register all tool functions from the specified package.
-
-    Args:
-        tools_package (str): The package name containing tool modules.
-        hub: The global_tools_hub instance used to register tools.
-    """
-    try:
-        # Import the tools package
-        package = importlib.import_module(tools_package)
-    except ImportError as e:
-        app.logger.error(f"Failed to import tools package '{tools_package}': {e}")
-        return
-
-    # Get the directory of the tools package
-    package_dir = os.path.dirname(package.__file__)
-
-    for filename in os.listdir(package_dir):
-        if filename.endswith(".py") and filename != "__init__.py":
-            module_name = filename[:-3]
-            full_module_name = f"{tools_package}.{module_name}"
-            try:
-                app.logger.info(f"Loading module {module_name} from {filename}")
-                module = importlib.import_module(full_module_name)
-                # Iterate through all members of the module
-                for name, obj in inspect.getmembers(module, inspect.isfunction):
-                    # Option 1: Use naming convention (functions starting with 'tool_')
-                    if name.startswith("tool_"):
-                        hub.register_tool(obj)
-                        app.logger.info(f"Registered tool '{name}' from {filename}")
-                    # Option 2: Use decorator to identify tool functions
-                    elif hasattr(obj, "is_tool") and obj.is_tool:
-                        hub.register_tool(obj)
-                        app.logger.info(f"Registered tool '{name}' from {filename}")
-            except Exception as e:
-                app.logger.error(f"Failed to load module {full_module_name}: {e}")
-
-
-# Define the tools package name
-tools_package = "tools"
-# Load and register tools from the tools package
-load_tools(tools_package, global_tools_hub)
+global_tools_hub.load_tools("tools")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
