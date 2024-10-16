@@ -32,6 +32,7 @@ def setup_logging(app):
         )
 
 setup_logging(app)
+logger = logging.getLogger(__name__)
 
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
@@ -106,11 +107,11 @@ if __name__ == "__main__":
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         vm = PlanExecutionVM(repo_path, llm_client)
         run_vm_with_goal(vm, args.goal)
-        logging.info("VM execution completed")
+        logger.info("VM execution completed")
     elif args.server:
-        logging.info("Starting visualization server...")
+        logger.info("Starting visualization server...")
         app.run(debug=True, port=args.port)
     else:
-        logging.info(
+        logger.info(
             "Please specify --goal to run the VM with a goal or --server to start the visualization server"
         )

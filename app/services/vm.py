@@ -8,7 +8,6 @@ from app.services import load_state, save_state, StepType
 from app.services import GitManager, commit_message_wrapper, VariableManager
 
 # Constants
-DEFAULT_LOGGING_LEVEL = logging.INFO
 VARIABLE_PREVIEW_LENGTH = 50
 
 
@@ -37,7 +36,6 @@ class PlanExecutionVM:
     def _setup_logger(self) -> logging.Logger:
         """Set up and return a logger for the class."""
         logger = logging.getLogger(__name__)
-        logger.setLevel(DEFAULT_LOGGING_LEVEL)
         return logger
 
     def register_handlers(self) -> None:

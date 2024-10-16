@@ -4,9 +4,11 @@ import logging
 
 from . import tool
 
+logger = logging.getLogger(__name__)
+
 API_KEY = os.environ.get("TIDB_AI_API_KEY")
 if not API_KEY:
-    logging.error("TIDB_AI_API_KEY not found in environment variables")
+    logger.error("TIDB_AI_API_KEY not found in environment variables")
 
 
 @tool
@@ -45,10 +47,10 @@ def retrieve_knowledge_graph(query):
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
-        logging.error(f"Request to search_graph failed: {e}")
+        logger.error(f"Request to search_graph failed: {e}")
         return {"error": "Failed to perform search_graph request."}
     except ValueError:
-        logging.error("Invalid JSON response received from search_graph.")
+        logger.error("Invalid JSON response received from search_graph.")
         return {"error": "Invalid response format."}
 
 
@@ -88,8 +90,8 @@ def vector_search(query, top_k=5):
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
-        logging.error(f"Request to retrieve_embedding failed: {e}")
+        logger.error(f"Request to retrieve_embedding failed: {e}")
         return {"error": "Failed to perform retrieve_embedding request."}
     except ValueError:
-        logging.error("Invalid JSON response received from retrieve_embedding.")
+        logger.error("Invalid JSON response received from retrieve_embedding.")
         return {"error": "Invalid response format."}

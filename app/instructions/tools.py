@@ -4,11 +4,8 @@ import logging
 import os
 from typing import Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
-)
+logger = logging.getLogger(__name__)
+
 
 class ToolsHub:
     _instance = None
@@ -57,7 +54,7 @@ class ToolsHub:
             # Import the tools package
             package = importlib.import_module(tools_package)
         except ImportError as e:
-            logging.error(f"Failed to import tools package '{tools_package}': {e}")
+            logger.error(f"Failed to import tools package '{tools_package}': {e}")
             return
 
         # Get the directory of the tools package
@@ -68,20 +65,20 @@ class ToolsHub:
                 module_name = filename[:-3]
                 full_module_name = f"{tools_package}.{module_name}"
                 try:
-                    logging.info(f"Loading module {module_name} from {filename}")
+                    logger.info(f"Loading module {module_name} from {filename}")
                     module = importlib.import_module(full_module_name)
                     # Iterate through all members of the module
                     for name, obj in inspect.getmembers(module, inspect.isfunction):
                         # Option 1: Use naming convention (functions starting with 'tool_')
                         if name.startswith("tool_"):
                             self.register_tool(obj)
-                            logging.info(f"Registered tool '{name}' from {filename}")
+                            logger.info(f"Registered tool '{name}' from {filename}")
                         # Option 2: Use decorator to identify tool functions
                         elif hasattr(obj, "is_tool") and obj.is_tool:
                             self.register_tool(obj)
-                            logging.info(f"Registered tool '{name}' from {filename}")
+                            logger.info(f"Registered tool '{name}' from {filename}")
                 except Exception as e:
-                    logging.error(f"Failed to load module {full_module_name}: {e}")
+                    logger.error(f"Failed to load module {full_module_name}: {e}")
 
 
 # Create a global instance of ToolsHub

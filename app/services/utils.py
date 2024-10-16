@@ -8,6 +8,7 @@ import git
 
 from app.utils import find_first_json_object, extract_json
 
+logger = logging.getLogger(__name__)
 
 class StepType(Enum):
     GENERATE_PLAN = "Generate Plan"
@@ -36,7 +37,7 @@ def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
 
         return plan
     except (json.JSONDecodeError, ValueError) as e:
-        logging.error(f"Failed to parse plan: {e}")
+        logger.error(f"Failed to parse plan: {e}")
         return None
 
 
@@ -60,7 +61,7 @@ def parse_step(step_response: str) -> Optional[Dict[str, Any]]:
 
         return step
     except (json.JSONDecodeError, ValueError) as e:
-        logging.error(f"Failed to parse step: {e}")
+        logger.error(f"Failed to parse step: {e}")
         return None
 
 def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
@@ -70,9 +71,9 @@ def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
         state_content = repo.git.show(f"{commit_hash}:vm_state.json")
         return json.loads(state_content)
     except (git.exc.GitCommandError, json.JSONDecodeError) as e:
-        logging.error(f"Error loading state from commit {commit_hash}: {str(e)}")
+        logger.error(f"Error loading state from commit {commit_hash}: {str(e)}")
     except Exception as e:
-        logging.error(
+        logger.error(
             f"Unexpected error loading state from commit {commit_hash}: {str(e)}"
         )
     return None
@@ -85,7 +86,7 @@ def save_state(state: Dict[str, Any], repo_path: str) -> None:
         with open(state_file, "w") as f:
             json.dump(state, f, indent=2, default=str, sort_keys=True)
     except Exception as e:
-        logging.error(f"Error saving state: {str(e)}")
+        logger.error(f"Error saving state: {str(e)}")
 
 
 def parse_commit_message(message: str) -> tuple:
