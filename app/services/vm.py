@@ -91,54 +91,42 @@ class PlanExecutionVM:
             self.logger.warning(f"Unknown instruction: {step_type}")
             return False
 
-        success = handler(params)
+        success, output = handler(params)
         if success:
             self.save_state()
-            self._log_step_execution(step_type, params, seq_no)
+            self._log_step_execution(step_type, params, seq_no, output)
         return success
 
     def _log_step_execution(
-        self, step_type: str, params: Dict[str, Any], seq_no: str
+        self,
+        step_type: str,
+        params: Dict[str, Any],
+        seq_no: str,
+        output_parameters: Dict[str, Any],
     ) -> None:
         """Log the execution of a step and prepare commit message."""
         if step_type == "calling":
             input_vars = params.get("params", {})
-            output_vars = params.get("output_vars", None)
             description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool', 'Unknown')}"
         else:
             input_vars = params
-            output_vars = None
             description = f"Executed seq_no: {seq_no}, step: {step_type}"
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
-        output_variables = {}
-        if output_vars is not None:
-            if isinstance(output_vars, list):
-                output_variables = {
-                    k: self._preview_value(self.variable_manager.get(k))
-                    for k in output_vars
-                }
-            elif isinstance(output_vars, str):
-                output_variables = {
-                    output_vars: self._preview_value(
-                        self.variable_manager.get(output_vars)
-                    )
-                }
-            else:
-                self.logger.error(
-                    f"Invalid output_vars type: {type(output_vars), {output_vars}}"
-                )
 
         self.logger.info(f"{description} with parameters: {json.dumps(params)}")
-        if output_variables:
-            self.logger.info(f"Output variables: {json.dumps(output_variables)}")
+        if output_parameters:
+            output_parameters = {
+                k: self._preview_value(v) for k, v in output_parameters.items()
+            }
+            self.logger.info(f"Output variables: {json.dumps(output_parameters)}")
 
         commit_message_wrapper.set_commit_message(
             StepType.STEP_EXECUTION,
             str(seq_no),
             description,
             input_parameters,
-            output_variables,
+            output_parameters,
         )
 
     @staticmethod

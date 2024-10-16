@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union, Tuple
 from inspect import signature
 
 from app.utils import find_first_json_object
@@ -60,6 +60,7 @@ class InstructionHandlers:
         self.vm.logger.debug(f"output_vars: {output_vars}")
         instruction_output_str = self.vm._preview_value(instruction_output)
         self.vm.logger.debug(f"instruction_output: {instruction_output_str}")
+        output_vars_record = {}
 
         try:
             if isinstance(output_vars, list):
@@ -74,25 +75,33 @@ class InstructionHandlers:
                 for var_name in output_vars:
                     var_value = instruction_output.get(var_name)
                     self.vm.set_variable(var_name, var_value)
+                    output_vars_record[var_name] = var_value
             elif isinstance(output_vars, str):
                 self.vm.set_variable(output_vars, instruction_output)
-            return True
+                output_vars_record[output_vars] = instruction_output
+            return True, output_vars_record
         except Exception as e:
             self.vm.logger.error(f"Failed to set output_vars: {e}")
-            return False
+            return False, output_vars_record
 
-    def calling_handler(self, params: Dict[str, Any]) -> bool:
+    def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
         tool_name = params.get("tool")
         if tool_name is None:
-            return self._handle_error(
-                "Missing 'tool' in calling parameters", "calling", params
+            return (
+                self._handle_error(
+                    "Missing 'tool' in calling parameters", "calling", params
+                ),
+                None,
             )
 
         # Retrieve the tool handler from the tools_calling dictionary
         tool_handler = self.tools_calling.get_tool_handler(tool_name)
         if tool_handler is None:
-            return self._handle_error(
-                f"Tool '{tool_name}' is not registered.", "calling", params
+            return (
+                self._handle_error(
+                    f"Tool '{tool_name}' is not registered.", "calling", params
+                ),
+                None,
             )
 
         tool_parameters = {
@@ -116,13 +125,15 @@ class InstructionHandlers:
         # Call the tool handler with the filtered parameters
         result = tool_handler(**filtered_tool_parameters)
         if result is not None:
-            success = self._set_output_vars(result, output_vars)
-            return success
+            return self._set_output_vars(result, output_vars)
 
-        return self._handle_error(
-            f"Failed to fetch response from tool '{tool_name}'.",
-            "calling",
-            params,
+        return (
+            self._handle_error(
+                f"Failed to fetch response from tool '{tool_name}'.",
+                "calling",
+                params,
+            ),
+            output_vars,
         )
 
     def _construct_response_format_example(
@@ -138,7 +149,7 @@ class InstructionHandlers:
 
         return json.dumps(example_structure, indent=2)
 
-    def jmp_handler(self, params: Dict[str, Any]) -> bool:
+    def jmp_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
         """Handle both conditional and unconditional jumps."""
         condition_prompt = self.vm.resolve_parameter(params.get("condition_prompt"))
         context = self.vm.resolve_parameter(params.get("context"))
@@ -149,10 +160,13 @@ class InstructionHandlers:
         if condition_prompt:
             # Conditional jump
             if jump_if_true is None or jump_if_false is None:
-                return self._handle_error(
-                    "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
-                    instruction="jmp_if",
-                    params=params,
+                return (
+                    self._handle_error(
+                        "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
+                        instruction="jmp_if",
+                        params=params,
+                    ),
+                    None,
                 )
 
             condition_prompt_with_response_format = (
@@ -174,10 +188,13 @@ class InstructionHandlers:
                 explanation = parsed_response.get("explanation", "")
 
                 if not isinstance(condition_result, bool):
-                    return self._handle_error(
-                        f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
-                        instruction="jmp",
-                        params=params,
+                    return (
+                        self._handle_error(
+                            f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
+                            instruction="jmp",
+                            params=params,
+                        ),
+                        None,
                     )
 
                 if condition_result:
@@ -190,47 +207,62 @@ class InstructionHandlers:
                     f"Explanation: {explanation}"
                 )
             except json.JSONDecodeError:
-                return self._handle_error(
-                    "Failed to parse JSON response from LLM.",
-                    instruction="jmp",
-                    params=params,
+                return (
+                    self._handle_error(
+                        "Failed to parse JSON response from LLM.",
+                        instruction="jmp",
+                        params=params,
+                    ),
+                    None,
                 )
             except Exception as e:
-                return self._handle_error(
-                    f"Unexpected error in jmp_handler: {str(e)}",
-                    instruction="jmp",
-                    params=params,
+                return (
+                    self._handle_error(
+                        f"Unexpected error in jmp_handler: {str(e)}",
+                        instruction="jmp",
+                        params=params,
+                    ),
+                    None,
                 )
         elif target_seq is None:
-            return self._handle_error(
-                "Missing 'target_seq' for unconditional jump.", "jmp", params
+            return (
+                self._handle_error(
+                    "Missing 'target_seq' for unconditional jump.", "jmp", params
+                ),
+                None,
             )
 
         try:
             target_index = self.vm.find_step_index(target_seq)
             if target_index is None:
-                return self._handle_error(
-                    f"Target sequence number {target_seq} not found in the plan.",
-                    "jmp",
-                    params,
+                return (
+                    self._handle_error(
+                        f"Target sequence number {target_seq} not found in the plan.",
+                        "jmp",
+                        params,
+                    ),
+                    None,
                 )
 
             self.vm.state["program_counter"] = target_index
             self.vm.logger.info(f"Jumped to seq_no {target_seq}")
-            return True
+            return True, {"target_seq": target_seq}
         except Exception as e:
-            return self._handle_error(
-                f"Unexpected error in jmp_handler: {str(e)}", "jmp", params
+            return (
+                self._handle_error(
+                    f"Unexpected error in jmp_handler: {str(e)}", "jmp", params
+                ),
+                None,
             )
 
-    def assign_handler(self, params: Dict[str, Any]) -> bool:
+    def assign_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
         """Handle variable assignment."""
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
-        return True
+        return True, {var_name: value_resolved}
 
-    def reasoning_handler(self, params: Dict[str, Any]) -> bool:
+    def reasoning_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
         """Handle reasoning steps."""
         chain_of_thoughts = params.get("chain_of_thoughts")
         dependency_analysis = params.get("dependency_analysis")
@@ -238,7 +270,7 @@ class InstructionHandlers:
         if not isinstance(chain_of_thoughts, str) or not isinstance(
             dependency_analysis, str
         ):
-            return self._handle_error("Invalid parameters for 'reasoning'.")
+            return self._handle_error("Invalid parameters for 'reasoning'."), None
 
         self.vm.logger.info(
             f"Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
@@ -250,4 +282,4 @@ class InstructionHandlers:
                 "dependency_analysis": dependency_analysis,
             }
         )
-        return True
+        return True, None
