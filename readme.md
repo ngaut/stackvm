@@ -86,9 +86,7 @@ Navigate to the tools directory in your project. Create a new Python file for yo
 
 ### Step 2:  Implement the Tool
 
-In your new tool file, implement the tool function. Use the @tool decorator to mark it as a tool. Ensure the function returns a dictionary if multiple values need to be returned.
-
-Example 1: Response with a single data variable
+In your new tool file, implement the tool function. Use the @tool decorator to mark it as a tool.
 
 ```json
 from . import tool
@@ -108,37 +106,8 @@ def my_custom_tool(param1, param2):
 
    # Your tool logic here
 
-   return result
+   return response_data
 ```
-
-Example 2: Response with multiple data variables
-
-```json
-from . import tool
-
-@tool
-def my_custom_tool(param1, param2):
-    """
-    This tool performs a custom operation using param1 and param2.
-
-    Arguments:
-    - `param1`: Description of param1.
-    - `param2`: Description of param2.
-
-    Returns:
-    - A dictionary containing multiple response variables with keys sum and product
-    """
-    # Your tool logic here
-    result1 = param1 + param2  # Example operation
-    result2 = param1 * param2  # Another example operation
-
-    # Return a dictionary if multiple values need to be returned
-    return {
-        "sum": result1,
-        "product": result2
-    }
-```
-
 
 ## Contributing
 
