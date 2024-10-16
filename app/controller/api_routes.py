@@ -12,7 +12,11 @@ from git import NULL_TREE
 from git.exc import GitCommandError
 from flask import Blueprint, render_template, jsonify, request, current_app
 
-from app.config.settings import GIT_REPO_PATH, LLM_MODEL
+from app.config.settings import (
+    GIT_REPO_PATH,
+    LLM_MODEL,
+    VM_SPEC_CONTENT
+)
 from app.services import (
     parse_commit_message,
     StepType,
@@ -24,6 +28,7 @@ from app.services import (
     commit_message_wrapper,
     get_step_update_prompt,
 )
+from app.instructions import global_tools_hub
 from .plan_repo import (
     global_repo,
     get_commits,
@@ -276,7 +281,7 @@ def optimize_step():
     repo = git.Repo(repo_path)
 
     # Generate the updated step using LLM
-    prompt = get_step_update_prompt(vm, seq_no, suggestion)
+    prompt = get_step_update_prompt(vm, seq_no, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), suggestion)
     updated_step_response = vm.llm_interface.generate(prompt)
 
     if not updated_step_response:
