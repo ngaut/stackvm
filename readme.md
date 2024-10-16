@@ -67,20 +67,78 @@ To switch back to OpenAI:
 - `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.
 
 ## Features
-- Local LLM support.
+
 - Dynamic plan generation and execution using a language model.
-- Automatic plan updates based on execution progress and errors.
-- Web interface for visualizing VM states, commit history, and code diffs.
-- Support for multiple Git repositories and branches.
-- Real-time execution of VM steps with commit tracking.
-- Knowledge graph retrieval using TiDB AI API.
-- Vector search for embedded chunks using TiDB AI API.
 - Conditional execution based on LLM evaluation.
-- Variable assignment and reasoning steps in the VM execution.
+- Automatic plan updates based on execution progress and errors.
+- Support for multiple plan or execution branches.
+- Real-time execution of VM steps with commit tracking.
+- Web interface for visualizing VM states, commit history, and code diffs.
+- Local LLM support.
 
-## API Integration
+## Customizing Tools
 
-This project integrates with the TiDB AI API for knowledge graph searches and vector searches. Make sure you have a valid API key set up in your environment variables.
+This project integrates with the TiDB AI API for knowledge graph searches and vector searches.
+
+### Step 1: Create a New Tool File
+
+Navigate to the tools directory in your project. Create a new Python file for your tool, e.g., `my_tool.py`.
+
+### Step 2:  Implement the Tool
+
+In your new tool file, implement the tool function. Use the @tool decorator to mark it as a tool. Ensure the function returns a dictionary if multiple values need to be returned.
+
+Example 1: Response with a single data variable
+
+```json
+from . import tool
+
+@tool
+def my_custom_tool(param1, param2):
+   """
+   This tool performs a custom operation using param1 and param2.
+
+   Arguments:
+   - `param1`: Description of param1.
+   - `param2`: Description of param2.
+
+   Returns:
+   - Result of the custom operation.
+   """
+
+   # Your tool logic here
+
+   return result
+```
+
+Example 2: Response with multiple data variables
+
+```json
+from . import tool
+
+@tool
+def my_custom_tool(param1, param2):
+    """
+    This tool performs a custom operation using param1 and param2.
+
+    Arguments:
+    - `param1`: Description of param1.
+    - `param2`: Description of param2.
+
+    Returns:
+    - A dictionary containing multiple response variables with keys sum and product
+    """
+    # Your tool logic here
+    result1 = param1 + param2  # Example operation
+    result2 = param1 * param2  # Another example operation
+
+    # Return a dictionary if multiple values need to be returned
+    return {
+        "sum": result1,
+        "product": result2
+    }
+```
+
 
 ## Contributing
 
@@ -91,8 +149,3 @@ If you would like to contribute to this project, please fork the repository and 
 - If you encounter any issues related to missing modules or dependencies, make sure you have installed all required packages as mentioned in the Installation section.
 - If you're getting API-related errors, check that your TiDB AI API key is correctly set in your environment variables.
 - For any LLM-related issues, ensure your OpenAI API key is properly configured.
-
-## Logging
-
-The project uses Python's logging module to log information, warnings, and errors. Check the logs for detailed information about the execution process and any issues that may arise.
-
