@@ -3,45 +3,7 @@ from typing import Any, Dict, Optional, List, Union
 from inspect import signature
 
 from app.utils import find_first_json_object
-
-
-class ToolsHub:
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(ToolsHub, cls).__new__(cls, *args, **kwargs)
-            cls._instance.tools = {}
-            cls._instance.tools_docstrings = {}
-        return cls._instance
-
-    def register_tool(self, handler_method: callable) -> None:
-        """Register a tool with its corresponding handler."""
-        tool_name = handler_method.__name__
-        if not isinstance(tool_name, str) or not callable(handler_method):
-            raise ValueError(f"Invalid tool registration: {tool_name} is not callable")
-        if not handler_method.__doc__ or len(handler_method.__doc__) < 10:
-            raise ValueError(
-                f"Invalid tool registration: {tool_name} has no valid docstring"
-            )
-        self.tools[tool_name] = handler_method
-        self.tools_docstrings[tool_name] = handler_method.__doc__
-        return True
-
-    def get_tool_handler(self, tool_name: str) -> Optional[callable]:
-        """Retrieve the handler for a registered tool."""
-        return self.tools.get(tool_name)
-
-    def get_tools_description(self) -> str:
-        """Get the description of all registered tools."""
-        description = "# Tools calling\n\nBelow are the ONLY avaiable tools for calling instruction.\n\n"
-        for tool_name, docstring in self.tools_docstrings.items():
-            description += f"## {tool_name}\n\n{docstring}\n\n"
-        return description
-
-
-# Create a global instance of ToolsHub
-global_tools_hub = ToolsHub()
+from .tools import ToolsHub
 
 
 class InstructionHandlers:
