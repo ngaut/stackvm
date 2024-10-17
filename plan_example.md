@@ -51,8 +51,7 @@
         "query": "TiDB latest stable version"
       },
       "output_vars": "latest_tidb_version_info"
-    },
-    "execution_objective": "Retrieve the latest stable TiDB version information from the knowledge graph. \n\nExpected Output: 'latest_tidb_version_info' contains a complex structured object with entities, relationships, and metadata related to the latest TiDB version.\n\nUsage: Use 'llm_generate' in the next step to extract the specific version number and release date from this complex data."
+    }
   },
   {
     "seq_no": 2,
@@ -64,8 +63,7 @@
         "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}"
       },
       "output_vars": ["latest_tidb_version", "release_date"]
-    },
-    "execution_objective": "Extract the latest TiDB version number and release date from 'latest_tidb_version_info'. \n\nExpected Output: 'latest_tidb_version' and 'release_date' containing the version string and release date respectively."
+    }
   },
   {
     "seq_no": 3,
@@ -75,8 +73,7 @@
       "context": "Latest TiDB version: ${latest_tidb_version}",
       "jump_if_true": 4,
       "jump_if_false": 6
-    },
-    "execution_objective": "Check if 'latest_tidb_version' was successfully extracted. \n\nExpected Output: JSON with 'result' indicating success and 'explanation' providing context.\n\nUsage: If true, jump to step 4 for version-specific info; if false, jump to step 6 for general TiDB data."
+    }
   },
   {
     "seq_no": 4,
@@ -88,16 +85,14 @@
         "top_k": 3
       },
       "output_vars": "tidb_info"
-    },
-    "execution_objective": "Retrieve the top 3 documents detailing key features and improvements of TiDB version '${latest_tidb_version}'. \n\nExpected Output: 'tidb_info' contains 3 document data in a complex structured object.\n\nUsage: Use this information to generate detailed optimization recommendations."
+    }
   },
   {
     "seq_no": 5,
     "type": "jmp",
     "parameters": {
       "target_seq": 7
-    },
-    "execution_objective": "Unconditionally jump to sequence number 7 to continue with performance-specific optimization steps, bypassing steps that are not needed."
+    }
   },
   {
     "seq_no": 6,
@@ -109,8 +104,7 @@
         "top_k": 3
       },
       "output_vars": "tidb_info"
-    },
-    "execution_objective": "Retrieve the top 3 documents with general information about the latest TiDB version and its key features. \n\nExpected Output: 'tidb_info' contains 3 document data in a complex structured object.\n\nUsage: Use this information to generate comprehensive optimization recommendations."
+    }
   },
   {
     "seq_no": 7,
@@ -122,8 +116,7 @@
         "top_k": 5
       },
       "output_vars": "performance_techniques"
-    },
-    "execution_objective": "Retrieve the top 5 documents outlining performance optimization techniques for TiDB version '${latest_tidb_version}'. \n\nExpected Output: 'performance_techniques' contains 5 document data in a complex structured object.\n\nUsage: Collect this information to formulate detailed optimization recommendations."
+    }
   },
   {
     "seq_no": 8,
@@ -135,8 +128,7 @@
         "top_k": 5
       },
       "output_vars": "ecommerce_optimizations"
-    },
-    "execution_objective": "Retrieve the top 5 documents discussing specific considerations and best practices for optimizing TiDB '${latest_tidb_version}' for e-commerce applications. \n\nExpected Output: 'ecommerce_optimizations' contains 5 document data in a complex structured object.\n\nUsage: Collect this information to formulate detailed optimization recommendations."
+    }
   },
   {
     "seq_no": 9,
@@ -148,16 +140,14 @@
         "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
       },
       "output_vars": "final_recommendations"
-    },
-    "execution_objective": "Generate a categorized list of best practices for optimizing TiDB '${latest_tidb_version}' in high-volume e-commerce applications. \n\nExpected Output: 'final_recommendations' contains organized best practices under categories like schema design, indexing, query optimization, and infrastructure scaling.\n\nUsage: Incorporate these recommendations into the final answer presented to the user."
+    }
   },
   {
     "seq_no": 10,
     "type": "assign",
     "parameters": {
       "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} (released on ${release_date}) performance for a high-volume e-commerce application:\n\n${final_recommendations}"
-    },
-    "execution_objective": "Consolidate the best practices into a formatted final answer with version and release date information. \n\nExpected Output: 'final_answer' contains a structured and comprehensive list of optimization practices tailored to TiDB '${latest_tidb_version}' and e-commerce needs"
+    }
   }
 ]
 ```

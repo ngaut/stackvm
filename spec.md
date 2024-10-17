@@ -23,7 +23,6 @@ Each instruction in the plan is represented as a JSON object with the following 
 - `seq_no`: A unique and AUTO-INCREMENT integer identifying the instruction's sequence within the plan, starting from 0.
 - `type`: A string indicating the instruction type.
 - `parameters`: An object containing parameters required by the instruction.
-- `execution_objective`: A string that includes the purpose of the instruction, a detailed description of the expected output, and how this output will be used by subsequent instructions.
 
 ```json
 {
@@ -32,8 +31,7 @@ Each instruction in the plan is represented as a JSON object with the following 
   "parameters": {
     "param1": "value_or_variable_reference",
     "param2": "value_or_variable_reference"
-  },
-  "execution_objective": "Description of the purpose, expected output, and usage in subsequent steps."
+  }
 }
 ```
 
@@ -51,8 +49,7 @@ Each instruction in the plan is represented as a JSON object with the following 
   "parameters": {
     "number": 42,
     "doubled_number": "${number}"
-  },
-  "execution_objective": "Assign the value 42 to 'number' and set 'doubled_number' to the value of 'number'. These variables will be used in calculations in subsequent steps."
+  }
 }
 ```
 
@@ -82,8 +79,7 @@ Each instruction in the plan is represented as a JSON object with the following 
     "context": null,
     "jump_if_true": 5,
     "jump_if_false": 6
-  },
-  "execution_objective": "Evaluate whether 'number' is even. If true, jump to step 5 to perform operations for even numbers; if false, jump to step 6 for odd number operations."
+  }
 }
 ```
 
@@ -94,8 +90,7 @@ Each instruction in the plan is represented as a JSON object with the following 
   "type": "jmp",
   "parameters": {
     "target_seq": 7
-  },
-  "execution_objective": "Jump unconditionally to step 7."
+  }
 }
 ```
 
@@ -141,8 +136,7 @@ Below is an example where the calling type is configured to use the `llm_generat
       "response_format": "json"
     },
     "output_vars": ["summary", "insights"]
-  },
-  "execution_objective": "Use the 'llm_generate' tool to analyze 'sales_data' and generate a summary and insights in JSON format. Store 'summary' and 'insights' for use in generating the final report in subsequent steps."
+  }
 }
 ```
 
@@ -199,7 +193,6 @@ Below is an example where the calling type is configured to use the `llm_generat
     This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
     "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
   }
-  // No execution_objective needed for 'reasoning' type
 }
 ```
 
@@ -219,7 +212,7 @@ Parameters can be either direct values or variable references. To reference a va
 ## 5. Variables and Dependencies
 - **Variable Assignment**: Use the `assign` instruction or specify an `output_vars` in a `calling` instruction that produces outputs.
 - **Variable Access**: Reference variables in parameters using the variable reference format.
-- **Dependencies**: Manage dependencies by assigning outputs to variables and referencing them in subsequent instructions. Use the `execution_objective` field to describe how outputs will be used in later steps.
+- **Dependencies**: Manage dependencies by assigning outputs to variables and referencing them in subsequent instructions.
 
 ## 6. Plan Structure
 - **Sequential Execution**: Instructions are executed in order based on their `seq_no`.
