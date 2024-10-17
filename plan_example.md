@@ -136,14 +136,14 @@
         "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
         "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
       },
-      "output_vars": ["final_recommendations", "summary"]
+      "output_vars": "final_recommendations"
     }
   },
   {
     "seq_no": 10,
     "type": "assign",
     "parameters": {
-      "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} (released on ${release_date}) performance for a high-volume e-commerce application:\n\n${final_recommendations}\n\nSummary of Recommendations:\n${summary}"
+      "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} (released on ${release_date}) performance for a high-volume e-commerce application:\n\n${final_recommendations}"
     }
   }
 ]
