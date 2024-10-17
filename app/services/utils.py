@@ -74,7 +74,7 @@ def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Error loading state from commit {commit_hash}: {str(e)}")
     except Exception as e:
         logger.error(
-            f"Unexpected error loading state from commit {commit_hash}: {str(e)}"
+            "Unexpected error loading state from commit %s: %s", commit_hash, str(e)
         )
     return None
 

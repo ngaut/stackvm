@@ -47,7 +47,7 @@ def retrieve_knowledge_graph(query):
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Request to search_graph failed: {e}")
+        logger.error("Request to search_graph failed: %s", str(e))
         return {"error": "Failed to perform search_graph request."}
     except ValueError:
         logger.error("Invalid JSON response received from search_graph.")
@@ -90,7 +90,7 @@ def vector_search(query, top_k=5):
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Request to retrieve_embedding failed: {e}")
+        logger.error("Request to retrieve_embedding failed: %s", str(e))
         return {"error": "Failed to perform retrieve_embedding request."}
     except ValueError:
         logger.error("Invalid JSON response received from retrieve_embedding.")

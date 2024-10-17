@@ -35,10 +35,10 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     )
     plan_response = llm_interface.generate(prompt)
 
-    logger.info(f"Generating plan using LLM: {plan_response}")
+    logger.info("Generating plan using LLM: %s", plan_response)
 
     if not plan_response:
-        logger.error(f"LLM failed to generate a response: {plan_response}")
+        logger.error("LLM failed to generate a response: %s", plan_response)
         return []
 
     plan = parse_plan(plan_response)
@@ -46,9 +46,8 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     if plan:
         return plan
     else:
-        logger.error(f"Failed to parse the generated plan: {plan_response}")
+        logger.error("Failed to parse the generated plan: %s", plan_response)
         return []
-
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
     prompt = get_plan_update_prompt(
@@ -82,11 +81,11 @@ def should_update_plan(vm: PlanExecutionVM):
     key_factors = analysis.get("key_factors", [])
 
     if should_update:
-        logger.info(f"LLM suggests updating the plan: {explanation}")
+        logger.info("LLM suggests updating the plan: %s", explanation)
         for factor in key_factors:
-            logger.info(f"Factor: {factor['factor']}, Impact: {factor['impact']}")
+            logger.info("Factor: %s, Impact: %s", factor['factor'], factor['impact'])
     else:
-        logger.info(f"LLM suggests keeping the current plan: {explanation}")
+        logger.info("LLM suggests keeping the current plan: %s", explanation)
 
     return should_update, explanation, key_factors
 
@@ -111,11 +110,11 @@ def run_vm_with_goal(vm, goal):
         if vm.state.get("goal_completed"):
             final_answer = vm.get_variable("final_answer")
             if final_answer:
-                logger.info(f"\nfinal_answer: {final_answer}")
+                logger.info("final_answer: %s", final_answer)
             else:
-                logger.info("\nNo result was generated.")
+                logger.info("No result was generated.")
         else:
             logger.warning("Plan execution failed or did not complete.")
-            logger.error(vm.state.get("errors"))
+            logger.error("%s", vm.state.get("errors"))
     else:
         logger.error("Failed to generate plan.")
