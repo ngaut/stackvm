@@ -221,3 +221,10 @@ Parameters can be either direct values or variable references. To reference a va
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
 - **Instruction selection**: DO NOT USE other instruction type that not list above.
+- **Best Practices for Utilizing Knowledge Graph Search and Vector Search Tools**:
+  1. **Understanding the Question and Relevant Knowledge:**
+    1.1 When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
+    1.2 After retrieving knowledge, integrate the user’s question with the knowledge graph data. Use an LLM generation tool to analyze both the user’s intent and the graph data, generating a more precise and effective query based on the context.
+  2. **Providing an In-Depth Answer:**
+    2.1 Use the refined query to search for detailed information using the Vector Search tool, which can retrieve pertinent document snippets from the vector store that directly aid in answering the user’s question.
+    2.2 Finally, synthesize all the data retrieved—from both the Knowledge Graph and Vector Search—to formulate a comprehensive and accurate response to the user’s inquiry.

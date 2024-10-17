@@ -33,6 +33,10 @@ def retrieve_knowledge_graph(query):
             "output_vars": "tidb_version_graph"
         }
     }
+
+    Best practices:
+    - Leverage the Knowledge Graph Search tool for tasks that require retrieving fine-grained knowledge points and understanding the relationships or connections between these entities. This tool excels in exploring structured and relational data, making it ideal for identifying specific concepts and their interdependencies.
+    - To maximize its effectiveness, integrate the Knowledge Graph Search with an LLM (Large Language Model) generation tool. First, use the Knowledge Graph Search to pinpoint relevant knowledge and their intricate relationships. Then, pass this structured data to the LLM generation tool to extract and organize the precise information needed by the user.
     """
 
     url = "https://tidb.ai/api/v1/admin/graph/search"
@@ -80,6 +84,10 @@ def vector_search(query, top_k=5):
         }
     }
     ```
+
+    Best practices:
+    - Utilize the Vector Search tool when you need to retrieve detailed and comprehensive information from large volumes of unstructured or semi-structured data. This tool is adept at returning relevant document snippets that provide rich context and in-depth insights, rather than just simple descriptions of knowledge points.
+    - To optimize its use, combine multiple Vector Search calls (different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
     """
 
     url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
