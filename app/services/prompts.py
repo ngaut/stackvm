@@ -3,6 +3,9 @@ import datetime
 
 
 def get_plan_update_prompt(vm, vm_spec_content, tools_instruction_content, explanation=None, key_factors=None):
+    """
+    Get the prompt for updating the plan.
+    """
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
 
@@ -68,6 +71,9 @@ After the updated plan, provide a summary of the changes made to the plan and th
 
 
 def get_should_update_plan_prompt(vm):
+    """
+    Get the prompt for determining if the plan should be updated.
+    """
     json_format = """
     {{
         "should_update": boolean,
@@ -111,6 +117,9 @@ Analyze the current VM execution state and determine if the plan needs to be upd
 
 
 def get_generate_plan_prompt(goal, vm_spec_content, tools_instruction_content, plan_example_content):
+    """
+    Get the prompt for generating a plan.
+    """
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Your task is to generate a detailed action plan to achieve the following goal:
 Goal: {goal}
@@ -160,6 +169,9 @@ Ensure the JSON is properly formatted and encapsulated within a ```json code blo
 
 
 def get_step_update_prompt(vm, seq_no, vm_spec_content, tools_instruction_content, suggestion):
+    """
+    Get the prompt for updating a step.
+    """
     current_step = vm.state["current_plan"][seq_no]
     current_variables = json.dumps(vm.get_all_variables(), indent=2)
 

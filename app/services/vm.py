@@ -12,6 +12,9 @@ VARIABLE_PREVIEW_LENGTH = 50
 
 
 class PlanExecutionVM:
+    """
+    Virtual Machine for executing plans.
+    """
     def __init__(self, repo_path: str, llm_interface: Any = None):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {

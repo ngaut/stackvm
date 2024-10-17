@@ -7,6 +7,9 @@ from .utils import StepType
 
 
 class CommitMessageWrapper:
+    """
+    Wrapper for commit message.
+    """
     def __init__(self):
         self.commit_message: Optional[str] = None
 
