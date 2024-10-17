@@ -39,7 +39,6 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.1 assign
 - **Purpose**: Assigns values to one or more variables.
 - **Parameters**: An object where each key is a variable name and each value is either a direct value or a variable reference.
-- **Execution Objective**: Should include the purpose of the assignment, the expected values to be stored, and how these variables will be used in subsequent instructions.
 
 **Example:**
 ```json
@@ -56,7 +55,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.2 jmp
 - **Purpose**: Jumps to a specified sequence number based on an optional condition.
 - **Parameters**:
-  - `condition_prompt` (optional): The prompt to evaluate the condition. If provided, the LLM evaluates whether to jump. Must respond with a JSON object in the following format:
+  - `condition_prompt` (optional): The prompt to evaluate the condition. If provided, the LLM evaluates whether to jump. **Must respond with a JSON object in the following format:**
     ```json
     {
       "result": boolean,
@@ -67,7 +66,6 @@ Each instruction in the plan is represented as a JSON object with the following 
   - `jump_if_true`: The `seq_no` to jump to if the condition evaluates to true. Required if `condition_prompt` is provided.
   - `jump_if_false` (optional): The `seq_no` to jump to if the condition evaluates to false. Required if `condition_prompt` is provided.
   - `target_seq` (optional): The `seq_no` to jump to if no condition is provided (unconditional jump).
-- **Execution Objective**: Should describe the purpose of the jump, the expected outcome of the condition evaluation, and how the result will affect subsequent execution flow.
 
 **Example (Conditional Jump):**
 ```json
@@ -104,7 +102,7 @@ Each instruction in the plan is represented as a JSON object with the following 
   - `output_vars` (optional): Specifies how the output from the tool should be stored in the VM’s variable store for later use. The type of output_vars can either be a string or an array.
     - If it is a string: The entire tool's response (whether text or JSON) will be stored under the specified variable name.
     - If it is an array: It specifies that the tool's response must be a valid JSON object and contain specific keys. Each entry in the array corresponds to a key in the JSON response, and the value associated with each key will be extracted and stored as a variable.
-- **Execution Objective**: Should include the purpose of invoking the tool, a detailed description of the expected output, and how this output will be used in subsequent instructions.
+    These variables are stored in the VM’s variable store and can be used in subsequent instructions.
 
 **Example:**
 ```json
@@ -152,7 +150,6 @@ Below is an example where the calling type is configured to use the `llm_generat
     - How different pieces of information are intended to be combined
     - Any limitations or potential issues with the chosen approach
   - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
-- **Execution Objective**: Not typically required for the 'reasoning' instruction, as it is a meta-commentary on the plan itself.
 
 **Example:**
 ```json
