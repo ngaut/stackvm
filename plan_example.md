@@ -52,7 +52,7 @@
       },
       "output_vars": "latest_tidb_version_info"
     },
-    "execution_objective": "Purpose: Retrieve the latest stable version information of TiDB from the knowledge graph to ensure the plan is based on the most recent and relevant data. \nExpected Output: The output variable 'latest_tidb_version_info' will contain a complex structured object representing the knowledge graph data related to the query (e.g., including entities, relationships, and metadata). \nUsage: Since the data structure is complex, extracting specific information such as the exact version number requires further processing using the 'llm_generate' tool. In subsequent steps, 'latest_tidb_version_info' will be processed to extract the precise TiDB version number needed for fetching version-specific features and optimizations."
+    "execution_objective": "Retrieve the latest stable TiDB version information from the knowledge graph. \n\nExpected Output: 'latest_tidb_version_info' contains a complex structured object with entities, relationships, and metadata related to the latest TiDB version.\n\nUsage: Use 'llm_generate' in the next step to extract the specific version number and release date from this complex data."
   },
   {
     "seq_no": 2,
@@ -65,7 +65,7 @@
       },
       "output_vars": ["latest_tidb_version", "release_date"]
     },
-    "execution_objective": "Extract the latest stable version number and its release date from the retrieved knowledge graph data to identify the target version for optimization."
+    "execution_objective": "Extract the latest TiDB version number and release date from 'latest_tidb_version_info'. \n\nExpected Output: 'latest_tidb_version' and 'release_date' containing the version string and release date respectively."
   },
   {
     "seq_no": 3,
@@ -76,7 +76,7 @@
       "jump_if_true": 4,
       "jump_if_false": 6
     },
-    "execution_objective": "Purpose: Assess whether a specific latest stable version of TiDB has been successfully retrieved from the knowledge graph. \n\nUsage: Based on the value of `result`, the VM will determine the next execution path:\n- If `result` is `true`: The VM will jump to sequence number **4** to gather detailed, version-specific information about TiDB.\n- If `result` is `false`: The VM will jump to sequence number **6** to utilize general TiDB data, ensuring that the plan can proceed even without specific version details."
+    "execution_objective": "Check if 'latest_tidb_version' was successfully extracted. \n\nExpected Output: JSON with 'result' indicating success and 'explanation' providing context.\n\nUsage: If true, jump to step 4 for version-specific info; if false, jump to step 6 for general TiDB data."
   },
   {
     "seq_no": 4,
@@ -89,7 +89,7 @@
       },
       "output_vars": "tidb_info"
     },
-    "execution_objective": "Purpose: Utilize the 'vector_search' tool to retrieve the top 3 documents that detail the key features and improvements of the specified TiDB version (${latest_tidb_version}). \n\nExpected Output: The output variable 'tidb_info' will contain a list of 3 document chunks related to the key features and improvements of the specified TiDB version. \n\nUsage: The retrieved information in 'tidb_info' will be used in subsequent steps (using 'llm_generate') to generate a comprehensive and detailed final answer that highlights the specific enhancements of the identified TiDB version."
+    "execution_objective": "Retrieve the top 3 documents detailing key features and improvements of TiDB version '${latest_tidb_version}'. \n\nExpected Output: 'tidb_info' contains 3 document data in a complex structured object.\n\nUsage: Use this information to generate detailed optimization recommendations."
   },
   {
     "seq_no": 5,
@@ -110,7 +110,7 @@
       },
       "output_vars": "tidb_info"
     },
-    "execution_objective": "Purpose: Utilize the 'vector_search' tool to retrieve the top 3 documents that provide general information about the latest TiDB version and its key features when a specific version was not found. \n\nExpected Output: The output variable 'tidb_info' will contain a list of 3 document chunks related to the latest TiDB version and its key features. \n\nUsage: The retrieved general information in 'tidb_info' will be used in subsequent steps (using 'llm_generate') to generate a comprehensive final answer, ensuring that the plan can proceed with relevant data even in the absence of specific version details."
+    "execution_objective": "Retrieve the top 3 documents with general information about the latest TiDB version and its key features. \n\nExpected Output: 'tidb_info' contains 3 document data in a complex structured object.\n\nUsage: Use this information to generate comprehensive optimization recommendations."
   },
   {
     "seq_no": 7,
@@ -123,7 +123,7 @@
       },
       "output_vars": "performance_techniques"
     },
-    "execution_objective": "Purpose: Utilize the 'vector_search' tool to retrieve the top 5 documents that outline performance optimization techniques specific to the identified TiDB version (${latest_tidb_version}). \n\nUsage: The retrieved performance optimization techniques will be used in subsequent steps to formulate detailed recommendations for enhancing TiDB's performance in high-volume e-commerce environments. Additionally, if further granularity is needed, additional queries or processing steps using 'llm_generate' may be employed to extract specific strategies or best practices from the retrieved documents."
+    "execution_objective": "Retrieve the top 5 documents outlining performance optimization techniques for TiDB version '${latest_tidb_version}'. \n\nExpected Output: 'performance_techniques' contains 5 document data in a complex structured object.\n\nUsage: Collect this information to formulate detailed optimization recommendations."
   },
   {
     "seq_no": 8,
@@ -136,7 +136,7 @@
       },
       "output_vars": "ecommerce_optimizations"
     },
-    "execution_objective": "Purpose: Use the 'vector_search' tool to retrieve the top 5 documents that discuss specific considerations and best practices for optimizing TiDB (${latest_tidb_version}) in the context of e-commerce applications. \n\nUsage: The information gathered in 'ecommerce_optimizations' will be integrated into the final recommendations to ensure that performance optimizations are aligned with the unique demands of high-volume e-commerce platforms. Additionally, if more detailed insights are required, subsequent steps may involve using 'llm_generate' to extract and elaborate on specific considerations from the retrieved documents."
+    "execution_objective": "Retrieve the top 5 documents discussing specific considerations and best practices for optimizing TiDB '${latest_tidb_version}' for e-commerce applications. \n\nExpected Output: 'ecommerce_optimizations' contains 5 document data in a complex structured object.\n\nUsage: Collect this information to formulate detailed optimization recommendations."
   },
   {
     "seq_no": 9,
@@ -149,14 +149,15 @@
       },
       "output_vars": "final_recommendations"
     },
-    "execution_objective": "Purpose: Use the 'llm_generate' tool to synthesize the retrieved performance optimization techniques and e-commerce-specific considerations into a cohesive set of best practices for optimizing TiDB (${latest_tidb_version}) in high-volume e-commerce applications.\n\nExpected Output: The output variable 'final_recommendations' will contain a detailed and actionable list of best practices organized into relevant categories such as schema design, indexing, query optimization, and infrastructure scaling.\n\nUsage: These comprehensive recommendations will be integrated into the final answer to provide the user with a structured and thorough guide for optimizing TiDB in their specific application context."
+    "execution_objective": "Generate a categorized list of best practices for optimizing TiDB '${latest_tidb_version}' in high-volume e-commerce applications. \n\nExpected Output: 'final_recommendations' contains organized best practices under categories like schema design, indexing, query optimization, and infrastructure scaling.\n\nUsage: Incorporate these recommendations into the final answer presented to the user."
   },
   {
     "seq_no": 10,
     "type": "assign",
     "parameters": {
       "final_answer": "Best practices for optimizing TiDB ${latest_tidb_version} (released on ${release_date}) performance for a high-volume e-commerce application:\n\n${final_recommendations}"
-    }
+    },
+    "execution_objective": "Consolidate the best practices into a formatted final answer with version and release date information. \n\nExpected Output: 'final_answer' contains a structured and comprehensive list of optimization practices tailored to TiDB '${latest_tidb_version}' and e-commerce needs"
   }
 ]
 ```
