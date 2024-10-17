@@ -87,6 +87,18 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
+**Example (Unconditional Jump):**
+```json
+{
+  "seq_no": 5,
+  "type": "jmp",
+  "parameters": {
+    "target_seq": 7
+  },
+  "execution_objective": "Jump unconditionally to step 7."
+}
+```
+
 ### 3.3 calling
 - **Purpose**: Invokes a specific tool or function with the provided parameters.
 - **Parameters**: Defines the specifications required to call a tool.
@@ -100,6 +112,23 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Execution Objective**: Should include the purpose of invoking the tool, a detailed description of the expected output, and how this output will be used in subsequent instructions.
 
 **Example:**
+```json
+{
+  "seq_no": 1,
+  "type": "calling",
+  "parameters": {
+    "tool": "tool_name",
+    "params": {
+      "param1": "value_or_variable_reference",
+      "param2": "value_or_variable_reference"
+    },
+    "output_vars": "variable_name" | ["variable_name_1", "variable_name_2"]
+  }
+}
+```
+
+Below is an example where the calling type is configured to use the `llm_generate` tool. It specifies the tool name and its parameters, including a prompt to analyze sales data, a reference to the sales_data variable for context, and a JSON response format. The tool’s output is stored in two variables: summary and insights. This setup allows the tool to process the sales data and save the results for later use.
+
 ```json
 {
   "seq_no": 1,
@@ -121,6 +150,13 @@ Each instruction in the plan is represented as a JSON object with the following 
 - **Purpose**: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
 - **Parameters**:
   - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
+    - The overall strategy for approaching the problem
+    - Key decision points and rationale for choices made
+    - Assumptions and their justifications
+    - Potential alternative approaches considered
+    - Expected outcomes of each major step
+    - How different pieces of information are intended to be combined
+    - Any limitations or potential issues with the chosen approach
   - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
 - **Execution Objective**: Not typically required for the 'reasoning' instruction, as it is a meta-commentary on the plan itself.
 
@@ -130,8 +166,38 @@ Each instruction in the plan is represented as a JSON object with the following 
   "seq_no": 0,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach: ...",
-    "dependency_analysis": "Step 2 depends on Step 1. ..."
+    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+
+    1. Overall Strategy:
+       We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+
+    2. Key Decision Points and Rationale:
+       a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
+       b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+
+    3. Assumptions:
+       - The latest stable version of TiDB is the most relevant for current optimization practices.
+       - E-commerce applications have specific performance requirements that may differ from general use cases.
+
+    4. Alternative Approaches Considered:
+       - We could have used only vector search, but this might miss important structured relationships in the data.
+       - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
+
+    5. Expected Outcomes:
+       - Step 1-2: Identification of the latest TiDB version
+       - Step 3-6: Gathering of version-specific and general TiDB information
+       - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
+       - Step 9-10: Synthesis of gathered information into actionable recommendations
+
+    6. Information Combination:
+       The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
+
+    7. Limitations:
+       - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
+       - If no specific version is found, our recommendations may be more general and less tailored.
+
+    This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
   }
   // No execution_objective needed for 'reasoning' type
 }
