@@ -67,7 +67,7 @@ After the updated plan, provide a summary of the changes made to the plan and th
     return prompt
 
 
-def get_should_update_plan_prompt(vm):
+def get_should_update_plan_prompt(vm, suggestion):
     json_format = """
     {{
         "should_update": boolean,
@@ -84,6 +84,7 @@ def get_should_update_plan_prompt(vm):
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and determine if the plan needs to be updated.
 
+    User Suggestion for plan update: {suggestion}
     Goal: {vm.state['goal']}
     Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
     Current Program Counter: {vm.state['program_counter']}

@@ -58,7 +58,7 @@ def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: li
     return new_plan
 
 
-def should_update_plan(vm: PlanExecutionVM):
+def should_update_plan(vm: PlanExecutionVM, suggestion: str):
     if vm.state.get("errors"):
         logger.info("Plan update triggered due to errors.")
         return (
@@ -67,7 +67,7 @@ def should_update_plan(vm: PlanExecutionVM):
             [{"factor": "VM errors", "impact": "Critical"}],
         )
 
-    prompt = get_should_update_plan_prompt(vm)
+    prompt = get_should_update_plan_prompt(vm, suggestion)
     response = vm.llm_interface.generate(prompt)
 
     json_response = find_first_json_object(response)

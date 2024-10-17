@@ -426,30 +426,95 @@ function highlightChartPoint(commitHash, updateCurrentHighlight = true) {
 }
 
 async function executeFromStep(commitHash, seqNo) {
-    try {
-        showLoading(true);
-        const executeData = await fetchWithErrorHandling('/execute_vm', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                repo: currentRepo,
-                commit_hash: commitHash,
-                seq_no: seqNo
-            }),
-        });
+    // Create a modal dialog for user input
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.left = '50%';
+    modal.style.top = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.backgroundColor = 'white';
+    modal.style.padding = '20px';
+    modal.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+    modal.style.zIndex = '1000';
 
-        if (executeData.success) {
-            await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
-            showNotification('Execution completed successfully', 'success');
-        } else {
-            showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+    const commitInfo = document.createElement('p');
+    commitInfo.textContent = `Commit Hash: ${commitHash}, Sequence No: ${seqNo}`;
+    modal.appendChild(commitInfo);
+
+    const suggestionLabel = document.createElement('label');
+    suggestionLabel.textContent = 'Enter your suggestion:';
+    modal.appendChild(suggestionLabel);
+
+    const suggestionInput = document.createElement('textarea');
+    suggestionInput.style.width = '100%';
+    suggestionInput.style.height = '100px';
+    modal.appendChild(suggestionInput);
+
+    const submitButton = document.createElement('button');
+    submitButton.textContent = 'Submit';
+    submitButton.onclick = async function() {
+        const suggestion = suggestionInput.value;
+        if (!suggestion) {
+            alert("Please enter a suggestion.");
+            return;
         }
-    } catch (error) {
-        console.error('Error in executeFromStep:', error);
-        showNotification('An error occurred: ' + error.message, 'danger');
-    } finally {
-        showLoading(false);
-    }
+
+        // Disable the input and buttons
+        suggestionInput.disabled = true;
+        submitButton.disabled = true;
+        cancelButton.disabled = true;
+
+        // Create and show a loading spinner
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        spinner.style.border = '4px solid #f3f3f3';
+        spinner.style.borderTop = '4px solid #3498db';
+        spinner.style.borderRadius = '50%';
+        spinner.style.width = '30px';
+        spinner.style.height = '30px';
+        spinner.style.animation = 'spin 1s linear infinite';
+        spinner.style.margin = '10px auto';
+        modal.appendChild(spinner);
+
+        try {
+            showLoading(true);
+            const executeData = await fetchWithErrorHandling('/execute_vm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repo: currentRepo,
+                    commit_hash: commitHash,
+                    seq_no: seqNo,
+                    suggestion: suggestion // Include suggestion parameter
+                }),
+            });
+
+            if (executeData.success) {
+                await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                showNotification('Execution completed successfully', 'success');
+            } else {
+                showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+            }
+        } catch (error) {
+            console.error('Error in executeFromStep:', error);
+            showNotification('An error occurred: ' + error.message, 'danger');
+        } finally {
+            showLoading(false);
+            // Remove the spinner
+            modal.removeChild(spinner);
+            document.body.removeChild(modal);
+        }
+    };
+    modal.appendChild(submitButton);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.onclick = function() {
+        document.body.removeChild(modal);
+    };
+    modal.appendChild(cancelButton);
+
+    document.body.appendChild(modal);
 }
 
 async function updateUIAfterExecution(newBranch, lastCommitHash) {
