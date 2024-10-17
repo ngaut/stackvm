@@ -46,7 +46,7 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     if plan:
         return plan
     else:
-        logger.logger.error(f"Failed to parse the generated plan: {plan_response}")
+        logger.error(f"Failed to parse the generated plan: {plan_response}")
         return []
 
 

@@ -59,7 +59,7 @@
     "parameters": {
       "tool": "llm_generate",
       "params": {
-        "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB and its release date.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number and release date in JSON format, (e.g., {\"latest_tidb_version\": \"v8.1.1\", \"release_date\": \"2024-08-27\"})\n- If no specific stable version number is found, respond exactly {\"latest_tidb_version\": \"latest stable version tidb\", \"release_date\": null}.",
+        "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB and its release date.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number and release date in JSON format, (e.g., {'latest_tidb_version': 'v8.1.1', 'release_date': '2024-08-27'})\n- If no specific stable version number is found, respond exactly {'latest_tidb_version': 'latest stable version tidb', 'release_date': null}.",
         "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}"
       },
       "output_vars": ["latest_tidb_version", "release_date"]
