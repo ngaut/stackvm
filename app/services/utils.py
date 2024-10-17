@@ -11,6 +11,10 @@ from app.utils import find_first_json_object, extract_json
 logger = logging.getLogger(__name__)
 
 class StepType(Enum):
+    """
+    Enum representing different types of steps in the process.
+    """
+
     GENERATE_PLAN = "Generate Plan"
     STEP_EXECUTION = "StepExecution"
     PLAN_UPDATE = "PlanUpdate"
@@ -37,7 +41,7 @@ def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
 
         return plan
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Failed to parse plan: {e}")
+        logger.error("Failed to parse plan: %s", e)
         return None
 
 
@@ -61,7 +65,7 @@ def parse_step(step_response: str) -> Optional[Dict[str, Any]]:
 
         return step
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"Failed to parse step: {e}")
+        logger.error("Failed to parse step: %s", e)
         return None
 
 def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
@@ -74,7 +78,7 @@ def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Error loading state from commit {commit_hash}: {str(e)}")
     except Exception as e:
         logger.error(
-            f"Unexpected error loading state from commit {commit_hash}: {str(e)}"
+            "Unexpected error loading state from commit %s: %s", commit_hash, str(e)
         )
     return None
 

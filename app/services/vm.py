@@ -12,6 +12,9 @@ VARIABLE_PREVIEW_LENGTH = 50
 
 
 class PlanExecutionVM:
+    """
+    Virtual Machine for executing plans.
+    """
     def __init__(self, repo_path: str, llm_interface: Any = None):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
@@ -60,12 +63,12 @@ class PlanExecutionVM:
         setattr(
             self.instruction_handlers, f"{instruction_name}_handler", handler_method
         )
-        self.logger.info(f"Registered handler for instruction: {instruction_name}")
+        self.logger.info("Registered handler for instruction: %s", instruction_name)
 
     def set_goal(self, goal: str) -> None:
         """Set the goal for the VM and save the state."""
         self.state["goal"] = goal
-        self.logger.info(f"Goal set: {goal}")
+        self.logger.info("Goal set: %s", goal)
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
@@ -114,12 +117,12 @@ class PlanExecutionVM:
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
 
-        self.logger.info(f"{description} with parameters: {json.dumps(params)}")
+        self.logger.info("%s with parameters: %s", description, json.dumps(params))
         if output_parameters:
             output_parameters = {
                 k: self._preview_value(v) for k, v in output_parameters.items()
             }
-            self.logger.info(f"Output variables: {json.dumps(output_parameters)}")
+            self.logger.info("Output variables: %s", json.dumps(output_parameters))
 
         commit_message_wrapper.set_commit_message(
             StepType.STEP_EXECUTION,
@@ -143,7 +146,9 @@ class PlanExecutionVM:
         """Execute the next step in the plan."""
         if self.state["program_counter"] >= len(self.state["current_plan"]):
             self.logger.error(
-                f"Program counter ({self.state['program_counter']}) out of range for current plan (length: {len(self.state['current_plan'])})"
+                "Program counter (%d) out of range for current plan (length: %d)",
+                self.state['program_counter'],
+                len(self.state['current_plan'])
             )
             self.state["errors"].append(
                 f"Program counter out of range: {self.state['program_counter']}"
@@ -152,14 +157,20 @@ class PlanExecutionVM:
 
         step = self.state["current_plan"][self.state["program_counter"]]
         self.logger.info(
-            f"Executing step {self.state['program_counter']}: {step['type']}, seq_no: {step.get('seq_no', 'Unknown')}, plan length: {len(self.state['current_plan'])}"
+            "Executing step %d: %s, seq_no: %s, plan length: %d",
+            self.state['program_counter'],
+            step['type'],
+            step.get('seq_no', 'Unknown'),
+            len(self.state['current_plan'])
         )
 
         try:
             success = self.execute_step_handler(step)
             if not success:
                 self.logger.error(
-                    f"Failed to execute step {self.state['program_counter']}: {step['type']}"
+                    "Failed to execute step %d: %s",
+                    self.state['program_counter'],
+                    step['type']
                 )
                 return False
             if step["type"] not in ("jmp_if", "jmp"):
@@ -172,7 +183,9 @@ class PlanExecutionVM:
         except Exception as e:
             traceback.print_exc()
             self.logger.error(
-                f"Error executing step {self.state['program_counter']}: {str(e)}"
+                "Error executing step %d: %s",
+                self.state['program_counter'],
+                str(e)
             )
             self.state["errors"].append(
                 f"Error in step {self.state['program_counter']}: {str(e)}"
@@ -202,7 +215,7 @@ class PlanExecutionVM:
                 if var_name in referenced_vars:
                     reference_count += 1
 
-        self.logger.info(f"Reference count for {var_name}: {reference_count}")
+        self.logger.info("Reference count for %s: %d", var_name, reference_count)
 
         self.variable_manager.set_reference_count(var_name, reference_count)
 
@@ -245,9 +258,9 @@ class PlanExecutionVM:
                 loaded_state.get("variables", {}),
                 loaded_state.get("variables_refs", {}),
             )
-            self.logger.info(f"State loaded from commit {commit_hash}")
+            self.logger.info("State loaded from commit %s", commit_hash)
         else:
-            self.logger.error(f"Failed to load state from commit {commit_hash}")
+            self.logger.error("Failed to load state from commit %s", commit_hash)
 
     def save_state(self):
         state_data = self.state.copy()
@@ -262,7 +275,7 @@ class PlanExecutionVM:
         for index, step in enumerate(self.state["current_plan"]):
             if step.get("seq_no") == seq_no:
                 return index
-        self.logger.error(f"Seq_no {seq_no} not found in the current plan.")
+        self.logger.error("Seq_no %d not found in the current plan.", seq_no)
         self.state["errors"].append(f"Seq_no {seq_no} not found in the current plan.")
         return None
 

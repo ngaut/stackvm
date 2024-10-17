@@ -6,6 +6,9 @@ import requests
 from abc import ABC, abstractmethod
 
 class BaseLLMProvider(ABC):
+    """
+    Abstract base class for LLM providers.
+    """
     def __init__(self, model: str, max_retries: int = 3, retry_delay: float = 1.0):
         self.model = model
         self.max_retries = max_retries
@@ -27,6 +30,9 @@ class BaseLLMProvider(ABC):
         pass
 
 class OpenAIProvider(BaseLLMProvider):
+    """
+    Provider for OpenAI.
+    """
     def __init__(self, model: str, **kwargs):
         super().__init__(model, **kwargs)
         openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -49,6 +55,9 @@ class OpenAIProvider(BaseLLMProvider):
         return response.choices[0].message.content.strip()
 
 class OllamaProvider(BaseLLMProvider):
+    """
+    Provider for Ollama.
+    """
     def __init__(self, model: str, **kwargs):
         super().__init__(model, **kwargs)
         self.ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')

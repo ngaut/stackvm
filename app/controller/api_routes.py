@@ -49,11 +49,11 @@ logger = logging.getLogger(__name__)
 
 def log_and_return_error(message, error_type, status_code):
     if error_type == "warning":
-        current_app.logger.warning(message)
+        current_app.logger.warning("%s", message)
     elif error_type == "error":
-        current_app.logger.error(message)
+        current_app.logger.error("%s", message)
     else:
-        current_app.logger.info(message)
+        current_app.logger.info("%s", message)
     return jsonify({"error": message}), status_code
 
 
@@ -489,7 +489,9 @@ def delete_branch(branch_name):
             )
             repo.git.checkout(switch_to)
             current_app.logger.info(
-                f"Switched to branch {switch_to} before deleting {branch_name}"
+                "Switched to branch %s before deleting %s",
+                switch_to,
+                branch_name
             )
 
         repo.git.branch("-D", branch_name)
