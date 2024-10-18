@@ -110,7 +110,8 @@ class InstructionHandlers:
         output_vars = params.get("output_vars", None)
         if isinstance(output_vars, list):
             tool_parameters["response_format"] = (
-                self._construct_response_format_example(output_vars)
+                "Respond with a JSON object in the following format:\n"
+                + self._construct_response_format_example(output_vars)
             )
 
         # Get the parameters required by the tool_handler
