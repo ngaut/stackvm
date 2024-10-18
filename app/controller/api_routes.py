@@ -17,7 +17,7 @@ from app.config.settings import (
     GIT_REPO_PATH,
     LLM_MODEL,
     VM_SPEC_CONTENT,
-    LLM_PROVIDER
+    LLM_PROVIDER,
 )
 from app.services import (
     parse_commit_message,
@@ -169,6 +169,7 @@ def execute_vm():
     current_app.logger.info(f"Received execute_vm request with data: {data}")
 
     commit_hash = data.get("commit_hash")
+    suggestion = data.get("suggestion")
     steps = int(data.get("steps", 20))
     repo_name = data.get("repo")
     new_branch = data.get("new_branch")
@@ -179,7 +180,9 @@ def execute_vm():
     repo_path = global_repo.get_current_repo_path()
 
     try:
-        vm = PlanExecutionVM(repo_path, LLMInterface(model=LLM_MODEL, provider=LLM_PROVIDER))
+        vm = PlanExecutionVM(
+            repo_path, LLMInterface(model=LLM_MODEL, provider=LLM_PROVIDER)
+        )
     except ImportError as e:
         return log_and_return_error(str(e), "error", 500)
 
@@ -197,18 +200,7 @@ def execute_vm():
     current_app.logger.info(f"Using branch: {current_branch}")
 
     for _ in range(steps):
-        try:
-            success = vm.step()
-        except Exception as e:
-            error_msg = f"Error during VM step execution: {str(e)}"
-            current_app.logger.error(error_msg, exc_info=True)
-            return log_and_return_error(error_msg, "error", 500)
-
-        commit_hash = commit_vm_changes(vm)
-        if commit_hash:
-            last_commit_hash = commit_hash
-
-        should_update, explanation, key_factors = should_update_plan(vm)
+        should_update, explanation, key_factors = should_update_plan(vm, suggestion)
         if should_update:
             updated_plan = generate_updated_plan(vm, explanation, key_factors)
             current_app.logger.info(
@@ -243,6 +235,17 @@ def execute_vm():
                     f"Failed to create or checkout branch '{branch_name}'"
                 )
                 break
+
+        try:
+            success = vm.step()
+        except Exception as e:
+            error_msg = f"Error during VM step execution: {str(e)}"
+            current_app.logger.error(error_msg, exc_info=True)
+            return log_and_return_error(error_msg, "error", 500)
+
+        commit_hash = commit_vm_changes(vm)
+        if commit_hash:
+            last_commit_hash = commit_hash
 
         steps_executed += 1
 
@@ -285,7 +288,13 @@ def optimize_step():
     repo = git.Repo(repo_path)
 
     # Generate the updated step using LLM
-    prompt = get_step_update_prompt(vm, seq_no, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), suggestion)
+    prompt = get_step_update_prompt(
+        vm,
+        seq_no,
+        VM_SPEC_CONTENT,
+        global_tools_hub.get_tools_description(),
+        suggestion,
+    )
     updated_step_response = vm.llm_interface.generate(prompt)
 
     if not updated_step_response:
