@@ -173,7 +173,7 @@ class PlanExecutionVM:
                     step['type']
                 )
                 return False
-            if step["type"] not in ("jmp_if", "jmp"):
+            if step["type"] not in ("jmp"):
                 self.state["program_counter"] += 1
 
             if self.state["program_counter"] < len(self.state["current_plan"]):

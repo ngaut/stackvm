@@ -164,7 +164,7 @@ class InstructionHandlers:
                 return (
                     self._handle_error(
                         "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
-                        instruction="jmp_if",
+                        instruction="jmp",
                         params=params,
                     ),
                     None,
