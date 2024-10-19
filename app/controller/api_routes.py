@@ -520,14 +520,8 @@ def save_plan():
     data = request.json
     current_app.logger.info(f"Received save_plan request with data: {data}")
 
-    repo_path = global_repo.get_current_repo_path()
-    repo_name = os.path.basename(repo_path)
-    print(f"repo_name: {repo_name}")
-    print(f"repo_path: {repo_path}")
+    repo_name = data.get("repo_name")
     target_directory = data.get("target_directory")
-    print(f"target_directory: {target_directory}")
-    print(not repo_name)
-    print(not target_directory)
 
     if not all([repo_name, target_directory]):
         return log_and_return_error("Missing 'repo_name' or 'target_directory' parameters.", "error", 400)

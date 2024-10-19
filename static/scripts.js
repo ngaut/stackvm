@@ -48,12 +48,14 @@ async function loadDirectories() {
 
 async function setRepo() {
     const selectedRepo = document.getElementById('directorySelect').value;
-    const data = await fetchWithErrorHandling(`/set_repo/${selectedRepo}`);
+    const data = await fetchWithErrorHandling(`/set_repo/${selectedRepo}?repo=${encodeURIComponent(selectedRepo)}`);
     if (data.success) {
         showNotification(data.message, 'success');
         currentRepo = selectedRepo;
         await loadBranches();
         clearDetails();
+        // Show Save Plan Button after setting repository
+        document.getElementById('savePlanButton').style.display = 'inline-block';
     } else {
         showNotification(data.message, 'danger');
     }
@@ -694,5 +696,130 @@ function optimizeStep(commitHash, seqNo) {
     document.body.appendChild(modal);
 }
 
+// New Save Plan Functionality
+async function savePlan() {
+    // Create a modal dialog for user input
+    const modal = createModal('Save Plan', 'Enter the target directory to save the plan:', async () => {
+        const targetDirectory = document.getElementById('targetDirectoryInput').value.trim();
+        if (!targetDirectory) {
+            alert("Please enter a target directory.");
+            return;
+        }
+
+        // Disable buttons and input
+        document.getElementById('modalSubmitButton').disabled = true;
+        document.getElementById('modalCancelButton').disabled = true;
+        showLoading(true);
+
+        try {
+            const response = await fetch('/save_plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repo_name: currentRepo,
+                    target_directory: targetDirectory
+                }),
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showNotification(result.message, 'success');
+            } else {
+                showNotification(result.message || 'Failed to save the plan.', 'danger');
+            }
+        } catch (error) {
+            console.error('Error saving plan:', error);
+            showNotification('An error occurred while saving the plan.', 'danger');
+        } finally {
+            showLoading(false);
+            document.body.removeChild(modal);
+        }
+    });
+
+    document.body.appendChild(modal);
+}
+
+// Utility function to create a modal
+function createModal(title, message, onSubmit) {
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'modal-container';
+
+    // Modal Header
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+    const headerTitle = document.createElement('h5');
+    headerTitle.textContent = title;
+    header.appendChild(headerTitle);
+    modal.appendChild(header);
+
+    // Modal Body
+    const body = document.createElement('div');
+    body.className = 'modal-body';
+    const messagePara = document.createElement('p');
+    messagePara.textContent = message;
+    body.appendChild(messagePara);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'targetDirectoryInput';
+    input.className = 'form-control';
+    input.placeholder = 'e.g., /path/to/save/plan';
+    body.appendChild(input);
+    modal.appendChild(body);
+
+    // Modal Footer
+    const footer = document.createElement('div');
+    footer.className = 'modal-footer';
+    const submitButton = document.createElement('button');
+    submitButton.textContent = 'Save';
+    submitButton.className = 'btn btn-primary';
+    submitButton.id = 'modalSubmitButton';
+    submitButton.onclick = onSubmit;
+    footer.appendChild(submitButton);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.className = 'btn btn-secondary';
+    cancelButton.id = 'modalCancelButton';
+    cancelButton.onclick = () => document.body.removeChild(overlay);
+    footer.appendChild(cancelButton);
+
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+
+    // Style the modal (Alternatively, you can move these styles to your CSS file)
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '10000';
+
+    modal.style.backgroundColor = '#fff';
+    modal.style.padding = '20px';
+    modal.style.borderRadius = '8px';
+    modal.style.width = '400px';
+    modal.style.boxShadow = '0 5px 15px rgba(0,0,0,.5)';
+
+    return overlay;
+}
+
+// Ensure the Save Plan button is hidden initially (in case the repository is already set)
+document.addEventListener('DOMContentLoaded', () => {
+    if (!currentRepo) {
+        document.getElementById('savePlanButton').style.display = 'none';
+    }
+});
+
+// Existing loadDirectories call and other initializations
 loadDirectories();
 window.addEventListener('resize', () => { if (chart) chart.resize(); });
