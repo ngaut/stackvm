@@ -84,7 +84,7 @@
         "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
         "top_k": 3
       },
-      "output_vars": "tidb_info"
+      "output_vars": "tidb_key_features_and_improvements"
     }
   },
   {
@@ -103,7 +103,7 @@
         "query": "Latest TiDB version and its key features",
         "top_k": 3
       },
-      "output_vars": "tidb_info"
+      "output_vars": "tidb_key_features_and_improvements"
     }
   },
   {
@@ -137,7 +137,7 @@
       "tool": "llm_generate",
       "params": {
         "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
-        "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_info}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
+        "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_key_features_and_improvements}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
       },
       "output_vars": "final_recommendations"
     }

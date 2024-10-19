@@ -47,7 +47,7 @@ Each instruction in the plan is represented as a JSON object with the following 
   "type": "assign",
   "parameters": {
     "number": 42,
-    "doubled_number": "${number}"
+    "explanation": "The choosen number is ${number}"
   }
 }
 ```
@@ -196,14 +196,42 @@ Below is an example where the calling type is configured to use the `llm_generat
 ## 4. Parameters and Variable References
 Parameters can be either direct values or variable references. To reference a variable, use the format `${variable_name}`.
 
+- **Direct Values** are used when you clearly know the corresponding parameter values. These values do not depend on the results of other instructions, ensuring clarity and simplicity. Using direct values helps improve query readability and maintainability, especially in scenarios where parameters do not need to change dynamically.
+
+- **Variable References** are ideal for scenarios that require dynamic parameter value filling, enhancing the interconnectivity and data flow between instructions. By using variable references, parameters can be adjusted dynamically based on the results of previous steps, increasing the flexibility and automation of the workflow.
+
+
+**Example Code:**
+
 **Direct Value Example:**
 ```json
-"prompt": "What is the capital of France?"
+{
+  "seq_no": 1,
+  "type": "calling",
+  "parameters": {
+    "tool": "retrieve_knowledge_graph",
+    "params": {
+      "query": "TiDB latest stable version"
+    },
+    "output_vars": "latest_tidb_version_info"
+  }
+}
 ```
 
 **Variable Reference Example:**
 ```json
-"prompt": "${user_question}"
+{
+  "seq_no": 4,
+  "type": "calling",
+  "parameters": {
+    "tool": "vector_search",
+    "params": {
+      "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
+      "top_k": 3
+    },
+    "output_vars": "tidb_key_features_and_improvements"
+  }
+}
 ```
 
 ## 5. Variables and Dependencies
