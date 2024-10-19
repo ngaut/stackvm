@@ -40,11 +40,14 @@ from .plan_repo import (
     repo_exists,
 )
 from .engine import generate_updated_plan, should_update_plan
+from app.services.plan_manager import PlanManager
 
 
 api_blueprint = Blueprint("api", __name__)
 
 logger = logging.getLogger(__name__)
+
+plan_manager = PlanManager()
 
 
 def log_and_return_error(message, error_type, status_code):
@@ -506,3 +509,26 @@ def delete_branch(branch_name):
         return log_and_return_error(
             f"Error deleting branch {branch_name}: {str(e)}", "error", 400
         )
+
+
+@api_blueprint.route("/save_plan", methods=["POST"])
+def save_plan():
+    """
+    API endpoint to save the current plan's project directory to a specified folder.
+    Expects JSON payload with 'repo_name' and 'target_directory'.
+    """
+    data = request.json
+    current_app.logger.info(f"Received save_plan request with data: {data}")
+
+    repo_name = data.get("repo_name")
+    target_directory = data.get("target_directory")
+
+    if not all([repo_name, target_directory]):
+        return log_and_return_error("Missing 'repo_name' or 'target_directory' parameters.", "error", 400)
+
+    success = plan_manager.save_current_plan(repo_name, target_directory)
+
+    if success:
+        return jsonify({"success": True, "message": f"Plan '{repo_name}' saved successfully to '{target_directory}'."}), 200
+    else:
+        return log_and_return_error(f"Failed to save plan '{repo_name}' to '{target_directory}'.", "error", 500)
