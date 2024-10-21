@@ -1,7 +1,7 @@
 import os
 import shutil
 import logging
-from app.services import GitManager
+from git import Repo
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ class PlanManager:
     def __init__(self):
         self.logger = logger
 
-    def save_current_plan(self, repo: GitManager, target_directory: str) -> bool:
+    def save_current_plan(self, repo: Repo, target_directory: str) -> bool:
         """
         Save the current plan's project directory to the specified target directory.
 
@@ -17,7 +17,7 @@ class PlanManager:
         :param target_directory: Path to the target directory where the plan will be saved.
         :return: True if save is successful, False otherwise.
         """
-        source_path = repo.repo_path
+        source_path = repo.working_tree_dir
         
         if not os.path.exists(source_path):
             self.logger.error(f"Source repository '{repo_name}' does not exist at {source_path}.")

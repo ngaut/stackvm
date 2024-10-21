@@ -5,12 +5,12 @@ Visualization module for the VM execution and Git repository management.
 import json
 import os
 import logging
-from git import Repo, git
+from git import Repo
 from git.exc import GitCommandError
 from readerwriterlock import rwlock
 from contextlib import contextmanager
 
-from app.services import GitManager, commit_message_wrapper
+from app.services import commit_message_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -18,47 +18,34 @@ logger = logging.getLogger(__name__)
 class RepoManager:
     def __init__(self, base_path):
         self.base_path = base_path
-        self.repos = {}
         self.locks = {}
         self.repos_lock = rwlock.RWLockFair()  # Read-write lock for repos and locks
         self.load_repos(base_path)
 
     def load_repos(self, base_path):
         with self.repos_lock.gen_wlock():
-            self.repos = {}
             self.locks = {}
             for repo_name in os.listdir(base_path):
-                if repo_name.startswith("."):
+                # Skip hidden files and non-directory entries
+                if repo_name.startswith(".") or not os.path.isdir(
+                    os.path.join(base_path, repo_name)
+                ):
                     continue
-                self.repos[repo_name] = GitManager(os.path.join(base_path, repo_name))
                 self.locks[repo_name] = rwlock.RWLockFair()
 
     def get_repo(self, repo_name):
-        with self.repos_lock.gen_rlock():
-            return self.repos.get(repo_name)
-
-    def get_or_create_repo(self, repo_name):
-        with self.repos_lock.gen_rlock():
-            repo = self.repos.get(repo_name)
-            if repo:
-                return repo
-
-        # If repo is not found, acquire write lock to add it
-        with self.repos_lock.gen_wlock():
-            # Double-checked locking
-            repo = self.repos.get(repo_name)
-            if not repo:
-                repo = GitManager(os.path.join(self.base_path, repo_name))
-                self.repos[repo_name] = repo
-                self.locks[repo_name] = rwlock.RWLockFair()
-            return repo
+        """
+        Get a repository by name.
+        """
+        if self.repo_exists(repo_name):
+            return get_repo(os.path.join(self.base_path, repo_name))
+        return None
 
     def repo_exists(self, repo_name):
-        with self.repos_lock.gen_rlock():
-            repo_path = os.path.join(self.base_path, repo_name)
-            return os.path.exists(repo_path) and os.path.isdir(
-                os.path.join(repo_path, ".git")
-            )
+        repo_path = os.path.join(self.base_path, repo_name)
+        return os.path.exists(repo_path) and os.path.isdir(
+            os.path.join(repo_path, ".git")
+        )
 
     @contextmanager
     def lock_repo_for_write(self, repo_name, timeout=10):

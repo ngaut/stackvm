@@ -36,6 +36,7 @@ from .plan_repo import (
     get_commits,
     get_vm_state_for_commit,
     commit_vm_changes,
+    get_repo,
 )
 from .engine import generate_updated_plan, should_update_plan
 from app.services.plan_manager import PlanManager
@@ -72,7 +73,6 @@ def get_vm_data():
     repo = repo_manager.get_repo(repo_name)
     if not repo:
         return jsonify([]), 200
-
     commits = get_commits(repo, branch)
 
     vm_states = []
@@ -101,12 +101,14 @@ def get_vm_data():
 def get_vm_state(repo_name, commit_hash):
     if not repo_name:
         return log_and_return_error("Missing 'repo' parameter", "error", 400)
-    
+
     try:
         with repo_manager.lock_repo_for_read(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository {repo_name} not found", "error", 404)
+                return log_and_return_error(
+                    f"Repository {repo_name} not found", "error", 404
+                )
 
             commit = repo.commit(commit_hash)
             vm_state = get_vm_state_for_commit(repo, commit)
@@ -131,8 +133,10 @@ def code_diff(repo_name, commit_hash):
         with repo_manager.lock_repo_for_read(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             commit = repo.commit(commit_hash)
             if commit.parents:
                 parent = commit.parents[0]
@@ -144,7 +148,7 @@ def code_diff(repo_name, commit_hash):
         return log_and_return_error(
             f"Error generating diff for commit {commit_hash} in repository '{repo_name}': {str(e)}",
             "error",
-            404
+            404,
         )
 
 
@@ -154,8 +158,10 @@ def commit_details(repo_name, commit_hash):
         with repo_manager.lock_repo_for_read(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             commit = repo.commit(commit_hash)
 
             if commit.parents:
@@ -203,9 +209,11 @@ def execute_vm():
         with repo_manager.lock_repo_for_write(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
 
-            repo_path = repo.repo_path
+            repo_path = repo.working_tree_dir
             try:
                 vm = PlanExecutionVM(
                     repo_path, LLMInterface(model=LLM_MODEL, provider=LLM_PROVIDER)
@@ -219,21 +227,29 @@ def execute_vm():
             last_commit_hash = commit_hash
 
             if not new_branch:
-                new_branch = f"re_execute_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                new_branch = (
+                    f"re_execute_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                )
             vm.git_manager.create_branch_from_commit(new_branch, commit_hash)
             vm.git_manager.checkout_branch(new_branch)
             current_branch = repo.active_branch.name
             current_app.logger.info(f"Using branch: {current_branch}")
 
             for _ in range(steps):
-                should_update, explanation, key_factors = should_update_plan(vm, suggestion)
+                should_update, explanation, key_factors = should_update_plan(
+                    vm, suggestion
+                )
                 if should_update:
                     updated_plan = generate_updated_plan(vm, explanation, key_factors)
                     current_app.logger.info(
                         "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
                     )
-                    branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    if vm.git_manager.create_branch(branch_name) and vm.git_manager.checkout_branch(branch_name):
+                    branch_name = (
+                        f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    )
+                    if vm.git_manager.create_branch(
+                        branch_name
+                    ) and vm.git_manager.checkout_branch(branch_name):
                         vm.state["current_plan"] = updated_plan
                         vm.recalculate_variable_refs()  # Recalculate variable references
                         commit_message_wrapper.set_commit_message(
@@ -310,9 +326,11 @@ def optimize_step():
         with repo_manager.lock_repo_for_write(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
 
-            repo_path = repo.repo_path
+            repo_path = repo.working_tree_dir
 
             try:
                 vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
@@ -332,12 +350,16 @@ def optimize_step():
             updated_step_response = vm.llm_interface.generate(prompt)
 
             if not updated_step_response:
-                return log_and_return_error("Failed to generate updated step", "error", 500)
+                return log_and_return_error(
+                    "Failed to generate updated step", "error", 500
+                )
 
             updated_step = parse_step(updated_step_response)
             if not updated_step:
                 return log_and_return_error(
-                    f"Failed to parse updated step {updated_step_response}", "error", 500
+                    f"Failed to parse updated step {updated_step_response}",
+                    "error",
+                    500,
                 )
 
             logger.info(
@@ -375,7 +397,9 @@ def optimize_step():
                         f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
                     )
                 else:
-                    log_and_return_error("Failed to commit step optimization", "error", 500)
+                    log_and_return_error(
+                        "Failed to commit step optimization", "error", 500
+                    )
             else:
                 log_and_return_error(
                     f"Failed to create or checkout branch '{branch_name}'", "error", 500
@@ -428,8 +452,10 @@ def vm_state_details(repo_name, commit_hash):
         with repo_manager.lock_repo_for_read(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             commit = repo.commit(commit_hash)
             vm_state = get_vm_state_for_commit(repo, commit)
 
@@ -445,7 +471,9 @@ def vm_state_details(repo_name, commit_hash):
             return jsonify({"variables": variables})
     except git.exc.BadName:
         return log_and_return_error(
-            f"Invalid commit hash: {commit_hash} in repository '{repo_name}'", "error", 404
+            f"Invalid commit hash: {commit_hash} in repository '{repo_name}'",
+            "error",
+            404,
         )
     except Exception as e:
         return log_and_return_error(
@@ -467,14 +495,17 @@ def get_directories():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @api_blueprint.route("/get_branches/<repo_name>")
 def get_branches(repo_name):
     try:
         with repo_manager.lock_repo_for_read(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             branches = repo.branches
             branch_data = [
                 {
@@ -491,7 +522,9 @@ def get_branches(repo_name):
             return jsonify(branch_data)
     except GitCommandError as e:
         return log_and_return_error(
-            f"Error fetching branches for repository '{repo_name}': {str(e)}", "error", 500
+            f"Error fetching branches for repository '{repo_name}': {str(e)}",
+            "error",
+            500,
         )
 
 
@@ -499,11 +532,11 @@ def get_branches(repo_name):
 def set_branch_route(repo_name, branch_name):
     """
     API endpoint to switch to a specified branch within a repository.
-    
+
     Args:
         repo_name (str): The name of the repository.
         branch_name (str): The name of the branch to switch to.
-    
+
     Returns:
         JSON response indicating success or failure.
     """
@@ -511,12 +544,17 @@ def set_branch_route(repo_name, branch_name):
         with repo_manager.lock_repo_for_write(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             try:
                 repo.git.checkout(branch_name)
                 return jsonify(
-                    {"success": True, "message": f"Switched to branch {branch_name} in repository '{repo_name}'"}
+                    {
+                        "success": True,
+                        "message": f"Switched to branch {branch_name} in repository '{repo_name}'",
+                    }
                 )
             except GitCommandError as e:
                 return log_and_return_error(
@@ -533,11 +571,11 @@ def set_branch_route(repo_name, branch_name):
 def delete_branch_route(repo_name, branch_name):
     """
     API endpoint to delete a specified branch within a repository.
-    
+
     Args:
         repo_name (str): The name of the repository.
         branch_name (str): The name of the branch to delete.
-    
+
     Returns:
         JSON response indicating success or failure.
     """
@@ -545,8 +583,10 @@ def delete_branch_route(repo_name, branch_name):
         with repo_manager.lock_repo_for_write(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
-            
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
+
             try:
                 if branch_name == repo.active_branch.name:
                     available_branches = [
@@ -554,10 +594,16 @@ def delete_branch_route(repo_name, branch_name):
                     ]
                     if not available_branches:
                         return log_and_return_error(
-                            "Cannot delete the only branch in the repository", "error", 400
+                            "Cannot delete the only branch in the repository",
+                            "error",
+                            400,
                         )
 
-                    switch_to = "main" if "main" in available_branches else available_branches[0]
+                    switch_to = (
+                        "main"
+                        if "main" in available_branches
+                        else available_branches[0]
+                    )
                     repo.git.checkout(switch_to)
                     current_app.logger.info(
                         f"Switched to branch {switch_to} before deleting {branch_name}"
@@ -595,20 +641,36 @@ def save_plan():
     target_directory = data.get("target_directory")
 
     if not all([repo_name, target_directory]):
-        return log_and_return_error("Missing 'repo_name' or 'target_directory' parameters.", "error", 400)
+        return log_and_return_error(
+            "Missing 'repo_name' or 'target_directory' parameters.", "error", 400
+        )
 
     try:
         with repo_manager.lock_repo_for_write(repo_name):
             repo = repo_manager.get_repo(repo_name)
             if not repo:
-                return log_and_return_error(f"Repository '{repo_name}' not found", "error", 404)
+                return log_and_return_error(
+                    f"Repository '{repo_name}' not found", "error", 404
+                )
 
             success = plan_manager.save_current_plan(repo, target_directory)
 
             if success:
-                return jsonify({"success": True, "message": f"Plan '{repo_name}' saved successfully to '{target_directory}'."}), 200
+                return (
+                    jsonify(
+                        {
+                            "success": True,
+                            "message": f"Plan '{repo_name}' saved successfully to '{target_directory}'.",
+                        }
+                    ),
+                    200,
+                )
             else:
-                return log_and_return_error(f"Failed to save plan '{repo_name}' to '{target_directory}'.", "error", 500)
+                return log_and_return_error(
+                    f"Failed to save plan '{repo_name}' to '{target_directory}'.",
+                    "error",
+                    500,
+                )
     except TimeoutError as e:
         return log_and_return_error(str(e), "error", 500)
     except Exception as e:

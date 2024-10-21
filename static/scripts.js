@@ -37,13 +37,26 @@ async function loadDirectories() {
     const select = document.getElementById('directorySelect');
     select.innerHTML = data.map(dir => `<option value="${dir}">${dir}</option>`).join('');
     select.style.display = 'block';
-    document.getElementById('setRepoButton').style.display = 'block';
+    document.getElementById('savePlanButton').style.display = 'none'; // Hide initially
 
-    // Automatically select the first directory and set the repository
+    // Automatically select the first directory and load its data
     if (data.length > 0) {
         select.value = data[0];
-        await setRepo();
+        await loadRepoData(data[0]);
     }
+
+    // Add event listener to load data when a new repo is selected
+    select.addEventListener('change', async (event) => {
+        const selectedRepo = event.target.value;
+        await loadRepoData(selectedRepo);
+    });
+}
+
+async function loadRepoData(repoName) {
+    currentRepo = repoName;
+    await loadBranches();
+    clearDetails();
+    document.getElementById('savePlanButton').style.display = 'inline-block'; // Show Save Plan Button
 }
 
 async function setRepo() {
@@ -62,19 +75,19 @@ async function setRepo() {
 }
 
 async function loadBranches() {
-    const data = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+    const data = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
     updateBranchSelector(data);
     return updateChart(data.map(branch => branch.name));
 }
 
 async function setBranch() {
     const branchName = document.getElementById('branchDropdown').value;
-    const data = await fetchWithErrorHandling(`/set_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`);
+    const data = await fetchWithErrorHandling(`/set_branch/${encodeURIComponent(currentRepo)}/${encodeURIComponent(branchName)}`);
     if (data.success) {
         currentBranch = branchName;
         showNotification(data.message, 'success');
         highlightCurrentBranch();
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${branchName}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branchName)}&repo=${encodeURIComponent(currentRepo)}`);
         updateStepList(branchData);
         if (branchData.length > 0) {
             showCommitDetailsAndHighlight(branchData[0].commit_hash);
@@ -338,10 +351,10 @@ async function showCommitDetailsAndHighlight(commitHash) {
     
     try {
         const [commitDetails, vmState, codeDiff, vmStateDetails] = await Promise.all([
-            fetchWithErrorHandling(`/commit_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-            fetchWithErrorHandling(`/vm_state/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-            fetchWithErrorHandling(`/code_diff/${commitHash}?repo=${encodeURIComponent(currentRepo)}`),
-            fetchWithErrorHandling(`/vm_state_details/${commitHash}?repo=${encodeURIComponent(currentRepo)}`)
+            fetchWithErrorHandling(`/commit_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/vm_state/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/code_diff/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/vm_state_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`)
         ]);
 
         updateCommitDetails(commitDetails);
@@ -525,7 +538,7 @@ async function updateUIAfterExecution(newBranch, lastCommitHash) {
     highlightCurrentBranch();
     
     try {
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${newBranch}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(newBranch)}&repo=${encodeURIComponent(currentRepo)}`);
         
         if (branchData.length === 0) {
             showNotification(`No VM states found for branch: ${newBranch}`, 'warning');
@@ -591,7 +604,7 @@ async function deleteBranch() {
 }
 
 async function updateBranchesAndChart() {
-    const branches = await fetchWithErrorHandling(`/get_branches?repo=${encodeURIComponent(currentRepo)}`);
+    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
     updateBranchSelector(branches);
     await updateChart(branches.map(branch => branch.name));
 }
@@ -603,7 +616,7 @@ document.getElementById('stepSearch').addEventListener('input', e => {
     });
 });
 
-function optimizeStep(commitHash, seqNo) {
+async function optimizeStep(commitHash, seqNo) {
     // Create a modal dialog for user input
     const modal = document.createElement('div');
     modal.style.position = 'fixed';
@@ -663,7 +676,7 @@ function optimizeStep(commitHash, seqNo) {
                 commit_hash: commitHash,
                 suggestion: suggestion,
                 seq_no: seqNo,
-                repo: currentRepo // Assuming this function is defined elsewhere
+                repo: currentRepo
             })
         });
 
