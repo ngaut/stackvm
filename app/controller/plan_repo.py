@@ -5,27 +5,80 @@ Visualization module for the VM execution and Git repository management.
 import json
 import os
 import logging
-from git import Repo
+import threading
+from git import Repo, git
 from git.exc import GitCommandError
+from readerwriterlock import rwlock
+from contextlib import contextmanager
 
-from app.config.settings import GIT_REPO_PATH
 from app.services import GitManager, commit_message_wrapper
 
 logger = logging.getLogger(__name__)
 
 
+class RepoManager:
+    def __init__(self, base_path):
+        self.base_path = base_path
+        self.repos = {}
+        self.rw_lock = rwlock.RWLockFair()
+        self.locks = {}
+        self.locks_lock = threading.Lock()
+        self.load_repos(base_path)
 
-class CurrentRepo:
-    def __init__(self, repo_path):
-        self.git_manager = GitManager(repo_path)
+    def load_repos(self, base_path):
+        with self.rw_lock.gen_wlock():
+            for repo_name in os.listdir(base_path):
+                if repo_name.startswith("."):
+                    continue
+                self.repos[repo_name] = GitManager(os.path.join(base_path, repo_name))
 
-    def get_current_repo_path(self):
-        return self.git_manager.repo_path
-    
-    def set_repo(self, repo_path):
-        self.git_manager = GitManager(repo_path)
+    def get_repo(self, repo_name):
+        with self.rw_lock.gen_rlock():
+            return self.repos.get(repo_name)
 
-global_repo = CurrentRepo(GIT_REPO_PATH)
+    def get_or_create_repo(self, repo_name):
+        with self.rw_lock.gen_rlock():
+            repo = self.repos.get(repo_name)
+            if repo:
+                return repo
+
+        # If repo is not found, acquire write lock to add it
+        with self.rw_lock.gen_wlock():
+            # Double-checked locking
+            repo = self.repos.get(repo_name)
+            if not repo:
+                repo = GitManager(os.path.join(self.base_path, repo_name))
+                self.repos[repo_name] = repo
+            return repo
+
+    def repo_exists(self, repo_name):
+        with self.rw_lock.gen_rlock():
+            repo_path = os.path.join(self.base_path, repo_name)
+            return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git"))
+
+    def get_lock(self, repo_name):
+        """
+        Retrieve a threading.Lock object for the specified repository.
+        Creates a new lock if one does not already exist.
+        """
+        with self.locks_lock:
+            if repo_name not in self.locks:
+                self.locks[repo_name] = threading.Lock()
+            return self.locks[repo_name]
+
+    @contextmanager
+    def lock_repo(self, repo_name):
+        """
+        Context manager to acquire and release a lock for a specific repository.
+        Ensures that write operations are mutually exclusive.
+        """
+        lock = self.get_lock(repo_name)
+        lock.acquire()
+        try:
+            yield
+        finally:
+            lock.release()
+
 
 def get_repo(repo_path):
     """Initialize and return a Git repository object."""
@@ -67,11 +120,6 @@ def get_vm_state_for_commit(repo, commit):
             "Invalid JSON in vm_state.json for commit %s", commit.hexsha
         )
     return None
-
-
-def repo_exists(repo_name):
-    repo_path = os.path.join(GIT_REPO_PATH, repo_name)
-    return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git"))
 
 
 def commit_vm_changes(vm):
