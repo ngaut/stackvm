@@ -90,7 +90,7 @@ def should_update_plan(vm: PlanExecutionVM, suggestion: str):
     return should_update, explanation, key_factors
 
 
-def run_vm_with_goal(vm, goal):
+def run_vm_with_goal(vm: PlanExecutionVM, goal: str):
     vm.set_goal(goal)
     plan = generate_plan(vm.llm_interface, goal)
     if plan:
@@ -98,9 +98,10 @@ def run_vm_with_goal(vm, goal):
         vm.state["current_plan"] = plan
 
         while True:
-            success = vm.step()
+            step_result = vm.step()
             commit_vm_changes(vm)
-            if not success:
+            if not step_result.get("success", False):
+                logger.error("Failed to execute step, result: %s", step_result)
                 break
 
             if vm.state.get("goal_completed"):

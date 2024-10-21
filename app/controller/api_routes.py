@@ -10,7 +10,7 @@ from datetime import datetime
 import git
 from git import NULL_TREE
 from git.exc import GitCommandError
-from flask import Blueprint, render_template, jsonify, request, current_app
+from flask import Blueprint, render_template, jsonify, request, current_app, Response, stream_with_context
 
 from app.config.settings import (
     LLM_PROVIDER,
@@ -38,7 +38,7 @@ from .plan_repo import (
     commit_vm_changes,
     get_repo,
 )
-from .engine import generate_updated_plan, should_update_plan
+from .engine import generate_updated_plan, should_update_plan, generate_plan
 from app.services.plan_manager import PlanManager
 
 
@@ -676,3 +676,106 @@ def save_plan():
     except Exception as e:
         current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
         return log_and_return_error("An unexpected error occurred.", "error", 500)
+
+
+@api_blueprint.route("/stream_execute_vm", methods=["POST"])
+def stream_execute_vm():
+    """
+    API endpoint to execute VM operations with event streaming.
+    Accepts a goal and streams each step's execution result using the Vercel AI SDK Data Stream Protocol.
+    """
+
+    data = request.json
+    goal = data.get("goal")
+    if not goal:
+        return log_and_return_error("Missing 'goal' parameter", "error", 400)
+
+    def event_stream():
+        try:
+            current_app.logger.info(f"Starting VM execution with goal: {goal}")
+
+            # Initialize VM
+            repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
+            vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
+            vm.set_goal(goal)
+
+            # Generate Plan
+            plan = generate_plan(vm.llm_interface, goal)
+            if not plan:
+                error_message = "Failed to generate plan."
+                current_app.logger.error(error_message)
+                yield f"3: {json.dumps({'error': error_message})}\n"
+                yield "d: <finish>\n"
+                return
+
+            vm.state["current_plan"] = plan
+            current_app.logger.info("Generated Plan: %s", json.dumps(plan))
+
+            # Initialize plan (Step 0)
+            yield f"e: <step 0 finished>\n"
+            yield f"6: {json.dumps(plan)}\n"
+
+            # Start executing steps
+            while True:
+                step_result = vm.step()
+                commit_vm_changes(vm)
+                if not step_result:
+                    error_message = "Failed to execute step."
+                    current_app.logger.error(error_message)
+                    yield f"3: {json.dumps({'error': error_message})}\n"
+                    break
+
+                if not step_result.get("success", False):
+                    error = step_result.get("error", "Unknown error during step execution.")
+                    current_app.logger.error(f"Error executing step: {error}")
+                    yield f"3: {json.dumps({'error': error})}\n"
+                    break
+
+                step_type = step_result.get("step_type")
+                params = step_result.get("parameters", {})
+                output = step_result.get("output", {})
+                seq_no = step_result.get("seq_no", "Unknown")
+
+                # Tool Call (Part 9) if the step is a tool call
+                if step_type == "calling":
+                    tool_name = params.get("tool", "Unknown")
+                    tool_params = params.get("params", {})
+                    yield f"9: {json.dumps({'tool_call': tool_name, 'parameters': tool_params})}\n"
+                    # Tool Result (Part a)
+                    yield f"a: {json.dumps({'tool_result': output})}\n"
+
+                # Step Finish (Part e)
+                yield f"e: <step {seq_no} finished>\n"
+
+                # Check if goal is completed
+                if vm.state.get("goal_completed"):
+                    current_app.logger.info("Goal completed during plan execution.")
+                    # Fetch the final_answer
+                    final_answer = vm.get_variable("final_answer")
+                    if final_answer:
+                        # Stream the final_answer using Part 0
+                        # You can customize the chunking strategy as needed
+                        for chunk in final_answer.split('. '):
+                            if chunk:
+                                # Add a period back if it was split
+                                if not chunk.endswith('.'):
+                                    chunk += '.'
+                                yield f"0: \"{chunk}\"\n"
+                    
+                    break
+
+            # Final Step Finish
+            yield f"e: <final step finished>\n"
+
+            # Finish Message (Part d)
+            yield "d: <finish>\n"
+
+        except Exception as e:
+            error_message = f"Error during VM execution: {str(e)}"
+            current_app.logger.error(error_message, exc_info=True)
+            yield f"3: {json.dumps({'error': error_message})}\n"
+            yield "d: <finish>\n"
+
+    return Response(stream_with_context(event_stream()), mimetype='text/event-stream')
+
+

@@ -53,10 +53,14 @@ class RepoManager:
         Context manager to acquire a write lock for a specific repository.
         Ensures that write operations are mutually exclusive.
         """
-        with self.repos_lock.gen_rlock():
+        if not self.repo_exists(repo_name):
+            raise ValueError(f"Repository '{repo_name}' does not exist.")
+
+        with self.repos_lock.gen_wlock():
             lock = self.locks.get(repo_name)
             if not lock:
-                raise ValueError(f"No lock found for repository '{repo_name}'")
+                self.locks[repo_name] = rwlock.RWLockFair()
+                lock = self.locks[repo_name]
 
         w_lock = lock.gen_wlock()
         acquired = w_lock.acquire(timeout=timeout)
@@ -75,10 +79,14 @@ class RepoManager:
         Context manager to acquire a read lock for a specific repository.
         Allows multiple concurrent read operations.
         """
-        with self.repos_lock.gen_rlock():
+        if not self.repo_exists(repo_name):
+            raise ValueError(f"Repository '{repo_name}' does not exist.")
+
+        with self.repos_lock.gen_wlock():
             lock = self.locks.get(repo_name)
             if not lock:
-                raise ValueError(f"No lock found for repository '{repo_name}'")
+                self.locks[repo_name] = rwlock.RWLockFair()
+                lock = self.locks[repo_name]
 
         r_lock = lock.gen_rlock()
         acquired = r_lock.acquire(timeout=timeout)
