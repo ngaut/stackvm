@@ -25,6 +25,8 @@ class RepoManager:
 
     def load_repos(self, base_path):
         with self.repos_lock.gen_wlock():
+            self.repos = {}
+            self.locks = {}
             for repo_name in os.listdir(base_path):
                 if repo_name.startswith("."):
                     continue
