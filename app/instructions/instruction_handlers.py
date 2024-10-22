@@ -81,7 +81,7 @@ class InstructionHandlers:
                 output_vars_record[output_vars[0]] = instruction_output
             return True, output_vars_record
         except Exception as e:
-            self.vm.logger.error(f"Failed to set output_vars: {e}")
+            self.vm.logger.error(f"Failed to set output_vars {e}, {instruction_output}")
             return False, output_vars_record
 
     def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
