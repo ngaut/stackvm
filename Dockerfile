@@ -26,7 +26,7 @@ COPY ./plan_example.md /code/plan_example.md
 COPY ./app /code/app
 COPY ./tools /code/tools
 
-RUN mkdir /tmp/stack_vm/runtime/
+RUN mkdir -p /tmp/stack_vm/runtime/
 
 EXPOSE 80
 
