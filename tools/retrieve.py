@@ -19,6 +19,9 @@ def retrieve_knowledge_graph(query):
     Arguments:
     - `query`: The query string. Can be a direct string or a variable reference.
 
+    Output:
+    - Returns a single value representing the retrieved knowledge graph data.
+
     Example to call this tool:
     **Example:**
     ```json
@@ -66,6 +69,9 @@ def vector_search(query, top_k=5):
     Arguments:
     - `query`: The query string. Can be a direct string or a variable reference.
     - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
+
+    Output:
+    - Returns a single value containing the concatenated top k document chunks.
 
     Example to call this tool:
 

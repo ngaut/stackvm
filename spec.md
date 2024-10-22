@@ -100,9 +100,8 @@ Each instruction in the plan is represented as a JSON object with the following 
     - Keys: Must match the argument names expected by the tool.
     - Values: Can be either a direct value or a variable reference.
   - `output_vars` (optional): Specifies how the output from the tool should be stored in the VM’s variable store for later use. The type of output_vars can either be a string or an array.
-    - If it is a string: The entire tool's response (whether text or JSON) will be stored under the specified variable name.
-    - If it is an array: It specifies that the tool's response must be a valid JSON object and contain specific keys. Each entry in the array corresponds to a key in the JSON response, and the value associated with each key will be extracted and stored as a variable.
-    These variables are stored in the VM’s variable store and can be used in subsequent instructions.
+    - If it is a string: Use this when the tool returns a single value. The entire tool's response (whether text or JSON) will be stored under the specified variable name.
+    - If it is an array: Use this when the tool returns a JSON object with multiple keys. Each entry in the array corresponds to a key in the JSON response, and the value associated with each key will be extracted and stored as a variable.
 
 **Example:**
 ```json
