@@ -10,7 +10,15 @@ from datetime import datetime
 import git
 from git import NULL_TREE
 from git.exc import GitCommandError
-from flask import Blueprint, render_template, jsonify, request, current_app, Response, stream_with_context
+from flask import (
+    Blueprint,
+    render_template,
+    jsonify,
+    request,
+    current_app,
+    Response,
+    stream_with_context,
+)
 
 from app.config.settings import (
     LLM_PROVIDER,
@@ -39,6 +47,7 @@ from .plan_repo import (
     get_repo,
 )
 from .engine import generate_updated_plan, should_update_plan, generate_plan
+from .streaming_protocol import StreamingProtocol
 from app.services.plan_manager import PlanManager
 
 
@@ -691,11 +700,14 @@ def stream_execute_vm():
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
 
     def event_stream():
+        protocol = StreamingProtocol()
         try:
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
 
             # Initialize VM
-            repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
+            repo_path = os.path.join(
+                GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S")
+            )
             vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
             vm.set_goal(goal)
 
@@ -704,16 +716,13 @@ def stream_execute_vm():
             if not plan:
                 error_message = "Failed to generate plan."
                 current_app.logger.error(error_message)
-                yield f"3: {json.dumps({'error': error_message})}\n"
-                yield "d: <finish>\n"
+                yield protocol.send_error(error_message)
                 return
 
             vm.state["current_plan"] = plan
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
-
-            # Initialize plan (Step 0)
-            yield f"e: <step 0 finished>\n"
-            yield f"6: {json.dumps(plan)}\n"
+            # send plan
+            yield protocol.send_plan(plan)
 
             # Start executing steps
             while True:
@@ -722,13 +731,15 @@ def stream_execute_vm():
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
-                    yield f"3: {json.dumps({'error': error_message})}\n"
+                    yield protocol.send_error(error_message)
                     break
 
                 if not step_result.get("success", False):
-                    error = step_result.get("error", "Unknown error during step execution.")
+                    error = step_result.get(
+                        "error", "Unknown error during step execution."
+                    )
                     current_app.logger.error(f"Error executing step: {error}")
-                    yield f"3: {json.dumps({'error': error})}\n"
+                    yield protocol.send_error(error)
                     break
 
                 step_type = step_result.get("step_type")
@@ -740,12 +751,10 @@ def stream_execute_vm():
                 if step_type == "calling":
                     tool_name = params.get("tool", "Unknown")
                     tool_params = params.get("params", {})
-                    yield f"9: {json.dumps({'tool_call': tool_name, 'parameters': tool_params})}\n"
-                    # Tool Result (Part a)
-                    yield f"a: {json.dumps({'tool_result': output})}\n"
-
+                    yield protocol.send_tool_call(tool_name, tool_params)
+                    yield protocol.send_tool_result(tool_name, tool_params, output)
                 # Step Finish (Part e)
-                yield f"e: <step {seq_no} finished>\n"
+                yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
                 if vm.state.get("goal_completed"):
@@ -755,27 +764,20 @@ def stream_execute_vm():
                     if final_answer:
                         # Stream the final_answer using Part 0
                         # You can customize the chunking strategy as needed
-                        for chunk in final_answer.split('. '):
+                        for chunk in final_answer.split(". "):
                             if chunk:
                                 # Add a period back if it was split
-                                if not chunk.endswith('.'):
-                                    chunk += '.'
-                                yield f"0: \"{chunk}\"\n"
-                    
+                                if not chunk.endswith("."):
+                                    chunk += "."
+                                yield protocol.send_text_part(chunk)
                     break
 
-            # Final Step Finish
-            yield f"e: <final step finished>\n"
-
             # Finish Message (Part d)
-            yield "d: <finish>\n"
+            yield protocol.send_finish_message(final_answer)
 
         except Exception as e:
             error_message = f"Error during VM execution: {str(e)}"
             current_app.logger.error(error_message, exc_info=True)
-            yield f"3: {json.dumps({'error': error_message})}\n"
-            yield "d: <finish>\n"
+            yield protocol.send_error(error_message)
 
-    return Response(stream_with_context(event_stream()), mimetype='text/event-stream')
-
-
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
