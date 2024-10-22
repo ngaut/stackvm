@@ -717,6 +717,7 @@ def stream_execute_vm():
                 error_message = "Failed to generate plan."
                 current_app.logger.error(error_message)
                 yield protocol.send_error(error_message)
+                yield protocol.send_finish_message('error')
                 return
 
             vm.state["current_plan"] = plan
@@ -726,34 +727,46 @@ def stream_execute_vm():
 
             # Start executing steps
             while True:
+                step = vm.get_current_step()
+                if step['type'] == "calling":
+                    params = step.get("parameters", {})
+                    tool_name = params.get("tool", "Unknown")
+                    tool_params = params.get("params", {})
+                    yield protocol.send_tool_call(tool_name, tool_params)
+
                 step_result = vm.step()
                 commit_vm_changes(vm)
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
+                    yield protocol.send_state(vm.state)
                     yield protocol.send_error(error_message)
-                    break
+                    yield protocol.send_finish_message('error')
+                    return
 
                 if not step_result.get("success", False):
                     error = step_result.get(
                         "error", "Unknown error during step execution."
                     )
                     current_app.logger.error(f"Error executing step: {error}")
+                    yield protocol.send_state(vm.state)
                     yield protocol.send_error(error)
-                    break
+                    yield protocol.send_finish_message('error')
+                    return
 
                 step_type = step_result.get("step_type")
                 params = step_result.get("parameters", {})
                 output = step_result.get("output", {})
-                seq_no = step_result.get("seq_no", "Unknown")
+                seq_no = step_result.get("seq_no", -1)  # -1 means unknown.
 
                 # Tool Call (Part 9) if the step is a tool call
                 if step_type == "calling":
                     tool_name = params.get("tool", "Unknown")
                     tool_params = params.get("params", {})
-                    yield protocol.send_tool_call(tool_name, tool_params)
                     yield protocol.send_tool_result(tool_name, tool_params, output)
+
                 # Step Finish (Part e)
+                yield protocol.send_state(vm.state)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
@@ -773,11 +786,13 @@ def stream_execute_vm():
                     break
 
             # Finish Message (Part d)
-            yield protocol.send_finish_message(final_answer)
+            yield protocol.send_finish_message()
 
         except Exception as e:
             error_message = f"Error during VM execution: {str(e)}"
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers={
+        "X-Content-Type-Options": "nosniff",
+    })

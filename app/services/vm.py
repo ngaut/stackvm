@@ -317,3 +317,6 @@ class PlanExecutionVM:
 
     def get_all_variables(self) -> Dict[str, Any]:
         return self.variable_manager.get_all_variables()
+
+    def get_current_step(self) -> dict :
+        return self.state['current_plan'][self.state['program_counter']]

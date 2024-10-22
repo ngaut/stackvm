@@ -9,12 +9,11 @@ class EventType(str, Enum):
     TEXT_PART = "0"
     DATA_PART = "2"
     ERROR_PART = "3"
-    MESSAGE_ANNOTATION_PART = "6"
+    MESSAGE_ANNOTATION_PART = "8"
     TOOL_CALL_PART = "9"
     TOOL_RESULT_PART = "a"
     STEP_FINISH_PART = "e"
     FINISH_MESSAGE_PART = "d"
-    EXECUTION_STEP_ANNOTATIONS_PART = "8"  # Existing event type
 
 
 @dataclass
@@ -73,16 +72,37 @@ class StreamingProtocol:
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_step_finish(self, step: int):
-        event = ExecutionEvent(event_type=EventType.STEP_FINISH_PART, payload={
-            "step": step
+    def send_state(self, state: dict):
+        event = ExecutionEvent(event_type=EventType.MESSAGE_ANNOTATION_PART, payload={
+            "state": state
         })
         event_bytes = event.encode()
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_finish_message(self, final_answer: str):
-        event = ExecutionEvent(event_type=EventType.FINISH_MESSAGE_PART, payload=final_answer)
+    def send_step_finish(self, step: int, reason: str = 'stop'):
+        payload = {
+            "step": step,
+            "finishReason": reason,
+            "usage":{
+                "promptTokens": 0,
+                "completionTokens": 0
+            }
+        }
+        event = ExecutionEvent(event_type=EventType.STEP_FINISH_PART, payload=payload)
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
+
+    def send_finish_message(self, reason: str = "stop"):
+        payload = {
+            "finishReason": reason,
+            "usage":{
+                "promptTokens": 0,
+                "completionTokens": 0
+            }
+        }
+        event = ExecutionEvent(event_type=EventType.FINISH_MESSAGE_PART, payload=payload)
         event_bytes = event.encode()
         self.events.append(event_bytes)
         return event_bytes
