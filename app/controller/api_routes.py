@@ -722,8 +722,6 @@ def stream_execute_vm():
 
             vm.state["current_plan"] = plan
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
-            # send plan
-            yield protocol.send_plan(plan)
 
             # Start executing steps
             while True:
