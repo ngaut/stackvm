@@ -1,4 +1,3 @@
- 
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -21,7 +20,7 @@ class EventType(str, Enum):
 @dataclass
 class ExecutionEvent:
     event_type: EventType
-    payload: str| dict | None= None
+    payload: str| dict | list| None= None
 
     def encode(self, charset: str = 'utf-8') -> bytes:
         body = self.payload
@@ -39,26 +38,30 @@ class StreamingProtocol:
 
     def send_text_part(self, text: str):
         event = ExecutionEvent(event_type=EventType.TEXT_PART, payload=text)
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_data_part(self, data: str):
         event = ExecutionEvent(event_type=EventType.DATA_PART, payload=data)
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
-    def send_plan(self, plan: dict):
+    def send_plan(self, plan: list):
         event = ExecutionEvent(event_type=EventType.MESSAGE_ANNOTATION_PART, payload=plan)
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_tool_call(self, tool_name: str, input: dict):
         event = ExecutionEvent(event_type=EventType.TOOL_CALL_PART, payload={
             "tool": tool_name,
             "input": input
         })
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_tool_result(self, tool_name: str, input: dict, result: dict):
         event = ExecutionEvent(event_type=EventType.TOOL_RESULT_PART, payload={
@@ -66,25 +69,29 @@ class StreamingProtocol:
             "input": input,
             "result": result
         })
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_step_finish(self, step: int):
         event = ExecutionEvent(event_type=EventType.STEP_FINISH_PART, payload={
             "step": step
         })
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_finish_message(self, final_answer: str):
         event = ExecutionEvent(event_type=EventType.FINISH_MESSAGE_PART, payload=final_answer)
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def send_error(self, error: str):
         event = ExecutionEvent(event_type=EventType.ERROR_PART, payload=error)
-        self.events.append(event.encode())
-        return event
+        event_bytes = event.encode()
+        self.events.append(event_bytes)
+        return event_bytes
 
     def get_stream(self) -> bytes:
         """
