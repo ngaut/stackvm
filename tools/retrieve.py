@@ -33,7 +33,7 @@ def retrieve_knowledge_graph(query):
                 "params": {
                 "query": "TiDB latest stable version"
             },
-            "output_vars": "tidb_version_graph"
+            "output_vars": ["tidb_version_graph"]
         }
     }
 
@@ -86,7 +86,7 @@ def vector_search(query, top_k=5):
                 "query": "Information about Mount Everest",
                 "top_k": 3
             },
-            "output_vars": "embedded_chunks"
+            "output_vars": ["embedded_chunks"]
         }
     }
     ```

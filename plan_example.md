@@ -50,7 +50,7 @@
       "params": {
         "query": "TiDB latest stable version"
       },
-      "output_vars": "latest_tidb_version_info"
+      "output_vars": ["latest_tidb_version_info"]
     }
   },
   {
@@ -84,7 +84,7 @@
         "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
         "top_k": 3
       },
-      "output_vars": "tidb_key_features_and_improvements"
+      "output_vars": ["tidb_key_features_and_improvements"]
     }
   },
   {
@@ -103,7 +103,7 @@
         "query": "Latest TiDB version and its key features",
         "top_k": 3
       },
-      "output_vars": "tidb_key_features_and_improvements"
+      "output_vars": ["tidb_key_features_and_improvements"]
     }
   },
   {
@@ -115,7 +115,7 @@
         "query": "TiDB ${latest_tidb_version} performance optimization techniques",
         "top_k": 5
       },
-      "output_vars": "performance_techniques"
+      "output_vars": ["performance_techniques"]
     }
   },
   {
@@ -127,7 +127,7 @@
         "query": "What are specific considerations for optimizing TiDB ${latest_tidb_version} for e-commerce applications?",
         "top_k": 5
       },
-      "output_vars": "ecommerce_optimizations"
+      "output_vars": ["ecommerce_optimizations"]
     }
   },
   {
@@ -139,7 +139,7 @@
         "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.",
         "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_key_features_and_improvements}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
       },
-      "output_vars": "final_recommendations"
+      "output_vars": ["final_recommendations"]
     }
   },
   {

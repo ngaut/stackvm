@@ -99,9 +99,9 @@ Each instruction in the plan is represented as a JSON object with the following 
   - `params`: An object containing key-value pairs that represent the arguments required by the specified tool.
     - Keys: Must match the argument names expected by the tool.
     - Values: Can be either a direct value or a variable reference.
-  - `output_vars` (optional): Specifies how the output from the tool should be stored in the VM’s variable store for later use. The type of output_vars can either be a string or an array.
-    - If it is a string: Use this when the tool returns a single value. The entire tool's response (whether text or JSON) will be stored under the specified variable name.
-    - If it is an array: Use this when the tool returns a JSON object with multiple keys. Each entry in the array corresponds to a key in the JSON response, and the value associated with each key will be extracted and stored as a variable.
+  - `output_vars` (optional): An array specifying how the tool’s output should be stored in the VM’s variable store for later use.
+    - If it is a string: The array contains one variable name. The entire tool’s response is stored under this variable name.
+    - If it is an array: The array contains variable names corresponding to the keys in the JSON response. Each variable name in the array maps to a key in the JSON object, and the value associated with each key will be extracted and stored under the corresponding variable name.
 
 **Example:**
 ```json
@@ -114,7 +114,7 @@ Each instruction in the plan is represented as a JSON object with the following 
       "param1": "value_or_variable_reference",
       "param2": "value_or_variable_reference"
     },
-    "output_vars": "variable_name" | ["variable_name_1", "variable_name_2"]
+    "output_vars": ["variable_name_1", ...]
   }
 }
 ```
@@ -212,7 +212,7 @@ Parameters can be either direct values or variable references. To reference a va
     "params": {
       "query": "TiDB latest stable version"
     },
-    "output_vars": "latest_tidb_version_info"
+    "output_vars": ["latest_tidb_version_info"]
   }
 }
 ```
@@ -228,7 +228,7 @@ Parameters can be either direct values or variable references. To reference a va
       "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
       "top_k": 3
     },
-    "output_vars": "tidb_key_features_and_improvements"
+    "output_vars": ["tidb_key_features_and_improvements"]
   }
 }
 ```
