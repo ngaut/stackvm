@@ -17,8 +17,16 @@ COPY --from=requirements-stage /tmp/requirements.txt /code/requirements.txt
 RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 RUN pip install "fastapi[all]" uvicorn
 
+COPY ./main.py /code/main.py
+COPY ./spec.md /code/spec.md
+COPY ./static /code/static
+COPY ./templates /code/templates
+COPY ./tools /code/tools
+COPY ./plan_example.md /code/plan_example.md
 COPY ./app /code/app
 COPY ./tools /code/tools
+
+RUN mkdir /tmp/stack_vm/runtime/
 
 EXPOSE 80
 
