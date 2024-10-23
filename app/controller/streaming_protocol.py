@@ -41,31 +41,19 @@ class StreamingProtocol:
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_data_part(self, data: str):
-        event = ExecutionEvent(event_type=EventType.DATA_PART, payload=data)
-        event_bytes = event.encode()
-        self.events.append(event_bytes)
-        return event_bytes
-
-    def send_plan(self, plan: list):
-        event = ExecutionEvent(event_type=EventType.MESSAGE_ANNOTATION_PART, payload=plan)
-        event_bytes = event.encode()
-        self.events.append(event_bytes)
-        return event_bytes
-
-    def send_tool_call(self, tool_name: str, input: dict):
+    def send_tool_call(self, tool_call_id: int, tool_name: str, args: dict):
         event = ExecutionEvent(event_type=EventType.TOOL_CALL_PART, payload={
-            "tool": tool_name,
-            "input": input
+            "toolCallId": str(tool_call_id),
+            "toolName": tool_name,
+            "args": args
         })
         event_bytes = event.encode()
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_tool_result(self, tool_name: str, input: dict, result: dict):
+    def send_tool_result(self, tool_call_id: int, result: dict):
         event = ExecutionEvent(event_type=EventType.TOOL_RESULT_PART, payload={
-            "tool": tool_name,
-            "input": input,
+            "toolCallId": str(tool_call_id),
             "result": result
         })
         event_bytes = event.encode()
@@ -73,9 +61,9 @@ class StreamingProtocol:
         return event_bytes
 
     def send_state(self, state: dict):
-        event = ExecutionEvent(event_type=EventType.MESSAGE_ANNOTATION_PART, payload={
+        event = ExecutionEvent(event_type=EventType.MESSAGE_ANNOTATION_PART, payload=[{
             "state": state
-        })
+        }])
         event_bytes = event.encode()
         self.events.append(event_bytes)
         return event_bytes

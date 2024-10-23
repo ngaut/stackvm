@@ -728,9 +728,10 @@ def stream_execute_vm():
                 step = vm.get_current_step()
                 if step['type'] == "calling":
                     params = step.get("parameters", {})
+                    tool_call_id = step["seq_no"]
                     tool_name = params.get("tool", "Unknown")
-                    tool_params = params.get("params", {})
-                    yield protocol.send_tool_call(tool_name, tool_params)
+                    tool_args = params.get("params", {})
+                    yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
                 step_result = vm.step()
                 commit_vm_changes(vm)
@@ -759,9 +760,7 @@ def stream_execute_vm():
 
                 # Tool Call (Part 9) if the step is a tool call
                 if step_type == "calling":
-                    tool_name = params.get("tool", "Unknown")
-                    tool_params = params.get("params", {})
-                    yield protocol.send_tool_result(tool_name, tool_params, output)
+                    yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
                 yield protocol.send_state(vm.state)
