@@ -348,6 +348,7 @@ async function showCommitDetailsAndHighlight(commitHash) {
         updateVMState(vmState);
         updateCodeDiff(codeDiff);
         updateVMStateDetails(vmStateDetails, commitHash);
+        updateVMVariables(vmStateDetails, vmState)
 
         hljs.highlightAll();
     } catch (error) {
@@ -823,3 +824,46 @@ document.addEventListener('DOMContentLoaded', () => {
 // Existing loadDirectories call and other initializations
 loadDirectories();
 window.addEventListener('resize', () => { if (chart) chart.resize(); });
+
+function updateVMVariables(vmVariablesData, vmState) {
+    const vmVariablesElement = document.getElementById('vmVariables');
+    if (vmVariablesData && vmVariablesData.variables) {
+        vmVariablesElement.innerHTML = `
+            <h2>VM Variables</h2>
+            <pre><code class="json">${JSON.stringify(vmVariablesData.variables, null, 2)}</code></pre>
+        `;
+
+        const finalAnswer = vmVariablesData.variables.final_answer;
+        console.log('Final Answer:', finalAnswer);
+
+        const goal = vmState ? vmState.goal : undefined;
+        console.log('Goal:', goal);
+
+        const finalAnswerElement = document.getElementById('finalAnswerContent');
+        const goalElement = document.getElementById('goalContent');
+
+        if (finalAnswerElement) {
+            if (finalAnswer) {
+                const converter = new showdown.Converter();
+                finalAnswerElement.innerHTML = converter.makeHtml(finalAnswer);
+            } else {
+                finalAnswerElement.innerHTML = 'No final answer available.';
+            }
+        } else {
+            console.error('Final Answer element not found!');
+        }
+
+        if (goalElement) {
+            if (goal) {
+                const converter = new showdown.Converter();
+                goalElement.innerHTML = converter.makeHtml(goal);
+            } else {
+                goalElement.innerHTML = 'No goal available.';
+            }
+        } else {
+            console.error('Goal element not found!');
+        }
+    } else {
+        vmVariablesElement.innerHTML = '<p>No VM variables available.</p>';
+    }
+}

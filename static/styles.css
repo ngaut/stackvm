@@ -91,3 +91,18 @@ body {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+.final-answer {
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+}
+
+.final-answer h2 {
+    margin-bottom: 15px;
+}
+
+.final-answer p {
+    font-size: 1rem;
+}
