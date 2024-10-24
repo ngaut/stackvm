@@ -46,6 +46,10 @@ def llm_generate(
     - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
 
+    Output: The output format (text or JSON) depends on your instructions.
+    - Text Response:If you ask for a text answer, let output_vars be an array containing one variable name. The entire text response will be stored under this variable.
+    - JSON Response: If you instruct the LLM to respond in JSON format, let output_vars be an array containing variable names that match the keys in the JSON response. Each variable name corresponds to a key in the JSON object, and the value associated with each key is stored under the corresponding variable name.
+
     Example to call this tool:
     **Example:**
     ```json
@@ -58,7 +62,7 @@ def llm_generate(
                 "prompt": "Simulate the step-by-step execution of the following Python code to count the occurrences of the character 'r' in the word 'strawberry'. Provide a detailed explanation of each step and the final numerical result.\n\nword = 'strawberry'\ncount = 0\nfor char in word:\n    if char == 'r':\n        count += 1\nprint(count)\n\n Example output:To count the occurrences of the character 'r' in the word 'strawberry' using the provided pseudo Python code, we can break it down step by step:\n\n1. Initialization:\n   - Set word = 'strawberry' and char_to_count = 'r'.\n\n2. Convert to Lowercase:\n   - Both word and char_to_count are already in lowercase:\n     word = 'strawberry'\n     char_to_count = 'r'\n\n3. Count Occurrences:\n   We iterate through each character c in word and check if c is equal to char_to_count ('r'):\n   - 's' → not 'r' (count = 0)\n   - 't' → not 'r' (count = 0)\n   - 'r' → is 'r' (count = 1)\n   - 'a' → not 'r' (count = 1)\n   - 'w' → not 'r' (count = 1)\n   - 'b' → not 'r' (count = 1)\n   - 'e' → not 'r' (count = 1)\n   - 'r' → is 'r' (count = 2)\n   - 'r' → is 'r' (count = 3)\n   - 'y' → not 'r' (count = 3)\n\n4. Final Count:\n   The total count of 'r' in 'strawberry' is 3.\n\nThus, the numerical result is 3.",
                 "context": null
             },
-            "output_vars": "r_count_by_pseudo_python_simulation"
+            "output_vars": ["r_count_by_pseudo_python_simulation"]
         }
     }
     ```
