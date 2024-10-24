@@ -19,6 +19,9 @@ def retrieve_knowledge_graph(query):
     Arguments:
     - `query`: The query string. Can be a direct string or a variable reference.
 
+    Output:
+    - Returns a single value representing the retrieved knowledge graph data.
+
     Example to call this tool:
     **Example:**
     ```json
@@ -30,7 +33,7 @@ def retrieve_knowledge_graph(query):
                 "params": {
                 "query": "TiDB latest stable version"
             },
-            "output_vars": "tidb_version_graph"
+            "output_vars": ["tidb_version_graph"]
         }
     }
 
@@ -67,6 +70,9 @@ def vector_search(query, top_k=5):
     - `query`: The query string. Can be a direct string or a variable reference.
     - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
 
+    Output:
+    - Returns a single value containing the concatenated top k document chunks.
+
     Example to call this tool:
 
     **Example:**
@@ -80,7 +86,7 @@ def vector_search(query, top_k=5):
                 "query": "Information about Mount Everest",
                 "top_k": 3
             },
-            "output_vars": "embedded_chunks"
+            "output_vars": ["embedded_chunks"]
         }
     }
     ```

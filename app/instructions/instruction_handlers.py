@@ -63,7 +63,7 @@ class InstructionHandlers:
         output_vars_record = {}
 
         try:
-            if isinstance(output_vars, list):
+            if len(output_vars) > 1:
                 if isinstance(instruction_output, str):
                     # Attempt to parse JSON string
                     json_object = find_first_json_object(instruction_output)
@@ -76,9 +76,9 @@ class InstructionHandlers:
                     var_value = instruction_output.get(var_name)
                     self.vm.set_variable(var_name, var_value)
                     output_vars_record[var_name] = var_value
-            elif isinstance(output_vars, str):
-                self.vm.set_variable(output_vars, instruction_output)
-                output_vars_record[output_vars] = instruction_output
+            elif len(output_vars) == 1:
+                self.vm.set_variable(output_vars[0], instruction_output)
+                output_vars_record[output_vars[0]] = instruction_output
             return True, output_vars_record
         except Exception as e:
             self.vm.logger.error(f"Failed to set output_vars: {e}")
@@ -108,7 +108,21 @@ class InstructionHandlers:
             k: self.vm.resolve_parameter(v) for k, v in params.get("params", {}).items()
         }
         output_vars = params.get("output_vars", None)
-        if isinstance(output_vars, list):
+        if output_vars is None:
+            return (
+                self._handle_error(
+                    "Missing 'output_vars' in calling parameters", "calling", params
+                ),
+                None,
+            )
+        if not isinstance(output_vars, list):
+            return (
+                self._handle_error(
+                    "Invalid 'output_vars' type in calling parameters", "calling", params
+                ),
+                None,
+            )
+        if len(output_vars) > 1:
             tool_parameters["response_format"] = (
                 "Respond with a JSON object in the following format:\n"
                 + self._construct_response_format_example(output_vars)
