@@ -10,7 +10,7 @@ from app.controller.engine import run_vm_with_goal
 from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL, OPENAI_API_KEY, OLLAMA_BASE_URL
 from app.services import PlanExecutionVM
 from app.services import LLMInterface
-from app.instructions import global_tools_hub
+from app.instructions import global_tools_hub, tool
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -36,60 +36,53 @@ logger = logging.getLogger(__name__)
 
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
+@tool
 def llm_generate(
-    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+    prompt: str, context: Optional[str] = None
 ):
     """
     Generates a response using the Language Model (LLM).
 
+    This tool must be used within a "calling" instruction in the plan.
+
     Arguments:
     - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
+        - **Language Matching**: Write the prompt in the same language as the goal.
+        - **Language Confirmation**: Append a sentence to confirm the desired language of the generated text:
+            - *For English goals*: "Please ensure that the generated text uses English."
+            - *For Chinese goals*: "请确保生成的文本使用中文。"
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
 
     Output: The output format (text or JSON) depends on your instructions.
-    - Text Response:If you ask for a text answer, let output_vars be an array containing one variable name. The entire text response will be stored under this variable.
+    - Text Response: If you ask for a text answer, let output_vars be an array containing one variable name. The entire text response will be stored under this variable.
     - JSON Response: If you instruct the LLM to respond in JSON format, let output_vars be an array containing variable names that match the keys in the JSON response. Each variable name corresponds to a key in the JSON object, and the value associated with each key is stored under the corresponding variable name.
 
-    Example to call this tool:
-    **Example:**
+    Example usage in a plan:
     ```json
     {
         "seq_no": 1,
         "type": "calling",
         "parameters": {
-            "tool": "llm_generate",
-            "params": {
-                "prompt": "Simulate the step-by-step execution of the following Python code to count the occurrences of the character 'r' in the word 'strawberry'. Provide a detailed explanation of each step and the final numerical result.\n\nword = 'strawberry'\ncount = 0\nfor char in word:\n    if char == 'r':\n        count += 1\nprint(count)\n\n Example output:To count the occurrences of the character 'r' in the word 'strawberry' using the provided pseudo Python code, we can break it down step by step:\n\n1. Initialization:\n   - Set word = 'strawberry' and char_to_count = 'r'.\n\n2. Convert to Lowercase:\n   - Both word and char_to_count are already in lowercase:\n     word = 'strawberry'\n     char_to_count = 'r'\n\n3. Count Occurrences:\n   We iterate through each character c in word and check if c is equal to char_to_count ('r'):\n   - 's' → not 'r' (count = 0)\n   - 't' → not 'r' (count = 0)\n   - 'r' → is 'r' (count = 1)\n   - 'a' → not 'r' (count = 1)\n   - 'w' → not 'r' (count = 1)\n   - 'b' → not 'r' (count = 1)\n   - 'e' → not 'r' (count = 1)\n   - 'r' → is 'r' (count = 2)\n   - 'r' → is 'r' (count = 3)\n   - 'y' → not 'r' (count = 3)\n\n4. Final Count:\n   The total count of 'r' in 'strawberry' is 3.\n\nThus, the numerical result is 3.",
-                "context": null
-            },
-            "output_vars": ["r_count_by_pseudo_python_simulation"]
-        }
-    }
-    ```
-
-    Example with json response:
-    ```json
-    {
-        "seq_no": 1,
-        "type": "calling",
-        "parameters": {
-            "tool": "llm_generate",
-            "params": {
-                "prompt": "Analyze the sales data and provide summary and insights.",
+            "tool_name": "llm_generate",
+            "tool_params": {
+                "prompt": "Analyze the sales data and provide summary and insights, response a json object including 'summary' and 'insights'.",
                 "context": "${sales_data}",
             },
             "output_vars": ["summary", "insights"]
         }
     }
     ```
+
+    Best practices:
+    - Always use llm_generate within a "calling" instruction in your plan.
+    - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
     """
-    if response_format:
-        prompt = prompt + "\n" + response_format
+
 
     response = llm_client.generate(prompt, context)
     return response
 
-
+# Register the tool after its definition
 global_tools_hub.register_tool(llm_generate)
 global_tools_hub.load_tools("tools")
 

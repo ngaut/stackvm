@@ -43,19 +43,19 @@ class InstructionHandlers:
         self,
         instruction_output: Any,
         output_vars: Optional[Union[str, List[str]]] = None,
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, Any]]:
         """
         Sets multiple output variables based on the instruction's output and the output_vars mapping.
 
         Args:
             instruction_output (Any): The raw output from the instruction.
-            output_vars (Optional[Union[str, List[str]]]]): Mapping of variable names to expressions referencing the instruction's output.
+            output_vars (Optional[Union[str, List[str]]]): Mapping of variable names to expressions referencing the instruction's output.
 
         Returns:
-            bool: True if all variables are set successfully, False otherwise.
+            Tuple[bool, Dict[str, Any]]: A tuple containing a boolean indicating success and a dictionary of set variables.
         """
         if not output_vars:
-            return True  # No output_vars to set
+            return True, {}  # No output_vars to set
 
         self.vm.logger.debug(f"output_vars: {output_vars}")
         instruction_output_str = self.vm._preview_value(instruction_output)
@@ -85,11 +85,11 @@ class InstructionHandlers:
             return False, output_vars_record
 
     def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
-        tool_name = params.get("tool")
+        tool_name = params.get("tool_name")
         if tool_name is None:
             return (
                 self._handle_error(
-                    "Missing 'tool' in calling parameters", "calling", params
+                    "Missing 'tool_name' in calling parameters", "calling", params
                 ),
                 None,
             )
@@ -105,7 +105,7 @@ class InstructionHandlers:
             )
 
         tool_parameters = {
-            k: self.vm.resolve_parameter(v) for k, v in params.get("params", {}).items()
+            k: self.vm.resolve_parameter(v) for k, v in params.get("tool_params", {}).items()
         }
         output_vars = params.get("output_vars", None)
         if output_vars is None:

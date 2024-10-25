@@ -57,10 +57,10 @@ Analyze the current VM execution state and update the plan.
 - **Clarity**: Ensure that each step is clearly defined and actionable.
 - **Referential Integrity**: Do not reference output variables from already executed steps if those variables are not present in Current Variables, as the variables have been garbage collected.
 
-**VM Specification**:
+**MUST follow VM Specification**:
 {vm_spec_content}
 
-**Tools Instruction**:
+**AvailableTools**:
 {tools_instruction_content}
 
 **Output**:
@@ -127,10 +127,10 @@ def get_generate_plan_prompt(goal, vm_spec_content, tools_instruction_content, p
 Your task is to generate a detailed action plan to achieve the following goal:
 Goal: {goal}
 
-**VM Specification**:
+**MUST follow the Specification**:
 {vm_spec_content}
 
-**Tools Instruction**:
+**Available Tools for calling**:
 {tools_instruction_content}
 
 **Plan Example**:
@@ -149,7 +149,25 @@ Goal: {goal}
    - For each sub-goal, create a corresponding action step to achieve it.
    - Ensure the plan follows the VM Specification.
    - Include a 'reasoning' step at the beginning of the plan that outlines the chain of thought and dependency analysis of the steps.
+   - IMPORTANT: Always use tools within "calling" instructions. Never use tool functions directly in the plan.
 
+4. **Tool Usage Guidelines**:
+   - When using a tool, always wrap it in a "calling" instruction.
+   - The "calling" instruction should have the following structure:
+     ```json
+     {{
+       "seq_no": <unique_sequential_number>,
+       "type": "calling",
+       "parameters": {{
+         "tool_name": "<tool_name>",
+         "tool_params": {{
+           <tool-specific parameters>
+         }},
+         "output_vars": [<list_of_output_variable_names>]
+       }}
+     }}
+     ```
+   - Ensure that the "tool_params" object contains all necessary parameters for the specific tool being called.
 
 The final step of the plan must be assign the final output result to the 'final_answer' variable.
 Please provide only the JSON array for the action plan without any additional text, explanations, or markdown. 

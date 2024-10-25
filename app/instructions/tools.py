@@ -3,6 +3,7 @@ import inspect
 import logging
 import os
 from typing import Optional
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -81,5 +82,12 @@ class ToolsHub:
                     logger.error(f"Failed to load module {full_module_name}: {e}")
 
 
-# Create a global instance of ToolsHub
-global_tools_hub = ToolsHub()
+def tool(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    # We'll register the tool later in __init__.py
+    wrapper.is_tool = True
+    return wrapper
+
+# You can add other tool-related functions or classes here if needed

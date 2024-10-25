@@ -140,8 +140,8 @@ class PlanExecutionVM:
     ) -> None:
         """Log the execution of a step and prepare commit message."""
         if step_type == "calling":
-            input_vars = params.get("params", {})
-            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool', 'Unknown')}"
+            input_vars = params.get("tool_params", {})
+            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
         else:
             input_vars = params
             description = f"Executed seq_no: {seq_no}, step: {step_type}"
@@ -243,7 +243,7 @@ class PlanExecutionVM:
             step = self.state["current_plan"][i]
             parameters = step.get("parameters", {})
             if step["type"] == "calling":
-                parameters = parameters.get("params", {})
+                parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
                 referenced_vars = self.variable_manager.find_referenced_variables(
                     param_value
