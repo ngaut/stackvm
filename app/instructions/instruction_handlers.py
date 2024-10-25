@@ -298,20 +298,3 @@ class InstructionHandlers:
             }
         )
         return True, None
-
-    def _log_step_execution(
-        self,
-        step_type: str,
-        params: Dict[str, Any],
-        seq_no: str,
-        output_parameters: Dict[str, Any],
-    ) -> None:
-        """Log the execution of a step and prepare commit message."""
-        if step_type == "calling":
-            input_vars = params.get("tool_params", {})
-            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
-        else:
-            input_vars = params
-            description = f"Executed seq_no: {seq_no}, step: {step_type}"
-
-        # ... (rest of the function remains unchanged)
