@@ -39,10 +39,19 @@ async function loadDirectories() {
     select.style.display = 'block';
     document.getElementById('savePlanButton').style.display = 'none'; // Hide initially
 
-    // Automatically select the first directory and load its data
+    // Automatically select plan.
     if (data.length > 0) {
-        select.value = data[0];
-        await loadRepoData(data[0]);
+        const selectedPlanId = (new URLSearchParams(location.search)).get('plan');``
+        const selectedIndex = data.indexOf(String(selectedPlanId));
+        if (selectedIndex !== -1) {
+            // Select the plan if specified in the query string.
+            select.value = data[selectedIndex];
+            await loadRepoData(data[selectedIndex]);
+        } else {
+            // Select the first directory by default.
+            select.value = data[0];
+            await loadRepoData(data[0]);
+        }
     }
 
     // Add event listener to load data when a new repo is selected
