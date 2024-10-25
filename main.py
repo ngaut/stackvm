@@ -78,10 +78,6 @@ def llm_generate(
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
     """
 
-    """
-    if response_format:
-        prompt = prompt + "\n" + response_format
-    """
 
     response = llm_client.generate(prompt, context)
     return response

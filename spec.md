@@ -26,7 +26,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 
 ```json
 {
-  "seq_no": 0,
+  "seq_no": N,
   "type": "instruction_type",
   "parameters": {
     "param1": "value_or_variable_reference",
@@ -43,7 +43,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 **Example:**
 ```json
 {
-  "seq_no": 0,
+  "seq_no": 1,
   "type": "assign",
   "parameters": {
     "number": 42,
@@ -257,7 +257,7 @@ Parameters can be either direct values or variable references. To reference a va
     - **Language Consistency**: Ensure the content being assigned is in the same language as the goal.
     - **Variable Content**: When inserting variables into the `final_answer`, make sure they are in the target language or have been processed to match it.
 
-- **Instruction selection**: DO NOT USE other instruction type that not list above.
+- **Instruction selection**: DO NOT USE other instruction type that not list above. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 - **Best Practices for Utilizing Knowledge Graph Search**:
   1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
   2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.
