@@ -52,8 +52,8 @@
     "seq_no": 1,
     "type": "calling",
     "parameters": {
-      "tool": "retrieve_knowledge_graph",
-      "params": {
+      "tool_name": "retrieve_knowledge_graph",
+      "tool_params": {
         "query": "TiDB latest stable version"
       },
       "output_vars": ["latest_tidb_version_info"]
@@ -63,8 +63,8 @@
     "seq_no": 2,
     "type": "calling",
     "parameters": {
-      "tool": "llm_generate",
-      "params": {
+      "tool_name": "llm_generate",
+      "tool_params": {
         "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB and its release date.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only with the latest stable version number and release date in JSON format, (e.g., {'latest_tidb_version': 'v8.1.1', 'release_date': '2024-08-27'})\n- If no specific stable version number is found, respond exactly {'latest_tidb_version': 'latest stable version tidb', 'release_date': null}.",
         "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}"
       },
@@ -85,8 +85,8 @@
     "seq_no": 4,
     "type": "calling",
     "parameters": {
-      "tool": "vector_search",
-      "params": {
+      "tool_name": "vector_search",
+      "tool_params": {
         "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
         "top_k": 3
       },
@@ -104,8 +104,8 @@
     "seq_no": 6,
     "type": "calling",
     "parameters": {
-      "tool": "vector_search",
-      "params": {
+      "tool_name": "vector_search",
+      "tool_params": {
         "query": "Latest TiDB version and its key features",
         "top_k": 3
       },
@@ -116,8 +116,8 @@
     "seq_no": 7,
     "type": "calling",
     "parameters": {
-      "tool": "vector_search",
-      "params": {
+      "tool_name": "vector_search",
+      "tool_params": {
         "query": "TiDB ${latest_tidb_version} performance optimization techniques",
         "top_k": 5
       },
@@ -128,8 +128,8 @@
     "seq_no": 8,
     "type": "calling",
     "parameters": {
-      "tool": "vector_search",
-      "params": {
+      "tool_name": "vector_search",
+      "tool_params": {
         "query": "What are specific considerations for optimizing TiDB ${latest_tidb_version} for e-commerce applications?",
         "top_k": 5
       },
@@ -140,9 +140,9 @@
     "seq_no": 9,
     "type": "calling",
     "parameters": {
-      "tool": "llm_generate",
-      "params": {
-        "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}.\n\nPlease ensure that the generated text uses English.",
+      "tool_name": "llm_generate",
+      "tool_params": {
+        "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_tidb_version}, response in text.",
         "context": "Based on the following information for TiDB version ${latest_tidb_version}:\n1. TiDB Overview: ${tidb_key_features_and_improvements}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
       },
       "output_vars": ["final_recommendations"]
