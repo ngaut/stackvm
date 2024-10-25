@@ -130,7 +130,6 @@ Below is an example where the calling type is configured to use the `llm_generat
     "tool_params": {
       "prompt": "Analyze the sales data and provide summary and insights.",
       "context": "${sales_data}",
-      "response_format": "json"
     },
     "output_vars": ["summary", "insights"]
   }
