@@ -89,7 +89,7 @@ Navigate to the tools directory in your project. Create a new Python file for yo
 
 In your new tool file, implement the tool function. Use the @tool decorator to mark it as a tool.
 
-```json
+```python
 from . import tool
 
 @tool

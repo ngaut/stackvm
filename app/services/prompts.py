@@ -55,7 +55,7 @@ Analyze the current VM execution state and update the plan.
 - **Consistency**: The format and structure of the plan should remain consistent with the original, as specified in the VM specification.
 - **Completeness**: Provide a complete merged plan that includes all necessary steps from the beginning to the end.
 - **Clarity**: Ensure that each step is clearly defined and actionable.
-- **Referential Integrity**: Do not reference outputs from already executed steps that are not present in Current Variables, as they have been garbage collected.
+- **Referential Integrity**: Do not reference output variables from already executed steps if those variables are not present in Current Variables, as the variables have been garbage collected.
 
 **MUST follow VM Specification**:
 {vm_spec_content}

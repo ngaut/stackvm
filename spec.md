@@ -250,7 +250,14 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
-- **Instruction selection**: Available instruction type:[assign, calling, reasoning, jmp].
+- **Language Consistency**:
+  - **Requirement**: All the instructions (e.g. `assign`) that directly contribute to generating the `final_answer` must be written in the same language as the goal. This ensures the final output is consistent with the intended language.
+
+  - **For `assign` Instructions**:
+    - **Language Consistency**: Ensure the content being assigned is in the same language as the goal.
+    - **Variable Content**: When inserting variables into the `final_answer`, make sure they are in the target language or have been processed to match it.
+
+- **Instruction selection**: DO NOT USE other instruction type that not list above.
 - **Best Practices for Utilizing Knowledge Graph Search**:
   1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
   2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.

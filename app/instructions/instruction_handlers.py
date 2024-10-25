@@ -63,7 +63,7 @@ class InstructionHandlers:
         output_vars_record = {}
 
         try:
-            if isinstance(output_vars, list) and len(output_vars) > 1:
+            if len(output_vars) > 1:
                 if isinstance(instruction_output, str):
                     # Attempt to parse JSON string
                     json_object = find_first_json_object(instruction_output)
@@ -72,20 +72,13 @@ class InstructionHandlers:
                             f"No JSON object found in the instruction output: {instruction_output}."
                         )
                     instruction_output = json.loads(json_object)
-                
-                if isinstance(instruction_output, dict):
-                    for var_name in output_vars:
-                        var_value = instruction_output.get(var_name)
-                        self.vm.set_variable(var_name, var_value)
-                        output_vars_record[var_name] = var_value
-                else:
-                    raise ValueError(f"Expected dictionary output, got {type(instruction_output)}")
-            elif isinstance(output_vars, list) and len(output_vars) == 1:
+                for var_name in output_vars:
+                    var_value = instruction_output.get(var_name)
+                    self.vm.set_variable(var_name, var_value)
+                    output_vars_record[var_name] = var_value
+            elif len(output_vars) == 1:
                 self.vm.set_variable(output_vars[0], instruction_output)
                 output_vars_record[output_vars[0]] = instruction_output
-            else:
-                raise ValueError(f"Invalid output_vars format: {output_vars}")
-            
             return True, output_vars_record
         except Exception as e:
             self.vm.logger.error(f"Failed to set output_vars: {e}")

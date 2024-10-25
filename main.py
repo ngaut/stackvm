@@ -47,6 +47,10 @@ def llm_generate(
 
     Arguments:
     - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
+        - **Language Matching**: Write the prompt in the same language as the goal.
+        - **Language Confirmation**: Append a sentence to confirm the desired language of the generated text:
+            - *For English goals*: "Please ensure that the generated text uses English."
+            - *For Chinese goals*: "请确保生成的文本使用中文。"
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
 
     Output: The output format (text or JSON) depends on your instructions.
