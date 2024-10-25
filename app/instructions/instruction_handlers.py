@@ -43,19 +43,19 @@ class InstructionHandlers:
         self,
         instruction_output: Any,
         output_vars: Optional[Union[str, List[str]]] = None,
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, Any]]:
         """
         Sets multiple output variables based on the instruction's output and the output_vars mapping.
 
         Args:
             instruction_output (Any): The raw output from the instruction.
-            output_vars (Optional[Union[str, List[str]]]]): Mapping of variable names to expressions referencing the instruction's output.
+            output_vars (Optional[Union[str, List[str]]]): Mapping of variable names to expressions referencing the instruction's output.
 
         Returns:
-            bool: True if all variables are set successfully, False otherwise.
+            Tuple[bool, Dict[str, Any]]: A tuple containing a boolean indicating success and a dictionary of set variables.
         """
         if not output_vars:
-            return True  # No output_vars to set
+            return True, {}  # No output_vars to set
 
         self.vm.logger.debug(f"output_vars: {output_vars}")
         instruction_output_str = self.vm._preview_value(instruction_output)
@@ -63,7 +63,7 @@ class InstructionHandlers:
         output_vars_record = {}
 
         try:
-            if len(output_vars) > 1:
+            if isinstance(output_vars, list) and len(output_vars) > 1:
                 if isinstance(instruction_output, str):
                     # Attempt to parse JSON string
                     json_object = find_first_json_object(instruction_output)
@@ -72,24 +72,31 @@ class InstructionHandlers:
                             f"No JSON object found in the instruction output: {instruction_output}."
                         )
                     instruction_output = json.loads(json_object)
-                for var_name in output_vars:
-                    var_value = instruction_output.get(var_name)
-                    self.vm.set_variable(var_name, var_value)
-                    output_vars_record[var_name] = var_value
-            elif len(output_vars) == 1:
+                
+                if isinstance(instruction_output, dict):
+                    for var_name in output_vars:
+                        var_value = instruction_output.get(var_name)
+                        self.vm.set_variable(var_name, var_value)
+                        output_vars_record[var_name] = var_value
+                else:
+                    raise ValueError(f"Expected dictionary output, got {type(instruction_output)}")
+            elif isinstance(output_vars, list) and len(output_vars) == 1:
                 self.vm.set_variable(output_vars[0], instruction_output)
                 output_vars_record[output_vars[0]] = instruction_output
+            else:
+                raise ValueError(f"Invalid output_vars format: {output_vars}")
+            
             return True, output_vars_record
         except Exception as e:
             self.vm.logger.error(f"Failed to set output_vars: {e}")
             return False, output_vars_record
 
     def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
-        tool_name = params.get("tool")
+        tool_name = params.get("tool_name")
         if tool_name is None:
             return (
                 self._handle_error(
-                    "Missing 'tool' in calling parameters", "calling", params
+                    "Missing 'tool_name' in calling parameters", "calling", params
                 ),
                 None,
             )
@@ -105,7 +112,7 @@ class InstructionHandlers:
             )
 
         tool_parameters = {
-            k: self.vm.resolve_parameter(v) for k, v in params.get("params", {}).items()
+            k: self.vm.resolve_parameter(v) for k, v in params.get("tool_params", {}).items()
         }
         output_vars = params.get("output_vars", None)
         if output_vars is None:
@@ -298,3 +305,20 @@ class InstructionHandlers:
             }
         )
         return True, None
+
+    def _log_step_execution(
+        self,
+        step_type: str,
+        params: Dict[str, Any],
+        seq_no: str,
+        output_parameters: Dict[str, Any],
+    ) -> None:
+        """Log the execution of a step and prepare commit message."""
+        if step_type == "calling":
+            input_vars = params.get("tool_params", {})
+            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
+        else:
+            input_vars = params
+            description = f"Executed seq_no: {seq_no}, step: {step_type}"
+
+        # ... (rest of the function remains unchanged)

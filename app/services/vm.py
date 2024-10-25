@@ -109,8 +109,8 @@ class PlanExecutionVM:
     ) -> None:
         """Log the execution of a step and prepare commit message."""
         if step_type == "calling":
-            input_vars = params.get("params", {})
-            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool', 'Unknown')}"
+            input_vars = params.get("tool_params", {})
+            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
         else:
             input_vars = params
             description = f"Executed seq_no: {seq_no}, step: {step_type}"

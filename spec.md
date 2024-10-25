@@ -21,7 +21,7 @@ The VM executes plans consisting of a sequence of instructions. Each instruction
 Each instruction in the plan is represented as a JSON object with the following keys:
 
 - `seq_no`: A unique and AUTO-INCREMENT integer identifying the instruction's sequence within the plan, starting from 0.
-- `type`: A string indicating the instruction type.
+- `type`: A string indicating the instruction type. See Supported Instructions.
 - `parameters`: An object containing parameters required by the instruction.
 
 ```json
@@ -95,12 +95,12 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.3 calling
 - **Purpose**: Invokes a specific tool or function with the provided parameters.
 - **Parameters**: Defines the specifications required to call a tool.
-  - `tool`: The name of the tool to be called (e.g., "llm_generate", "retrieve_knowledge_graph", "vector_search").
-  - `params`: An object containing key-value pairs that represent the arguments required by the specified tool.
+  - `tool_name`: The name of the tool to be called (e.g., "llm_generate", "retrieve_knowledge_graph", "vector_search").
+  - `tool_params`: An object containing key-value pairs that represent the arguments required by the specified tool.
     - Keys: Must match the argument names expected by the tool.
     - Values: Can be either a direct value or a variable reference.
-  - `output_vars` (optional): An array specifying how the tool’s output should be stored in the VM’s variable store for later use.
-    - If it is a string: The array contains one variable name. The entire tool’s response is stored under this variable name.
+  - `output_vars` (optional): An array specifying how the tool's output should be stored in the VM's variable store for later use.
+    - If it is a string: The array contains one variable name. The entire tool's response is stored under this variable name.
     - If it is an array: The array contains variable names corresponding to the keys in the JSON response. Each variable name in the array maps to a key in the JSON object, and the value associated with each key will be extracted and stored under the corresponding variable name.
 
 **Example:**
@@ -109,8 +109,8 @@ Each instruction in the plan is represented as a JSON object with the following 
   "seq_no": 1,
   "type": "calling",
   "parameters": {
-    "tool": "tool_name",
-    "params": {
+    "tool_name": "tool_name",
+    "tool_params": {
       "param1": "value_or_variable_reference",
       "param2": "value_or_variable_reference"
     },
@@ -119,15 +119,15 @@ Each instruction in the plan is represented as a JSON object with the following 
 }
 ```
 
-Below is an example where the calling type is configured to use the `llm_generate` tool. It specifies the tool name and its parameters, including a prompt to analyze sales data, a reference to the sales_data variable for context, and a JSON response format. The tool’s output is stored in two variables: summary and insights. This setup allows the tool to process the sales data and save the results for later use.
-
+Below is an example where the calling type is configured to use the `llm_generate` tool. It specifies the tool name and its parameters, including a prompt to analyze sales data, a reference to the sales_data variable for context, and a JSON response format. The tool's output is stored in two variables: summary and insights. This setup allows the tool to process the sales data and save the results for later use.
+**Example:**
 ```json
 {
   "seq_no": 1,
   "type": "calling",
   "parameters": {
-    "tool": "llm_generate",
-    "params": {
+    "tool_name": "llm_generate",
+    "tool_params": {
       "prompt": "Analyze the sales data and provide summary and insights.",
       "context": "${sales_data}",
       "response_format": "json"
@@ -200,16 +200,14 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable References** are ideal for scenarios that require dynamic parameter value filling, enhancing the interconnectivity and data flow between instructions. By using variable references, parameters can be adjusted dynamically based on the results of previous steps, increasing the flexibility and automation of the workflow.
 
 
-**Example Code:**
-
 **Direct Value Example:**
 ```json
 {
   "seq_no": 1,
   "type": "calling",
   "parameters": {
-    "tool": "retrieve_knowledge_graph",
-    "params": {
+    "tool_name": "retrieve_knowledge_graph",
+    "tool_params": {
       "query": "TiDB latest stable version"
     },
     "output_vars": ["latest_tidb_version_info"]
@@ -223,8 +221,8 @@ Parameters can be either direct values or variable references. To reference a va
   "seq_no": 4,
   "type": "calling",
   "parameters": {
-    "tool": "vector_search",
-    "params": {
+    "tool_name": "vector_search",
+    "tool_params": {
       "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
       "top_k": 3
     },
@@ -247,7 +245,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
-- **Instruction selection**: DO NOT USE other instruction type that not list above.
+- **Instruction selection**: Available instruction type:[assign, calling, reasoning, jmp].
 - **Best Practices for Utilizing Knowledge Graph Search**:
   1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
-  2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user’s intent and the graph data, generating a more precise knowledge for the question.
+  2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.

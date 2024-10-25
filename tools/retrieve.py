@@ -29,8 +29,8 @@ def retrieve_knowledge_graph(query):
         "seq_no": 2,
         "type": "calling",
         "parameters": {
-            "tool": "retrieve_knowledge_graph",
-                "params": {
+            "tool_name": "retrieve_knowledge_graph",
+            "tool_params": {
                 "query": "TiDB latest stable version"
             },
             "output_vars": ["tidb_version_graph"]
@@ -81,8 +81,8 @@ def vector_search(query, top_k=5):
         "seq_no": 3,
         "type": "calling",
         "parameters": {
-            "tool": "vector_search",
-            "params": {
+            "tool_name": "vector_search",
+            "tool_params": {
                 "query": "Information about Mount Everest",
                 "top_k": 3
             },
