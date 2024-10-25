@@ -83,7 +83,7 @@ def vector_search(query, top_k=5):
         "parameters": {
             "tool_name": "vector_search",
             "tool_params": {
-                "query": "Information about Mount Everest",
+                "query": "Information about ...",
                 "top_k": 3
             },
             "output_vars": ["embedded_chunks"]

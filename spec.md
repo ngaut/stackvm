@@ -158,7 +158,13 @@ Below is an example where the calling type is configured to use the `llm_generat
     "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
 
     1. Overall Strategy:
-       We'll first determine the latest stable version of TiDB, then gather relevant information about its features and optimization techniques, with a focus on e-commerce applications.
+       We'll follow these steps:
+         1. Determine the latest stable version of TiDB
+         2. Gather version-specific information
+         3. Collect general TiDB information (if needed)
+         4. Gather performance optimization techniques
+         5. Collect e-commerce-specific optimizations
+         6. Synthesize gathered information into actionable recommendations
 
     2. Key Decision Points and Rationale:
        a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.

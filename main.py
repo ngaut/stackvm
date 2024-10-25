@@ -38,7 +38,7 @@ llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 @tool
 def llm_generate(
-    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+    prompt: str, context: Optional[str] = None
 ):
     """
     Generates a response using the Language Model (LLM).
@@ -48,7 +48,6 @@ def llm_generate(
     Arguments:
     - `prompt`: The prompt to provide to the LLM. Can be a direct string or a variable reference.
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
-    - `response_format` (optional): Desired format of the response.
 
     Output: The output format (text or JSON) depends on your instructions.
     - Text Response: If you ask for a text answer, let output_vars be an array containing one variable name. The entire text response will be stored under this variable.
@@ -71,12 +70,9 @@ def llm_generate(
     ```
 
     Best practices:
-    - Always use this tool within a "calling" instruction in your plan.
+    - Always use llm_generate within a "calling" instruction in your plan.
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
-    - Specify the desired response format if you need a specific structure in the output.
     """
-    if response_format:
-        prompt = prompt + "\n" + response_format
 
     response = llm_client.generate(prompt, context)
     return response
