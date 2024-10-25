@@ -705,8 +705,9 @@ def stream_execute_vm():
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
 
             # Initialize VM
+            plan_id = datetime.now().strftime("%Y%m%d%H%M%S")
             repo_path = os.path.join(
-                GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S")
+                GIT_REPO_PATH, plan_id
             )
             vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
             vm.set_goal(goal)
@@ -738,7 +739,7 @@ def stream_execute_vm():
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
-                    yield protocol.send_state(vm.state)
+                    yield protocol.send_state(plan_id, vm.state)
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message('error')
                     return
@@ -748,7 +749,7 @@ def stream_execute_vm():
                         "error", "Unknown error during step execution."
                     )
                     current_app.logger.error(f"Error executing step: {error}")
-                    yield protocol.send_state(vm.state)
+                    yield protocol.send_state(plan_id, vm.state)
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message('error')
                     return
@@ -763,7 +764,7 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
-                yield protocol.send_state(vm.state)
+                yield protocol.send_state(plan_id, vm.state)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
