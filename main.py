@@ -65,7 +65,7 @@ def llm_generate(
         "parameters": {
             "tool_name": "llm_generate",
             "tool_params": {
-                "prompt": "Analyze the sales data and provide summary and insights.",
+                "prompt": "Analyze the sales data and provide summary and insights, response a json object including 'summary' and 'insights'.",
                 "context": "${sales_data}",
             },
             "output_vars": ["summary", "insights"]

@@ -128,7 +128,7 @@ Below is an example where the calling type is configured to use the `llm_generat
   "parameters": {
     "tool_name": "llm_generate",
     "tool_params": {
-      "prompt": "Analyze the sales data and provide summary and insights.",
+      "prompt": "Analyze the sales data and provide summary and insights, response in json format including 'summary' and 'insights' fields",
       "context": "${sales_data}",
     },
     "output_vars": ["summary", "insights"]
@@ -257,7 +257,7 @@ Parameters can be either direct values or variable references. To reference a va
     - **Language Consistency**: Ensure the content being assigned is in the same language as the goal.
     - **Variable Content**: When inserting variables into the `final_answer`, make sure they are in the target language or have been processed to match it.
 
-- **Instruction selection**: DO NOT USE other instruction type that not list above. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
+- **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 - **Best Practices for Utilizing Knowledge Graph Search**:
   1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
   2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.
