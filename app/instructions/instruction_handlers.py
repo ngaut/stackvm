@@ -63,25 +63,35 @@ class InstructionHandlers:
         output_vars_record = {}
 
         try:
-            if len(output_vars) > 1:
-                if isinstance(instruction_output, str):
-                    # Attempt to parse JSON string
-                    json_object = find_first_json_object(instruction_output)
-                    if json_object is None:
-                        raise ValueError(
-                            f"No JSON object found in the instruction output: {instruction_output}."
-                        )
-                    instruction_output = json.loads(json_object)
-                for var_name in output_vars:
-                    var_value = instruction_output.get(var_name)
-                    self.vm.set_variable(var_name, var_value)
-                    output_vars_record[var_name] = var_value
-            elif len(output_vars) == 1:
-                self.vm.set_variable(output_vars[0], instruction_output)
-                output_vars_record[output_vars[0]] = instruction_output
+            # Attempt to parse instruction_output as JSON if it's a string
+            parsed_output = None
+            if isinstance(instruction_output, str):
+                json_object = find_first_json_object(instruction_output)
+                if json_object:
+                    try:
+                        parsed_output = json.loads(json_object)
+                        self.vm.logger.debug(f"Parsed JSON output: {parsed_output}")
+                    except json.JSONDecodeError:
+                        self.vm.logger.debug("instruction_output is a string but not a valid JSON.")
+
+            if isinstance(output_vars, str):
+                output_vars = [output_vars]
+
+            for var_name in output_vars:
+                if parsed_output and isinstance(parsed_output, dict) and var_name in parsed_output:
+                    var_value = parsed_output.get(var_name)
+                else:
+                    # Fallback to treating instruction_output as a single value
+                    if len(output_vars) == 1:
+                        var_value = instruction_output
+                    else:
+                        raise ValueError(f"Not found variable {var_name} in parsed_output {parsed_output}.")
+                self.vm.set_variable(var_name, var_value)
+                output_vars_record[var_name] = var_value
+
             return True, output_vars_record
         except Exception as e:
-            self.vm.logger.error(f"Failed to set output_vars: {e}")
+            self.vm.logger.error(f"Failed to set output_vars: {e} for {instruction_output}")
             return False, output_vars_record
 
     def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:

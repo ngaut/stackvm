@@ -38,7 +38,7 @@ llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 @tool
 def llm_generate(
-    prompt: str, context: Optional[str] = None
+    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
 ):
     """
     Generates a response using the Language Model (LLM).
@@ -52,6 +52,7 @@ def llm_generate(
             - *For English goals*: "Please ensure that the generated text uses English."
             - *For Chinese goals*: "请确保生成的文本使用中文。"
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
+    - `response_format` (optional): The format of the response. Can be "text" or "json", default is "text".
 
     Output: The output format (text or JSON) depends on your instructions.
     - Text Response: If you ask for a text answer, let output_vars be an array containing one variable name. The entire text response will be stored under this variable.
@@ -66,7 +67,7 @@ def llm_generate(
             "tool_name": "llm_generate",
             "tool_params": {
                 "prompt": "Analyze the sales data and provide summary and insights, response a json object including 'summary' and 'insights'.",
-                "context": "${sales_data}",
+                "context": "${sales_data}"
             },
             "output_vars": ["summary", "insights"]
         }
@@ -78,6 +79,8 @@ def llm_generate(
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
     """
 
+    if response_format:
+        prompt = prompt + f"\n\n{response_format}"
 
     response = llm_client.generate(prompt, context)
     return response
