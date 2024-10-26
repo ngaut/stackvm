@@ -9,7 +9,7 @@ LLM_MODEL = os.environ.get('LLM_MODEL', 'aya-expanse')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
 
-SQLALCHEMY_DATABASE_URI="mysql+pymysql://Jwhaz1xnRvVwpY7.root:NlJoVGXHcz6XoNMc@gateway01.ap-northeast-1.prod.aws.tidbcloud.com:4000/stackvm?ssl_ca=/etc/ssl/cert.pem&ssl_verify_cert=true&ssl_verify_identity=true"
+SQLALCHEMY_DATABASE_URI=os.environ.get('SQLALCHEMY_DATABASE_URI')
 
 # Existing settings
 # must use tmp path, DO NOT EDIT
