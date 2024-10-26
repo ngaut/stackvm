@@ -78,8 +78,8 @@ class PlanExecutionVM:
             self.variable_manager.decrease_ref_count(var)
         return self.variable_manager.interpolate_variables(param)
 
-    def execute_step_handler(self, step: Dict[str, Any]) -> bool:
-        """Execute a single step in the plan."""
+    def execute_step_handler(self, step: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a single step in the plan and return step execution details."""
         step_type = step.get("type")
         params = step.get("parameters", {})
         seq_no = step.get("seq_no", "Unknown")
@@ -87,18 +87,49 @@ class PlanExecutionVM:
         if not isinstance(step_type, str):
             self.logger.error("Invalid step type.")
             self.state["errors"].append("Invalid step type.")
-            return False
+            return {
+                "success": False,
+                "error": "Invalid step type.",
+                "step_type": step_type,
+                "seq_no": seq_no,
+            }
 
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if not handler:
             self.logger.warning(f"Unknown instruction: {step_type}")
-            return False
+            return {
+                "success": False,
+                "error": f"Unknown instruction: {step_type}",
+                "step_type": step_type,
+                "seq_no": seq_no,
+            }
 
         success, output = handler(params)
         if success:
             self.save_state()
             self._log_step_execution(step_type, params, seq_no, output)
-        return success
+            return {
+                "success": True,
+                "step_type": step_type,
+                "parameters": params,
+                "output": output,
+                "seq_no": seq_no,
+            }
+        else:
+            self.logger.error(
+                "Failed to execute step %d: %s",
+                self.state['program_counter'],
+                step['type']
+            )
+            self.state["errors"].append(
+                f"Failed to execute step {self.state['program_counter']}: {step['type']}"
+            )
+            return {
+                "success": False,
+                "error": f"Failed to execute step {self.state['program_counter']}: {step['type']}",
+                "step_type": step_type,
+                "seq_no": seq_no,
+            }
 
     def _log_step_execution(
         self,
@@ -142,8 +173,8 @@ class PlanExecutionVM:
             else value_str
         )
 
-    def step(self) -> bool:
-        """Execute the next step in the plan."""
+    def step(self) -> Dict[str, Any]:
+        """Execute the next step in the plan and return step details."""
         if self.state["program_counter"] >= len(self.state["current_plan"]):
             self.logger.error(
                 "Program counter (%d) out of range for current plan (length: %d)",
@@ -153,7 +184,10 @@ class PlanExecutionVM:
             self.state["errors"].append(
                 f"Program counter out of range: {self.state['program_counter']}"
             )
-            return False
+            return {
+                "success": False,
+                "error": f"Program counter out of range: {self.state['program_counter']}"
+            }
 
         step = self.state["current_plan"][self.state["program_counter"]]
         self.logger.info(
@@ -165,21 +199,20 @@ class PlanExecutionVM:
         )
 
         try:
-            success = self.execute_step_handler(step)
-            if not success:
-                self.logger.error(
-                    "Failed to execute step %d: %s",
-                    self.state['program_counter'],
-                    step['type']
-                )
-                return False
+            step_result = self.execute_step_handler(step)
+            if not step_result["success"]:
+                return step_result
+
+            # Increment program counter unless it's a jump
             if step["type"] not in ("jmp"):
                 self.state["program_counter"] += 1
 
+            # Garbage collect if necessary
             if self.state["program_counter"] < len(self.state["current_plan"]):
                 self.garbage_collect()
+
             self.save_state()
-            return True
+            return step_result
         except Exception as e:
             traceback.print_exc()
             self.logger.error(
@@ -190,7 +223,10 @@ class PlanExecutionVM:
             self.state["errors"].append(
                 f"Error in step {self.state['program_counter']}: {str(e)}"
             )
-            return False
+            return {
+                "success": False,
+                "error": f"Error in step {self.state['program_counter']}: {str(e)}"
+            }
 
     def set_variable(self, var_name: str, value: Any) -> None:
         self.variable_manager.set(var_name, value)
@@ -281,3 +317,6 @@ class PlanExecutionVM:
 
     def get_all_variables(self) -> Dict[str, Any]:
         return self.variable_manager.get_all_variables()
+
+    def get_current_step(self) -> dict :
+        return self.state['current_plan'][self.state['program_counter']]
