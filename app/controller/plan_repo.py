@@ -7,25 +7,98 @@ import os
 import logging
 from git import Repo
 from git.exc import GitCommandError
+from readerwriterlock import rwlock
+from contextlib import contextmanager
 
-from app.config.settings import GIT_REPO_PATH
-from app.services import GitManager, commit_message_wrapper
+from app.services import commit_message_wrapper
 
 logger = logging.getLogger(__name__)
 
 
+class RepoManager:
+    def __init__(self, base_path):
+        self.base_path = base_path
+        self.locks = {}
+        self.repos_lock = rwlock.RWLockFair()  # Read-write lock for repos and locks
+        self.load_repos(base_path)
 
-class CurrentRepo:
-    def __init__(self, repo_path):
-        self.git_manager = GitManager(repo_path)
+    def load_repos(self, base_path):
+        with self.repos_lock.gen_wlock():
+            self.locks = {}
+            for repo_name in os.listdir(base_path):
+                # Skip hidden files and non-directory entries
+                if repo_name.startswith(".") or not os.path.isdir(
+                    os.path.join(base_path, repo_name)
+                ):
+                    continue
+                self.locks[repo_name] = rwlock.RWLockFair()
 
-    def get_current_repo_path(self):
-        return self.git_manager.repo_path
-    
-    def set_repo(self, repo_path):
-        self.git_manager = GitManager(repo_path)
+    def get_repo(self, repo_name):
+        """
+        Get a repository by name.
+        """
+        if self.repo_exists(repo_name):
+            return get_repo(os.path.join(self.base_path, repo_name))
+        return None
 
-global_repo = CurrentRepo(GIT_REPO_PATH)
+    def repo_exists(self, repo_name):
+        repo_path = os.path.join(self.base_path, repo_name)
+        return os.path.exists(repo_path) and os.path.isdir(
+            os.path.join(repo_path, ".git")
+        )
+
+    @contextmanager
+    def lock_repo_for_write(self, repo_name, timeout=10):
+        """
+        Context manager to acquire a write lock for a specific repository.
+        Ensures that write operations are mutually exclusive.
+        """
+        if not self.repo_exists(repo_name):
+            raise ValueError(f"Repository '{repo_name}' does not exist.")
+
+        with self.repos_lock.gen_wlock():
+            lock = self.locks.get(repo_name)
+            if not lock:
+                self.locks[repo_name] = rwlock.RWLockFair()
+                lock = self.locks[repo_name]
+
+        w_lock = lock.gen_wlock()
+        acquired = w_lock.acquire(timeout=timeout)
+        if not acquired:
+            raise TimeoutError(
+                f"Could not acquire write lock for repository '{repo_name}' within {timeout} seconds."
+            )
+        try:
+            yield
+        finally:
+            w_lock.release()
+
+    @contextmanager
+    def lock_repo_for_read(self, repo_name, timeout=300):
+        """
+        Context manager to acquire a read lock for a specific repository.
+        Allows multiple concurrent read operations.
+        """
+        if not self.repo_exists(repo_name):
+            raise ValueError(f"Repository '{repo_name}' does not exist.")
+
+        with self.repos_lock.gen_wlock():
+            lock = self.locks.get(repo_name)
+            if not lock:
+                self.locks[repo_name] = rwlock.RWLockFair()
+                lock = self.locks[repo_name]
+
+        r_lock = lock.gen_rlock()
+        acquired = r_lock.acquire(timeout=timeout)
+        if not acquired:
+            raise TimeoutError(
+                f"Could not acquire read lock for repository '{repo_name}' within {timeout} seconds."
+            )
+        try:
+            yield
+        finally:
+            r_lock.release()
+
 
 def get_repo(repo_path):
     """Initialize and return a Git repository object."""
@@ -63,15 +136,8 @@ def get_vm_state_for_commit(repo, commit):
     except GitCommandError:
         logger.error("vm_state.json not found in commit %s", commit.hexsha)
     except json.JSONDecodeError:
-        logger.error(
-            "Invalid JSON in vm_state.json for commit %s", commit.hexsha
-        )
+        logger.error("Invalid JSON in vm_state.json for commit %s", commit.hexsha)
     return None
-
-
-def repo_exists(repo_name):
-    repo_path = os.path.join(GIT_REPO_PATH, repo_name)
-    return os.path.exists(repo_path) and os.path.isdir(os.path.join(repo_path, ".git"))
 
 
 def commit_vm_changes(vm):

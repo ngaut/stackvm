@@ -66,7 +66,7 @@ def llm_generate(
             "tool_name": "llm_generate",
             "tool_params": {
                 "prompt": "Analyze the sales data and provide summary and insights, response a json object including 'summary' and 'insights'.",
-                "context": "${sales_data}",
+                "context": "${sales_data}"
             },
             "output_vars": ["summary", "insights"]
         }
@@ -77,7 +77,6 @@ def llm_generate(
     - Always use llm_generate within a "calling" instruction in your plan.
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
     """
-
 
     response = llm_client.generate(prompt, context)
     return response
