@@ -21,6 +21,9 @@ class Task:
         self.task_orm = task_orm
         self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
 
+    def id(self):
+        return self.task_orm.id
+
     def update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
     ) -> Dict[str, Any]:

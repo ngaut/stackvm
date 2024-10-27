@@ -46,9 +46,10 @@ from .plan_repo import (
     commit_vm_changes,
     get_repo,
 )
+from app.services.plan_manager import PlanManager
 from .engine import generate_updated_plan, should_update_plan, generate_plan
 from .streaming_protocol import StreamingProtocol
-from app.services.plan_manager import PlanManager
+from .task import TaskService
 
 
 api_blueprint = Blueprint("api", __name__)
@@ -58,6 +59,7 @@ logger = logging.getLogger(__name__)
 plan_manager = PlanManager()
 repo_manager = RepoManager(GIT_REPO_PATH)
 
+ts = TaskService()
 
 def log_and_return_error(message, error_type, status_code):
     if error_type == "warning":
@@ -208,113 +210,20 @@ def execute_vm():
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     steps = int(data.get("steps", 20))
-    repo_name = data.get("repo")
-    new_branch = data.get("new_branch")
+    task_id = data.get("repo")
 
-    if not all([commit_hash, steps, repo_name]):
+    if not all([commit_hash, steps, task_id]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
     try:
-        with repo_manager.lock_repo_for_write(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
-
-            repo_path = repo.working_tree_dir
-            try:
-                vm = PlanExecutionVM(
-                    repo_path, LLMInterface(model=LLM_MODEL, provider=LLM_PROVIDER)
-                )
-            except ImportError as e:
-                return log_and_return_error(str(e), "error", 500)
-
-            vm.set_state(commit_hash)
-
-            steps_executed = 0
-            last_commit_hash = commit_hash
-
-            if not new_branch:
-                new_branch = (
-                    f"re_execute_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                )
-            vm.git_manager.create_branch_from_commit(new_branch, commit_hash)
-            vm.git_manager.checkout_branch(new_branch)
-            current_branch = repo.active_branch.name
-            current_app.logger.info(f"Using branch: {current_branch}")
-
-            for _ in range(steps):
-                should_update, explanation, key_factors = should_update_plan(
-                    vm, suggestion
-                )
-                if should_update:
-                    updated_plan = generate_updated_plan(vm, explanation, key_factors)
-                    current_app.logger.info(
-                        "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
-                    )
-                    branch_name = (
-                        f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    )
-                    if vm.git_manager.create_branch(
-                        branch_name
-                    ) and vm.git_manager.checkout_branch(branch_name):
-                        vm.state["current_plan"] = updated_plan
-                        vm.recalculate_variable_refs()  # Recalculate variable references
-                        commit_message_wrapper.set_commit_message(
-                            StepType.PLAN_UPDATE,
-                            str(vm.state["program_counter"]),
-                            explanation,
-                            {"updated_plan": updated_plan},
-                            {},  # No output variables for this operation
-                        )
-                        vm.save_state()
-
-                        new_commit_hash = commit_vm_changes(vm)
-                        if new_commit_hash:
-                            last_commit_hash = new_commit_hash
-                            current_app.logger.info(
-                                f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
-                            )
-                        else:
-                            current_app.logger.error("Failed to commit updated plan")
-                            break
-                    else:
-                        current_app.logger.error(
-                            f"Failed to create or checkout branch '{branch_name}'"
-                        )
-                        break
-
-                try:
-                    success = vm.step()
-                except Exception as e:
-                    error_msg = f"Error during VM step execution: {str(e)}"
-                    current_app.logger.error(error_msg, exc_info=True)
-                    return log_and_return_error(error_msg, "error", 500)
-
-                commit_hash = commit_vm_changes(vm)
-                if commit_hash:
-                    last_commit_hash = commit_hash
-
-                steps_executed += 1
-
-                if vm.state.get("goal_completed"):
-                    current_app.logger.info("Goal completed. Stopping execution.")
-                    break
-
-            return jsonify(
-                {
-                    "success": True,
-                    "steps_executed": steps_executed,
-                    "current_branch": vm.git_manager.get_current_branch(),
-                    "last_commit_hash": last_commit_hash,
-                }
-            )
-    except TimeoutError as e:
-        return log_and_return_error(str(e), "error", 500)
+        result = ts.run_task(task_id, commit_hash, steps=steps, suggestion=suggestion)
+        if result:
+            return jsonify(result), 200
+        else:
+            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
     except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return log_and_return_error("An unexpected error occurred.", "error", 500)
+        current_app.logger.error(f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True)
+        return log_and_return_error("Failed to execute VM.", "error", 500)
 
 
 @api_blueprint.route("/optimize_step", methods=["POST"])
@@ -325,134 +234,22 @@ def optimize_step():
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     seq_no_str = data.get("seq_no")
-    repo_name = data.get("repo")
+    task_id = data.get("repo")
 
-    if not all([commit_hash, suggestion, seq_no_str, repo_name]):
+    if not all([commit_hash, suggestion, seq_no_str, task_id]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
     seq_no = int(seq_no_str)
+
     try:
-        with repo_manager.lock_repo_for_write(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
-
-            repo_path = repo.working_tree_dir
-
-            try:
-                vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
-            except ImportError as e:
-                return log_and_return_error(str(e), "error", 500)
-
-            vm.set_state(commit_hash)
-
-            # Generate the updated step using LLM
-            prompt = get_step_update_prompt(
-                vm,
-                seq_no,
-                VM_SPEC_CONTENT,
-                global_tools_hub.get_tools_description(),
-                suggestion,
-            )
-            updated_step_response = vm.llm_interface.generate(prompt)
-
-            if not updated_step_response:
-                return log_and_return_error(
-                    "Failed to generate updated step", "error", 500
-                )
-
-            updated_step = parse_step(updated_step_response)
-            if not updated_step:
-                return log_and_return_error(
-                    f"Failed to parse updated step {updated_step_response}",
-                    "error",
-                    500,
-                )
-
-            logger.info(
-                f"Updating step: {updated_step}, program_counter: {vm.state['program_counter']}"
-            )
-
-            current_commit = repo.commit(commit_hash)
-            if current_commit.parents:
-                previous_commit_hash = current_commit.parents[0].hexsha
-            else:
-                log_and_return_error("Cannot update the first commit", "error", 400)
-
-            # checkout from the previous commit of specified seq_no
-            vm.set_state(previous_commit_hash)
-            branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            if vm.git_manager.create_branch_from_commit(
-                branch_name, previous_commit_hash
-            ) and vm.git_manager.checkout_branch(branch_name):
-                vm.state["current_plan"][seq_no] = updated_step
-                vm.state["program_counter"] = seq_no
-                vm.recalculate_variable_refs()  # Recalculate variable references
-                commit_message_wrapper.set_commit_message(
-                    StepType.STEP_OPTIMIZATION,
-                    str(vm.state["program_counter"]),
-                    suggestion,
-                    {"updated_step": updated_step},
-                    {},  # No output variables for this operation
-                )
-                vm.save_state()
-
-                new_commit_hash = commit_vm_changes(vm)
-                if new_commit_hash:
-                    last_commit_hash = new_commit_hash
-                    current_app.logger.info(
-                        f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
-                    )
-                else:
-                    log_and_return_error(
-                        "Failed to commit step optimization", "error", 500
-                    )
-            else:
-                log_and_return_error(
-                    f"Failed to create or checkout branch '{branch_name}'", "error", 500
-                )
-
-            logger.info(
-                f"Updated step: {vm.state['current_plan'][vm.state['program_counter']]}, program_counter: {vm.state['program_counter']}"
-            )
-
-            # Re-execute the plan from the updated step
-            while True:
-                success = vm.step()
-                commit_hash = commit_vm_changes(vm)
-                if commit_hash:
-                    last_commit_hash = commit_hash
-                if not success:
-                    break
-
-                if vm.state.get("goal_completed"):
-                    logger.info("Goal completed during plan execution.")
-                    break
-
-            if vm.state.get("goal_completed"):
-                final_answer = vm.get_variable("final_answer")
-                if final_answer:
-                    logger.info(f"\nfinal_answer: {final_answer}")
-                else:
-                    logger.info("\nNo result was generated.")
-            else:
-                logger.warning("Plan execution failed or did not complete.")
-                logger.error(vm.state.get("errors"))
-
-            return jsonify(
-                {
-                    "success": True,
-                    "current_branch": vm.git_manager.get_current_branch(),
-                    "last_commit_hash": last_commit_hash,
-                }
-            )
-    except TimeoutError as e:
-        return log_and_return_error(str(e), "error", 500)
+        result = ts.optimize_task_step(task_id, step_index, suggestion)
+        if result:
+            return jsonify(result), 200
+        else:
+            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
     except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return log_and_return_error("An unexpected error occurred.", "error", 500)
+        current_app.logger.error(f"Failed to optimize step {step_index} for task {task_id}: {str(e)}", exc_info=True)
+        return log_and_return_error("Failed to optimize step.", "error", 500)
 
 
 @api_blueprint.route("/vm_state_details/<repo_name>/<commit_hash>")
@@ -698,18 +495,15 @@ def stream_execute_vm():
     goal = data.get("goal")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
+    repo_path = os.path.join(
+        GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S")
+    )
+    task = ts.create_task(goal, repo_path)
 
-    def event_stream():
+    def event_stream(task_id, vm):
         protocol = StreamingProtocol()
         try:
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
-
-            # Initialize VM
-            plan_id = datetime.now().strftime("%Y%m%d%H%M%S")
-            repo_path = os.path.join(
-                GIT_REPO_PATH, plan_id
-            )
-            vm = PlanExecutionVM(repo_path, LLMInterface(LLM_PROVIDER, LLM_MODEL))
             vm.set_goal(goal)
 
             # Generate Plan
@@ -735,11 +529,10 @@ def stream_execute_vm():
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
                 step_result = vm.step()
-                commit_vm_changes(vm)
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
-                    yield protocol.send_state(plan_id, vm.state)
+                    yield protocol.send_state(task_id, vm.state)
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message('error')
                     return
@@ -749,7 +542,7 @@ def stream_execute_vm():
                         "error", "Unknown error during step execution."
                     )
                     current_app.logger.error(f"Error executing step: {error}")
-                    yield protocol.send_state(plan_id, vm.state)
+                    yield protocol.send_state(task_id, vm.state)
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message('error')
                     return
@@ -764,7 +557,7 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
-                yield protocol.send_state(plan_id, vm.state)
+                yield protocol.send_state(task_id, vm.state)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
@@ -791,6 +584,6 @@ def stream_execute_vm():
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers={
+    return Response(stream_with_context(event_stream(task.id(), task.vm)), mimetype="text/event-stream", headers={
         "X-Content-Type-Options": "nosniff",
     })
