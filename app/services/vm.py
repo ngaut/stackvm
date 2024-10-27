@@ -107,13 +107,14 @@ class PlanExecutionVM:
         success, output = handler(params)
         if success:
             self.save_state()
-            self._log_step_execution(step_type, params, seq_no, output)
+            commit_hash = self._log_step_execution(step_type, params, seq_no, output)
             return {
                 "success": True,
                 "step_type": step_type,
                 "parameters": params,
                 "output": output,
                 "seq_no": seq_no,
+                "commit_hash": commit_hash
             }
         else:
             self.logger.error(
@@ -137,7 +138,7 @@ class PlanExecutionVM:
         params: Dict[str, Any],
         seq_no: str,
         output_parameters: Dict[str, Any],
-    ) -> None:
+    ):
         """Log the execution of a step and prepare commit message."""
         if step_type == "calling":
             input_vars = params.get("tool_params", {})
@@ -155,7 +156,7 @@ class PlanExecutionVM:
             }
             self.logger.info("Output variables: %s", json.dumps(output_parameters))
 
-        commit_message_wrapper.set_commit_message(
+        return self.git_manager.commit_changes(
             StepType.STEP_EXECUTION,
             str(seq_no),
             description,

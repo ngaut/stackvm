@@ -5,7 +5,6 @@ import json
 from typing import Optional, Dict, Any
 from .utils import StepType
 
-
 class CommitMessageWrapper:
     """
     Wrapper for commit message.
@@ -77,7 +76,23 @@ class GitManager:
 
         return repo
 
-    def commit_changes(self, commit_message):
+    def commit_changes(
+        self,
+        step_type: StepType,
+        seq_no: str,
+        description: str,
+        input_parameters: Dict[str, Any],
+        output_variables: Dict[str, Any],
+    ):
+        commit_info = {
+            "type": step_type.value,
+            "seq_no": seq_no,
+            "description": description,
+            "input_parameters": input_parameters,
+            "output_variables": output_variables,
+        }
+        commit_message = json.dumps(commit_info)
+
         try:
             self.repo.git.add(all=True)
             if self.repo.is_dirty(untracked_files=True):
@@ -94,6 +109,9 @@ class GitManager:
         except Exception as e:
             self.logger.error(f"Error committing changes: {str(e)}")
             return None
+
+    def get_current_commit(self, hash:str):
+        return self.repo.commit(commit_hash)
 
     def list_branches(self):
         return [branch.name for branch in self.repo.branches]
