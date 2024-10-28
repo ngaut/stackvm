@@ -3,12 +3,18 @@ from sqlalchemy import Column, String, Text, Enum, DateTime
 from datetime import datetime
 from app.database import Base
 
+
 class Task(Base):
-    __tablename__ = 'tasks'
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    __tablename__ = "tasks"
+
+    id = Column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
     goal = Column(Text, nullable=False)
-    status = Column(Enum('pending', 'in_progress', 'completed', 'failed', name='task_status'), default='pending')
+    status = Column(
+        Enum("pending", "in_progress", "completed", "failed", name="task_status"),
+        default="pending",
+    )
     repo_path = Column(String(255), nullable=False)
     logs = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

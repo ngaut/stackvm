@@ -72,26 +72,36 @@ class InstructionHandlers:
                         parsed_output = json.loads(json_object)
                         self.vm.logger.debug(f"Parsed JSON output: {parsed_output}")
                     except json.JSONDecodeError:
-                        self.vm.logger.debug("instruction_output is a string but not a valid JSON.")
+                        self.vm.logger.debug(
+                            "instruction_output is a string but not a valid JSON."
+                        )
 
             if isinstance(output_vars, str):
                 output_vars = [output_vars]
 
             for var_name in output_vars:
-                if parsed_output and isinstance(parsed_output, dict) and var_name in parsed_output:
+                if (
+                    parsed_output
+                    and isinstance(parsed_output, dict)
+                    and var_name in parsed_output
+                ):
                     var_value = parsed_output.get(var_name)
                 else:
                     # Fallback to treating instruction_output as a single value
                     if len(output_vars) == 1:
                         var_value = instruction_output
                     else:
-                        raise ValueError(f"Not found variable {var_name} in parsed_output {parsed_output}.")
+                        raise ValueError(
+                            f"Not found variable {var_name} in parsed_output {parsed_output}."
+                        )
                 self.vm.set_variable(var_name, var_value)
                 output_vars_record[var_name] = var_value
 
             return True, output_vars_record
         except Exception as e:
-            self.vm.logger.error(f"Failed to set output_vars: {e} for {instruction_output}")
+            self.vm.logger.error(
+                f"Failed to set output_vars: {e} for {instruction_output}"
+            )
             return False, output_vars_record
 
     def calling_handler(self, params: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
@@ -115,7 +125,8 @@ class InstructionHandlers:
             )
 
         tool_parameters = {
-            k: self.vm.resolve_parameter(v) for k, v in params.get("tool_params", {}).items()
+            k: self.vm.resolve_parameter(v)
+            for k, v in params.get("tool_params", {}).items()
         }
         output_vars = params.get("output_vars", None)
         if output_vars is None:
@@ -128,7 +139,9 @@ class InstructionHandlers:
         if not isinstance(output_vars, list):
             return (
                 self._handle_error(
-                    "Invalid 'output_vars' type in calling parameters", "calling", params
+                    "Invalid 'output_vars' type in calling parameters",
+                    "calling",
+                    params,
                 ),
                 None,
             )

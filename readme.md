@@ -62,7 +62,6 @@ To switch back to OpenAI:
 - `app/services/git_manager.py`: Manages Git repository initialization and operations.
 - `app/services/llm_interface.py`: Interface for interacting with the OpenAI language model.
 - `app/services/variable_manager.py`: Manages variable interpolation and reference within the VM.
-- `app/services/plan_manager.py`: Manages plan saving functionality.
 - `app/tools/instruction_handlers.py`: Handles instruction execution and API interactions for knowledge graph searches.
 - `main.py`: Entry point for running the VM with a specified goal or starting the visualization server.
 - `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.

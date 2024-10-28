@@ -24,13 +24,17 @@ from app.instructions import global_tools_hub
 
 logger = logging.getLogger(__name__)
 
+
 def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     if not goal:
         logger.error("No goal is set.")
         return []
 
     prompt = custom_prompt or get_generate_plan_prompt(
-        goal, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), PLAN_EXAMPLE_CONTENT
+        goal,
+        VM_SPEC_CONTENT,
+        global_tools_hub.get_tools_description(),
+        PLAN_EXAMPLE_CONTENT,
     )
     plan_response = llm_interface.generate(prompt)
 
@@ -48,9 +52,14 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
         logger.error("Failed to parse the generated plan: %s", plan_response)
         return []
 
+
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
     prompt = get_plan_update_prompt(
-        vm, VM_SPEC_CONTENT, global_tools_hub.get_tools_description(), explanation, key_factors
+        vm,
+        VM_SPEC_CONTENT,
+        global_tools_hub.get_tools_description(),
+        explanation,
+        key_factors,
     )
     new_plan = generate_plan(vm.llm_interface, vm.state["goal"], custom_prompt=prompt)
     return new_plan
@@ -82,7 +91,7 @@ def should_update_plan(vm: PlanExecutionVM, suggestion: str):
     if should_update:
         logger.info("LLM suggests updating the plan: %s", explanation)
         for factor in key_factors:
-            logger.info("Factor: %s, Impact: %s", factor['factor'], factor['impact'])
+            logger.info("Factor: %s, Impact: %s", factor["factor"], factor["impact"])
     else:
         logger.info("LLM suggests keeping the current plan: %s", explanation)
 

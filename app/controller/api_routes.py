@@ -8,7 +8,6 @@ import logging
 from datetime import datetime
 
 import git
-from git import NULL_TREE
 from git.exc import GitCommandError
 from flask import (
     Blueprint,
@@ -20,8 +19,6 @@ from flask import (
     stream_with_context,
 )
 from app.config.settings import GIT_REPO_PATH
-from app.services import parse_commit_message
-from app.services.plan_manager import PlanManager
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -30,8 +27,6 @@ from .task import TaskService
 api_blueprint = Blueprint("api", __name__)
 
 logger = logging.getLogger(__name__)
-
-plan_manager = PlanManager()
 
 ts = TaskService()
 
@@ -78,7 +73,7 @@ def get_vm_state(task_id, commit_hash):
                 "warning",
                 404,
             )
-        return jsonify(vm_states[0])
+        return jsonify(vm_states[0]["vm_state"])
     except Exception as e:
         return log_and_return_error(
             f"Unexpected error fetching VM state for commit {commit_hash} for task {task_id}: {str(e)}",

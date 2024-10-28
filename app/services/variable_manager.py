@@ -5,6 +5,7 @@ class VariableManager:
     """
     Manages variables and their reference counts.
     """
+
     def __init__(self):
         self.variables = {}
         self.variable_refs = {}

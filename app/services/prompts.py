@@ -2,7 +2,9 @@ import json
 import datetime
 
 
-def get_plan_update_prompt(vm, vm_spec_content, tools_instruction_content, explanation=None, key_factors=None):
+def get_plan_update_prompt(
+    vm, vm_spec_content, tools_instruction_content, explanation=None, key_factors=None
+):
     """
     Get the prompt for updating the plan.
     """
@@ -119,7 +121,9 @@ Analyze the current VM execution state and determine if the plan needs to be upd
     """
 
 
-def get_generate_plan_prompt(goal, vm_spec_content, tools_instruction_content, plan_example_content):
+def get_generate_plan_prompt(
+    goal, vm_spec_content, tools_instruction_content, plan_example_content
+):
     """
     Get the prompt for generating a plan.
     """
@@ -189,7 +193,9 @@ Ensure the JSON is properly formatted and encapsulated within a ```json code blo
 """
 
 
-def get_step_update_prompt(vm, seq_no, vm_spec_content, tools_instruction_content, suggestion):
+def get_step_update_prompt(
+    vm, seq_no, vm_spec_content, tools_instruction_content, suggestion
+):
     """
     Get the prompt for updating a step.
     """

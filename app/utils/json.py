@@ -1,6 +1,7 @@
 import re
 from typing import Optional
 
+
 def extract_json(plan_response: str) -> str:
     """Extract JSON from the plan response."""
     json_code_block_pattern = re.compile(
@@ -15,6 +16,7 @@ def extract_json(plan_response: str) -> str:
         raise ValueError("No valid JSON array found in the response.")
 
     return json_str
+
 
 def find_first_json_array(text: str) -> Optional[str]:
     """Find the first JSON array in the given text."""
