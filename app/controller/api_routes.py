@@ -215,12 +215,13 @@ def execute_vm():
     if not all([commit_hash, steps, task_id]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+
     try:
-        result = ts.run_task(task_id, commit_hash, steps=steps, suggestion=suggestion)
-        if result:
-            return jsonify(result), 200
-        else:
-            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+        result = task.update(commit_hash, suggestion=suggestion, steps=steps)
+        return jsonify(result), 200
     except Exception as e:
         current_app.logger.error(f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True)
         return log_and_return_error("Failed to execute VM.", "error", 500)
@@ -240,15 +241,15 @@ def optimize_step():
         return log_and_return_error("Missing required parameters", "error", 400)
 
     seq_no = int(seq_no_str)
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        result = ts.optimize_task_step(task_id, step_index, suggestion)
-        if result:
-            return jsonify(result), 200
-        else:
-            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+        result = task.optimize_step(commit_hash, seq_no, suggestion)
+        return jsonify(result), 200
     except Exception as e:
-        current_app.logger.error(f"Failed to optimize step {step_index} for task {task_id}: {str(e)}", exc_info=True)
+        current_app.logger.error(f"Failed to optimize step {seq_no} for task {task_id}: {str(e)}", exc_info=True)
         return log_and_return_error("Failed to optimize step.", "error", 500)
 
 

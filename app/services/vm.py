@@ -107,14 +107,14 @@ class PlanExecutionVM:
         success, output = handler(params)
         if success:
             self.save_state()
-            commit_hash = self._log_step_execution(step_type, params, seq_no, output)
+            execution_result = self._log_step_execution(step_type, params, seq_no, output)
             return {
                 "success": True,
                 "step_type": step_type,
                 "parameters": params,
                 "output": output,
                 "seq_no": seq_no,
-                "commit_hash": commit_hash
+                "execution_result": execution_result
             }
         else:
             self.logger.error(
@@ -156,13 +156,11 @@ class PlanExecutionVM:
             }
             self.logger.info("Output variables: %s", json.dumps(output_parameters))
 
-        return self.git_manager.commit_changes(
-            StepType.STEP_EXECUTION,
-            str(seq_no),
-            description,
-            input_parameters,
-            output_parameters,
-        )
+        return {
+            "description": description,
+            "input_parameters": input_parameters,
+            "output_variables": output_parameters
+        }
 
     @staticmethod
     def _preview_value(value: Any) -> str:
@@ -213,6 +211,14 @@ class PlanExecutionVM:
                 self.garbage_collect()
 
             self.save_state()
+            commit_hash = self.git_manager.commit_changes(
+                StepType.STEP_EXECUTION,
+                str(step.get("seq_no", "Unknown")),
+                **step_result.get("execution_result", {})
+            )
+
+            print(f"commit_hash: {commit_hash}", self.state["program_counter"])
+            step_result["commit_hash"] = commit_hash
             return step_result
         except Exception as e:
             traceback.print_exc()

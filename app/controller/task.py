@@ -40,8 +40,11 @@ class Task:
             while True:
                 execution_result = self.vm.step()
                 if execution_result.get("success") is not True:
+                    self.task_orm.status = "failed"
+                    self.task_orm.logs = f"Execution result is not successful:{execution_result.get('error')}"
+                    self.save()
                     raise ValueError(
-                        f"Execution result is not successful:{execution_result.get('error')}"
+                        self.task_orm.logs
                     )
                 commit_hash = execution_result.get("commit_hash")
                 if not commit_hash:
@@ -52,16 +55,23 @@ class Task:
                     break
 
             if self.vm.state.get("goal_completed"):
+                self.task_orm.status = "completed"
+                self.task_orm.logs = "Plan execution completed."
                 final_answer = self.vm.get_variable("final_answer")
                 if final_answer:
                     logger.info("final_answer: %s", final_answer)
                 else:
                     logger.info("No result was generated.")
             else:
-                logger.warning("Plan execution failed or did not complete.")
-                logger.error("%s", self.vm.state.get("errors"))
+                self.task_orm.status = "failed"
+                self.task_orm.logs = self.vm.state.get("errors")
+                logger.error("Plan execution failed or did not complete: %s", self.vm.state.get("errors"))
         else:
-            logger.error(f"Failed to generate plan {plan} for task {self.task_orm.id}.")
+            self.task_orm.status = "failed"
+            self.task_orm.logs = f"Failed to generate plan {plan}"
+            logger.error("task %s:%s", self.task_orm.id, self.task_orm.logs)
+
+        self.save()
 
     def update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
@@ -96,7 +106,6 @@ class Task:
                         self.vm.state["current_plan"] = updated_plan
                         self.vm.recalculate_variable_refs()
                         self.vm.save_state()
-
                         new_commit_hash = self.vm.git_manager.commit_changes(
                             StepType.PLAN_UPDATE,
                             str(self.vm.state["program_counter"]),
@@ -125,7 +134,7 @@ class Task:
                     logger.error(error_msg, exc_info=True)
                     raise e
 
-                if execution_result.get("success") != True:
+                if execution_result.get("success") is not True:
                     raise ValueError(
                         f"Execution result is not successful:{execution_result.get('error')}"
                     )
@@ -141,7 +150,6 @@ class Task:
                     logger.info("Goal completed. Stopping execution.")
                     break
 
-            self.task_orm.commit_hash = last_commit_hash
             self.task_orm.status = (
                 "completed" if self.vm.state.get("goal_completed") else "failed"
             )
@@ -164,6 +172,7 @@ class Task:
     ) -> Dict[str, Any]:
         try:
             self.vm.set_state(commit_hash)
+            last_commit_hash = commit_hash
             prompt = get_step_update_prompt(
                 self.vm,
                 seq_no,
@@ -212,7 +221,7 @@ class Task:
                 )
 
                 if new_commit_hash:
-                    self.task_orm.commit_hash = new_commit_hash
+                    last_commit_hash = new_commit_hash
                     logger.info(
                         f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
                     )
@@ -246,7 +255,7 @@ class Task:
             if self.vm.state.get("goal_completed"):
                 final_answer = self.vm.get_variable("final_answer")
                 if final_answer:
-                    logger.info(f"Final answer: {final_answer}")
+                    logger.info("Final answer: %s", final_answer)
                 else:
                     logger.info("No result was generated.")
             else:
@@ -256,7 +265,7 @@ class Task:
             return {
                 "success": True,
                 "current_branch": self.vm.git_manager.get_current_branch(),
-                "last_commit_hash": commit_hash,
+                "last_commit_hash": last_commit_hash,
             }
         except Exception as e:
             logger.error(
@@ -291,7 +300,6 @@ class Task:
                 "Failed to delete task %s: %s", self.task_orm.id, str(e), exc_info=True
             )
             raise e
-
 
 class TaskService:
     def __init__(self):

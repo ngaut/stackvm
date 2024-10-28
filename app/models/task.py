@@ -10,5 +10,6 @@ class Task(Base):
     goal = Column(Text, nullable=False)
     status = Column(Enum('pending', 'in_progress', 'completed', 'failed', name='task_status'), default='pending')
     repo_path = Column(String(255), nullable=False)
+    logs = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
