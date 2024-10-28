@@ -1,5 +1,6 @@
 import logging
 import json
+import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
@@ -233,7 +234,7 @@ class Task:
             # Re-execute the plan from the updated step
             while True:
                 execution_result = self.vm.step()
-                if execution_result.get("success") != True:
+                if execution_result.get("success") is not True:
                     raise ValueError(
                         f"Execution result is not successful:{execution_result.get('error')}"
                     )
@@ -308,7 +309,7 @@ class TaskService:
     def create_task(self, goal: str, repo_path: str) -> Task:
         try:
             session: Session = SessionLocal()
-            task_orm = TaskORM(goal=goal, repo_path=repo_path, status="pending")
+            task_orm = TaskORM(id=uuid.uuid4(), goal=goal, repo_path=repo_path, status="pending")
             session.add(task_orm)
             session.commit()
             session.refresh(task_orm)
@@ -319,7 +320,7 @@ class TaskService:
             logger.error(f"Failed to create task: {str(e)}", exc_info=True)
             raise e
 
-    def get_task(self, task_id: int) -> Optional[Task]:
+    def get_task(self, task_id: uuid.UUID) -> Optional[Task]:
         try:
             session: Session = SessionLocal()
             task_orm = session.query(TaskORM).filter(TaskORM.id == task_id).first()
@@ -334,7 +335,7 @@ class TaskService:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def update_task(self, task_id: int, **kwargs) -> Optional[Task]:
+    def update_task(self, task_id: uuid.UUID, **kwargs) -> Optional[Task]:
         try:
             task = self.get_task(task_id)
             if task:
@@ -348,7 +349,7 @@ class TaskService:
             logger.error(f"Failed to update task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def delete_task(self, task_id: int) -> bool:
+    def delete_task(self, task_id: uuid.UUID) -> bool:
         try:
             task = self.get_task(task_id)
             if task:

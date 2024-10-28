@@ -1,12 +1,12 @@
-from sqlalchemy import Column, Integer, String, Text, Enum, DateTime
-from sqlalchemy.orm import relationship
+import uuid
+from sqlalchemy import Column, String, Text, Enum, DateTime
 from datetime import datetime
 from app.database import Base
 
 class Task(Base):
     __tablename__ = 'tasks'
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     goal = Column(Text, nullable=False)
     status = Column(Enum('pending', 'in_progress', 'completed', 'failed', name='task_status'), default='pending')
     repo_path = Column(String(255), nullable=False)
