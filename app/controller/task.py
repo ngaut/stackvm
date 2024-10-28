@@ -2,7 +2,7 @@ import logging
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -13,7 +13,7 @@ from app.services import (
     PlanExecutionVM,
     get_step_update_prompt,
     parse_step,
-    StepType
+    StepType,
 )
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
@@ -28,8 +28,13 @@ class Task:
         self.task_orm = task_orm
         self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
 
+    @property
     def id(self):
         return self.task_orm.id
+
+    @property
+    def repo_path(self):
+        return self.task_orm.repo_path
 
     def run(self):
         self.vm.set_goal(self.task_orm.goal)
@@ -44,9 +49,7 @@ class Task:
                     self.task_orm.status = "failed"
                     self.task_orm.logs = f"Execution result is not successful:{execution_result.get('error')}"
                     self.save()
-                    raise ValueError(
-                        self.task_orm.logs
-                    )
+                    raise ValueError(self.task_orm.logs)
                 commit_hash = execution_result.get("commit_hash")
                 if not commit_hash:
                     raise ValueError("Failed to commit changes")
@@ -66,7 +69,10 @@ class Task:
             else:
                 self.task_orm.status = "failed"
                 self.task_orm.logs = self.vm.state.get("errors")
-                logger.error("Plan execution failed or did not complete: %s", self.vm.state.get("errors"))
+                logger.error(
+                    "Plan execution failed or did not complete: %s",
+                    self.vm.state.get("errors"),
+                )
         else:
             self.task_orm.status = "failed"
             self.task_orm.logs = f"Failed to generate plan {plan}"
@@ -302,6 +308,7 @@ class Task:
             )
             raise e
 
+
 class TaskService:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
@@ -309,7 +316,9 @@ class TaskService:
     def create_task(self, goal: str, repo_path: str) -> Task:
         try:
             session: Session = SessionLocal()
-            task_orm = TaskORM(id=uuid.uuid4(), goal=goal, repo_path=repo_path, status="pending")
+            task_orm = TaskORM(
+                id=uuid.uuid4(), goal=goal, repo_path=repo_path, status="pending"
+            )
             session.add(task_orm)
             session.commit()
             session.refresh(task_orm)
@@ -361,3 +370,12 @@ class TaskService:
             logger.error(f"Failed to delete task {task_id}: {str(e)}", exc_info=True)
             raise e
 
+    def list_tasks(self) -> List[Task]:
+        try:
+            session: Session = SessionLocal()
+            tasks = session.query(TaskORM).all()
+            session.close()
+            return tasks
+        except Exception as e:
+            logger.error(f"Failed to list tasks: {str(e)}", exc_info=True)
+            raise e

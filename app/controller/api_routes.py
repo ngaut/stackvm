@@ -40,7 +40,6 @@ from app.services import (
 )
 from app.instructions import global_tools_hub
 from .plan_repo import (
-    RepoManager,
     get_commits,
     get_vm_state_for_commit,
     commit_vm_changes,
@@ -57,7 +56,6 @@ api_blueprint = Blueprint("api", __name__)
 logger = logging.getLogger(__name__)
 
 plan_manager = PlanManager()
-repo_manager = RepoManager(GIT_REPO_PATH)
 
 ts = TaskService()
 
@@ -79,9 +77,13 @@ def index():
 @api_blueprint.route("/vm_data")
 def get_vm_data():
     branch = request.args.get("branch", "main")
-    repo_name = request.args.get("repo")
+    task_id = request.args.get("task_id")
 
-    repo = repo_manager.get_repo(repo_name)
+    task = ts.get_task(task_id)
+    if not task:
+        return jsonify([]), 200
+
+    repo = get_repo(task.repo_path)
     if not repo:
         return jsonify([]), 200
     commits = get_commits(repo, branch)
@@ -108,91 +110,97 @@ def get_vm_data():
     return jsonify(vm_states)
 
 
-@api_blueprint.route("/vm_state/<repo_name>/<commit_hash>")
-def get_vm_state(repo_name, commit_hash):
-    if not repo_name:
-        return log_and_return_error("Missing 'repo' parameter", "error", 400)
+@api_blueprint.route("/vm_state/<task_id>/<commit_hash>")
+def get_vm_state(task_id, commit_hash):
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        with repo_manager.lock_repo_for_read(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository {repo_name} not found", "error", 404
-                )
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository {task.repo_path} not found for task {task_id}", "error", 404
+            )
 
-            commit = repo.commit(commit_hash)
-            vm_state = get_vm_state_for_commit(repo, commit)
-            if vm_state is None:
-                return log_and_return_error(
-                    f"VM state not found for commit {commit_hash} for repo {repo_name}",
-                    "warning",
-                    404,
-                )
-            return jsonify(vm_state)
+        commit = repo.commit(commit_hash)
+        vm_state = get_vm_state_for_commit(repo, commit)
+        if vm_state is None:
+            return log_and_return_error(
+                f"VM state not found for commit {commit_hash} for repo {task.repo_path}",
+                "warning",
+                404,
+            )
+        return jsonify(vm_state)
     except Exception as e:
         return log_and_return_error(
-            f"Unexpected error fetching VM state for commit {commit_hash} for repo {repo_name}: {str(e)}",
+            f"Unexpected error fetching VM state for commit {commit_hash} for repo {task.repo_path}: {str(e)}",
             "error",
             500,
         )
 
 
-@api_blueprint.route("/code_diff/<repo_name>/<commit_hash>")
-def code_diff(repo_name, commit_hash):
-    try:
-        with repo_manager.lock_repo_for_read(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+@api_blueprint.route("/code_diff/<task_id>/<commit_hash>")
+def code_diff(task_id, commit_hash):
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
-            commit = repo.commit(commit_hash)
-            if commit.parents:
-                parent = commit.parents[0]
-                diff = repo.git.diff(parent, commit, "--unified=3")
-            else:
-                diff = repo.git.show(commit, "--pretty=format:", "--no-commit-id", "-p")
-            return jsonify({"diff": diff})
+    try:
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found", "error", 404
+            )
+
+        commit = repo.commit(commit_hash)
+        if commit.parents:
+            parent = commit.parents[0]
+            diff = repo.git.diff(parent, commit, "--unified=3")
+        else:
+            diff = repo.git.show(commit, "--pretty=format:", "--no-commit-id", "-p")
+        return jsonify({"diff": diff})
     except Exception as e:
         return log_and_return_error(
-            f"Error generating diff for commit {commit_hash} in repository '{repo_name}': {str(e)}",
+            f"Error generating diff for commit {commit_hash} in repository '{task.repo_path}': {str(e)}",
             "error",
             404,
         )
 
 
-@api_blueprint.route("/commit_details/<repo_name>/<commit_hash>")
-def commit_details(repo_name, commit_hash):
+@api_blueprint.route("/commit_details/<task_id>/<commit_hash>")
+def commit_details(task_id, commit_hash):
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+
     try:
-        with repo_manager.lock_repo_for_read(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
+            )
 
-            commit = repo.commit(commit_hash)
+        commit = repo.commit(commit_hash)
 
-            if commit.parents:
-                diff = commit.diff(commit.parents[0])
-            else:
-                diff = commit.diff(NULL_TREE)
+        if commit.parents:
+            diff = commit.diff(commit.parents[0])
+        else:
+            diff = commit.diff(NULL_TREE)
 
-            seq_no, _, _, _ = parse_commit_message(commit.message)
-            details = {
-                "hash": commit.hexsha,
-                "author": commit.author.name,
-                "date": commit.committed_datetime.isoformat(),
-                "message": commit.message,
-                "seq_no": seq_no,
-                "files_changed": [item.a_path for item in diff],
-            }
-            return jsonify(details)
+        seq_no, _, _, _ = parse_commit_message(commit.message)
+        details = {
+            "hash": commit.hexsha,
+            "author": commit.author.name,
+            "date": commit.committed_datetime.isoformat(),
+            "message": commit.message,
+            "seq_no": seq_no,
+            "files_changed": [item.a_path for item in diff],
+        }
+        return jsonify(details)
     except Exception as e:
         return log_and_return_error(
-            f"Error fetching commit details for {commit_hash} in repository '{repo_name}': {str(e)}",
+            f"Error fetching commit details for {commit_hash} in repository '{task.repo_path}': {str(e)}",
             "error",
             404,
         )
@@ -202,7 +210,6 @@ def commit_details(repo_name, commit_hash):
 def execute_vm():
     """
     API endpoint to execute VM operations.
-    Ensures mutual exclusion using repo_manager.lock_repo_for_write to handle concurrent access.
     """
     data = request.json
     current_app.logger.info(f"Received execute_vm request with data: {data}")
@@ -210,7 +217,7 @@ def execute_vm():
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     steps = int(data.get("steps", 20))
-    task_id = data.get("repo")
+    task_id = data.get("task_id")
 
     if not all([commit_hash, steps, task_id]):
         return log_and_return_error("Missing required parameters", "error", 400)
@@ -235,7 +242,7 @@ def optimize_step():
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     seq_no_str = data.get("seq_no")
-    task_id = data.get("repo")
+    task_id = data.get("task_id")
 
     if not all([commit_hash, suggestion, seq_no_str, task_id]):
         return log_and_return_error("Missing required parameters", "error", 400)
@@ -253,120 +260,123 @@ def optimize_step():
         return log_and_return_error("Failed to optimize step.", "error", 500)
 
 
-@api_blueprint.route("/vm_state_details/<repo_name>/<commit_hash>")
-def vm_state_details(repo_name, commit_hash):
+@api_blueprint.route("/vm_state_details/<task_id>/<commit_hash>")
+def vm_state_details(task_id, commit_hash):
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+
     try:
-        with repo_manager.lock_repo_for_read(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found", "error", 404
+            )
 
-            commit = repo.commit(commit_hash)
-            vm_state = get_vm_state_for_commit(repo, commit)
+        commit = repo.commit(commit_hash)
+        vm_state = get_vm_state_for_commit(repo, commit)
 
-            if vm_state is None:
-                return log_and_return_error(
-                    f"vm_state.json not found for commit: {commit_hash} in repository '{repo_name}'",
-                    "warning",
-                    404,
-                )
+        if vm_state is None:
+            return log_and_return_error(
+                f"vm_state.json not found for commit: {commit_hash} in repository '{task.repo_path}'",
+                "warning",
+                404,
+            )
 
-            variables = vm_state.get("variables", {})
+        variables = vm_state.get("variables", {})
 
-            return jsonify({"variables": variables})
+        return jsonify({"variables": variables})
     except git.exc.BadName:
         return log_and_return_error(
-            f"Invalid commit hash: {commit_hash} in repository '{repo_name}'",
+            f"Invalid commit hash: {commit_hash} in repository '{task.repo_path}'",
             "error",
             404,
         )
     except Exception as e:
         return log_and_return_error(
-            f"Unexpected error: {str(e)} in repository '{repo_name}'", "error", 500
+            f"Unexpected error: {str(e)} in repository '{task.repo_path}'", "error", 500
         )
 
 
-@api_blueprint.route("/get_directories")
-def get_directories():
+@api_blueprint.route("/get_tasks")
+def get_tasks():
     try:
-        directories = [
-            d
-            for d in os.listdir(GIT_REPO_PATH)
-            if os.path.isdir(os.path.join(GIT_REPO_PATH, d))
-        ]
-        # filter out .git directories
-        directories = [d for d in directories if not d.endswith(".git")]
-        return jsonify(directories)
+        tasks = ts.list_tasks()
+        task_ids = [task.id for task in tasks]
+        return jsonify(task_ids)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@api_blueprint.route("/get_branches/<repo_name>")
-def get_branches(repo_name):
+@api_blueprint.route("/get_branches/<task_id>")
+def get_branches(task_id):
     try:
-        with repo_manager.lock_repo_for_read(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
-
-            branches = repo.branches
-            branch_data = [
-                {
-                    "name": branch.name,
-                    "last_commit_date": branch.commit.committed_datetime.isoformat(),
-                    "last_commit_message": branch.commit.message.split("\n")[0],
-                    "is_active": branch.name == repo.active_branch.name,
-                }
-                for branch in branches
-            ]
-            branch_data.sort(
-                key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
+        task = ts.get_task(task_id)
+        if not task:
+            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
             )
-            return jsonify(branch_data)
+
+        branches = repo.branches
+        branch_data = [
+            {
+                "name": branch.name,
+                "last_commit_date": branch.commit.committed_datetime.isoformat(),
+                "last_commit_message": branch.commit.message.split("\n")[0],
+                "is_active": branch.name == repo.active_branch.name,
+            }
+            for branch in branches
+        ]
+        branch_data.sort(
+            key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
+        )
+        return jsonify(branch_data)
     except GitCommandError as e:
         return log_and_return_error(
-            f"Error fetching branches for repository '{repo_name}': {str(e)}",
+            f"Error fetching branches for repository '{task.repo_path}': {str(e)}",
             "error",
             500,
         )
 
 
-@api_blueprint.route("/set_branch/<repo_name>/<branch_name>")
-def set_branch_route(repo_name, branch_name):
+@api_blueprint.route("/set_branch/<task_id>/<branch_name>")
+def set_branch_route(task_id, branch_name):
     """
     API endpoint to switch to a specified branch within a repository.
 
     Args:
-        repo_name (str): The name of the repository.
+        task_id (str): The ID of the task.
         branch_name (str): The name of the branch to switch to.
 
     Returns:
         JSON response indicating success or failure.
     """
-    try:
-        with repo_manager.lock_repo_for_write(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
-            try:
-                repo.git.checkout(branch_name)
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": f"Switched to branch {branch_name} in repository '{repo_name}'",
-                    }
-                )
-            except GitCommandError as e:
-                return log_and_return_error(
-                    f"Error switching to branch {branch_name}: {str(e)}", "error", 400
-                )
+    try:
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
+            )
+
+        try:
+            repo.git.checkout(branch_name)
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
+                }
+            )
+        except GitCommandError as e:
+            return log_and_return_error(
+                f"Error switching to branch {branch_name}: {str(e)}", "error", 400
+            )
     except TimeoutError as e:
         return log_and_return_error(str(e), "error", 500)
     except Exception as e:
@@ -374,60 +384,63 @@ def set_branch_route(repo_name, branch_name):
         return log_and_return_error("An unexpected error occurred.", "error", 500)
 
 
-@api_blueprint.route("/delete_branch/<repo_name>/<branch_name>", methods=["POST"])
-def delete_branch_route(repo_name, branch_name):
+@api_blueprint.route("/delete_branch/<task_id>/<branch_name>", methods=["POST"])
+def delete_branch_route(task_id, branch_name):
     """
     API endpoint to delete a specified branch within a repository.
 
     Args:
-        repo_name (str): The name of the repository.
+        task_id (str): The ID of the task.
         branch_name (str): The name of the branch to delete.
 
     Returns:
         JSON response indicating success or failure.
     """
+    task = ts.get_task(task_id)
+    if not task:
+        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+
     try:
-        with repo_manager.lock_repo_for_write(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
+            )
 
-            try:
-                if branch_name == repo.active_branch.name:
-                    available_branches = [
-                        b.name for b in repo.branches if b.name != branch_name
-                    ]
-                    if not available_branches:
-                        return log_and_return_error(
-                            "Cannot delete the only branch in the repository",
-                            "error",
-                            400,
-                        )
-
-                    switch_to = (
-                        "main"
-                        if "main" in available_branches
-                        else available_branches[0]
-                    )
-                    repo.git.checkout(switch_to)
-                    current_app.logger.info(
-                        f"Switched to branch {switch_to} before deleting {branch_name}"
+        try:
+            if branch_name == repo.active_branch.name:
+                available_branches = [
+                    b.name for b in repo.branches if b.name != branch_name
+                ]
+                if not available_branches:
+                    return log_and_return_error(
+                        "Cannot delete the only branch in the repository",
+                        "error",
+                        400,
                     )
 
-                repo.git.branch("-D", branch_name)
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": f"Branch {branch_name} deleted successfully in repository '{repo_name}'",
-                        "new_active_branch": repo.active_branch.name,
-                    }
+                switch_to = (
+                    "main"
+                    if "main" in available_branches
+                    else available_branches[0]
                 )
-            except GitCommandError as e:
-                return log_and_return_error(
-                    f"Error deleting branch {branch_name}: {str(e)}", "error", 400
+                repo.git.checkout(switch_to)
+                current_app.logger.info(
+                    f"Switched to branch {switch_to} before deleting {branch_name}"
                 )
+
+            repo.git.branch("-D", branch_name)
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
+                    "new_active_branch": repo.active_branch.name,
+                }
+            )
+        except GitCommandError as e:
+            return log_and_return_error(
+                f"Error deleting branch {branch_name}: {str(e)}", "error", 400
+            )
     except TimeoutError as e:
         return log_and_return_error(str(e), "error", 500)
     except Exception as e:
@@ -439,45 +452,47 @@ def delete_branch_route(repo_name, branch_name):
 def save_plan():
     """
     API endpoint to save the current plan's project directory to a specified folder.
-    Expects JSON payload with 'repo_name' and 'target_directory'.
+    Expects JSON payload with 'task_id' and 'target_directory'.
     """
     data = request.json
     current_app.logger.info(f"Received save_plan request with data: {data}")
 
-    repo_name = data.get("repo_name")
+    task_id = data.get("task_id")
     target_directory = data.get("target_directory")
 
-    if not all([repo_name, target_directory]):
+    if not all([task_id, target_directory]):
         return log_and_return_error(
-            "Missing 'repo_name' or 'target_directory' parameters.", "error", 400
+            "Missing 'task_id' or 'target_directory' parameters.", "error", 400
         )
 
     try:
-        with repo_manager.lock_repo_for_write(repo_name):
-            repo = repo_manager.get_repo(repo_name)
-            if not repo:
-                return log_and_return_error(
-                    f"Repository '{repo_name}' not found", "error", 404
-                )
+        task = ts.get_task(task_id)
+        if not task:
+            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+        repo = get_repo(task.repo_path)
+        if not repo:
+            return log_and_return_error(
+                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
+            )
 
-            success = plan_manager.save_current_plan(repo, target_directory)
+        success = plan_manager.save_current_plan(repo, target_directory)
 
-            if success:
-                return (
-                    jsonify(
-                        {
-                            "success": True,
-                            "message": f"Plan '{repo_name}' saved successfully to '{target_directory}'.",
-                        }
-                    ),
-                    200,
-                )
-            else:
-                return log_and_return_error(
-                    f"Failed to save plan '{repo_name}' to '{target_directory}'.",
-                    "error",
-                    500,
-                )
+        if success:
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "message": f"Plan '{task.repo_path}' saved successfully to '{target_directory}'.",
+                    }
+                ),
+                200,
+            )
+        else:
+            return log_and_return_error(
+                f"Failed to save plan '{task.repo_path}' to '{target_directory}'.",
+                "error",
+                500,
+            )
     except TimeoutError as e:
         return log_and_return_error(str(e), "error", 500)
     except Exception as e:

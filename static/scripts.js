@@ -1,4 +1,4 @@
-let chart, currentBranch = 'main', currentRepo = '', currentHighlightedCommit = null;
+let chart, currentBranch = 'main', currentTaskId = '', currentHighlightedCommit = null;
 
 // Utility functions
 function showLoading(show = true) {
@@ -31,52 +31,52 @@ async function fetchWithErrorHandling(url, options = {}) {
     }
 }
 
-// Repository and Branch Management
-async function loadDirectories() {
-    const data = await fetchWithErrorHandling('/get_directories');
-    const select = document.getElementById('directorySelect');
-    select.innerHTML = data.map(dir => `<option value="${dir}">${dir}</option>`).join('');
+// Task and Branch Management
+async function loadTasks() {
+    const data = await fetchWithErrorHandling('/get_tasks');
+    const select = document.getElementById('taskSelect');
+    select.innerHTML = data.map(taskId => `<option value="${taskId}">${taskId}</option>`).join('');
     select.style.display = 'block';
     document.getElementById('savePlanButton').style.display = 'none'; // Hide initially
 
-    // Automatically select plan.
+    // Automatically select task.
     if (data.length > 0) {
-        const selectedPlanId = (new URLSearchParams(location.search)).get('plan');``
-        const selectedIndex = data.indexOf(String(selectedPlanId));
+        const selectedTaskId = (new URLSearchParams(location.search)).get('task_id');
+        const selectedIndex = data.indexOf(String(selectedTaskId));
         if (selectedIndex !== -1) {
-            // Select the plan if specified in the query string.
+            // Select the task if specified in the query string.
             select.value = data[selectedIndex];
-            await loadRepoData(data[selectedIndex]);
+            await loadTaskData(data[selectedIndex]);
         } else {
-            // Select the first directory by default.
+            // Select the first task by default.
             select.value = data[0];
-            await loadRepoData(data[0]);
+            await loadTaskData(data[0]);
         }
     }
 
-    // Add event listener to load data when a new repo is selected
+    // Add event listener to load data when a new task is selected
     select.addEventListener('change', async (event) => {
-        const selectedRepo = event.target.value;
-        await loadRepoData(selectedRepo);
+        const selectedTaskId = event.target.value;
+        await loadTaskData(selectedTaskId);
     });
 }
 
-async function loadRepoData(repoName) {
-    currentRepo = repoName;
+async function loadTaskData(taskId) {
+    currentTaskId = taskId;
     await loadBranches();
     clearDetails();
     document.getElementById('savePlanButton').style.display = 'inline-block'; // Show Save Plan Button
 }
 
-async function setRepo() {
-    const selectedRepo = document.getElementById('directorySelect').value;
-    const data = await fetchWithErrorHandling(`/set_repo/${selectedRepo}?repo=${encodeURIComponent(selectedRepo)}`);
+async function setTask() {
+    const selectedTaskId = document.getElementById('taskSelect').value;
+    const data = await fetchWithErrorHandling(`/set_task/${selectedTaskId}?task_id=${encodeURIComponent(selectedTaskId)}`);
     if (data.success) {
         showNotification(data.message, 'success');
-        currentRepo = selectedRepo;
+        currentTaskId = selectedTaskId;
         await loadBranches();
         clearDetails();
-        // Show Save Plan Button after setting repository
+        // Show Save Plan Button after setting task
         document.getElementById('savePlanButton').style.display = 'inline-block';
     } else {
         showNotification(data.message, 'danger');
@@ -84,19 +84,19 @@ async function setRepo() {
 }
 
 async function loadBranches() {
-    const data = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
+    const data = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentTaskId)}`);
     updateBranchSelector(data);
     return updateChart(data.map(branch => branch.name));
 }
 
 async function setBranch() {
     const branchName = document.getElementById('branchDropdown').value;
-    const data = await fetchWithErrorHandling(`/set_branch/${encodeURIComponent(currentRepo)}/${encodeURIComponent(branchName)}`);
+    const data = await fetchWithErrorHandling(`/set_branch/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(branchName)}`);
     if (data.success) {
         currentBranch = branchName;
         showNotification(data.message, 'success');
         highlightCurrentBranch();
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branchName)}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branchName)}&task_id=${encodeURIComponent(currentTaskId)}`);
         updateStepList(branchData);
         if (branchData.length > 0) {
             showCommitDetailsAndHighlight(branchData[0].commit_hash);
@@ -112,7 +112,7 @@ async function setBranch() {
 async function updateChart(branches) {
     const branchesData = await Promise.all(branches.map(async branch => {
         try {
-            const data = await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+            const data = await fetchWithErrorHandling(`/vm_data?branch=${branch}&task_id=${encodeURIComponent(currentTaskId)}`);
             return data.length > 0 ? data : null;
         } catch (error) {
             console.warn(`Failed to fetch data for branch ${branch}:`, error);
@@ -234,7 +234,7 @@ async function updateChart(branches) {
                 currentBranch = branch;
                 document.getElementById('branchDropdown').value = branch;
                 try {
-                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&repo=${encodeURIComponent(currentRepo)}`);
+                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&task_id=${encodeURIComponent(currentTaskId)}`);
                     if (branchData.length === 0) {
                         showNotification(`No VM states found for branch: ${branch}`, 'warning');
                         updateStepList([]);
@@ -360,10 +360,10 @@ async function showCommitDetailsAndHighlight(commitHash) {
     
     try {
         const [commitDetails, vmState, codeDiff, vmStateDetails] = await Promise.all([
-            fetchWithErrorHandling(`/commit_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/code_diff/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`)
+            fetchWithErrorHandling(`/commit_details/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/vm_state/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/code_diff/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
+            fetchWithErrorHandling(`/vm_state_details/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`)
         ]);
 
         updateCommitDetails(commitDetails);
@@ -507,7 +507,7 @@ async function executeFromStep(commitHash, seqNo) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    repo: currentRepo,
+                    task_id: currentTaskId,
                     commit_hash: commitHash,
                     seq_no: seqNo,
                     suggestion: suggestion // Include suggestion parameter
@@ -548,7 +548,7 @@ async function updateUIAfterExecution(newBranch, lastCommitHash) {
     highlightCurrentBranch();
     
     try {
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(newBranch)}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(newBranch)}&task_id=${encodeURIComponent(currentTaskId)}`);
         
         if (branchData.length === 0) {
             showNotification(`No VM states found for branch: ${newBranch}`, 'warning');
@@ -596,7 +596,7 @@ async function deleteBranch() {
     
     showLoading(true);
     try {
-        const data = await fetchWithErrorHandling(`/delete_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`, {
+        const data = await fetchWithErrorHandling(`/delete_branch/${branchName}?task_id=${encodeURIComponent(currentTaskId)}`, {
             method: 'POST'
         });
         
@@ -614,7 +614,7 @@ async function deleteBranch() {
 }
 
 async function updateBranchesAndChart() {
-    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
+    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentTaskId)}`);
     updateBranchSelector(branches);
     await updateChart(branches.map(branch => branch.name));
 }
@@ -686,7 +686,7 @@ async function optimizeStep(commitHash, seqNo) {
                 commit_hash: commitHash,
                 suggestion: suggestion,
                 seq_no: seqNo,
-                repo: currentRepo
+                task_id: currentTaskId
             })
         });
 
@@ -739,7 +739,7 @@ async function savePlan() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    repo_name: currentRepo,
+                    task_id: currentTaskId,
                     target_directory: targetDirectory
                 }),
             });
@@ -836,15 +836,15 @@ function createModal(title, message, onSubmit) {
     return overlay;
 }
 
-// Ensure the Save Plan button is hidden initially (in case the repository is already set)
+// Ensure the Save Plan button is hidden initially (in case the task is already set)
 document.addEventListener('DOMContentLoaded', () => {
-    if (!currentRepo) {
+    if (!currentTaskId) {
         document.getElementById('savePlanButton').style.display = 'none';
     }
 });
 
-// Existing loadDirectories call and other initializations
-loadDirectories();
+// Existing loadTasks call and other initializations
+loadTasks();
 window.addEventListener('resize', () => { if (chart) chart.resize(); });
 
 function updateVMVariables(vmVariablesData, vmState) {
