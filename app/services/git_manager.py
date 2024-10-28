@@ -2,58 +2,24 @@ import os
 from git import Repo, GitCommandError
 import logging
 import json
-from typing import Optional, Dict, Any
+from typing import Dict, Any, Optional
 from .utils import StepType
 
-class CommitMessageWrapper:
-    """
-    Wrapper for commit message.
-    """
-    def __init__(self):
-        self.commit_message: Optional[str] = None
-
-    def set_commit_message(
-        self,
-        step_type: StepType,
-        seq_no: str,
-        description: str,
-        input_parameters: Dict[str, Any],
-        output_variables: Dict[str, Any],
-    ) -> None:
-        commit_info = {
-            "type": step_type.value,
-            "seq_no": seq_no,
-            "description": description,
-            "input_parameters": input_parameters,
-            "output_variables": output_variables,
-        }
-        # Set the commit message using the commit_info dictionary
-        self.commit_message = json.dumps(commit_info)
-
-    def get_commit_message(self) -> Optional[str]:
-        return self.commit_message
-
-    def clear_commit_message(self) -> None:
-        self.commit_message = None
-
-
-commit_message_wrapper = CommitMessageWrapper()
-
+logger = logging.getLogger(__name__)
 
 class GitManager:
     def __init__(self, repo_path):
         self.repo_path = repo_path
-        self.logger = logging.getLogger(__name__)
         self.repo = self._initialize_repo()
 
     def _initialize_repo(self):
         if not os.path.exists(self.repo_path):
             os.makedirs(self.repo_path)
-            self.logger.info(f"Created directory: {self.repo_path}")
+            logger.info("Created directory: %s", self.repo_path)
 
         if not os.path.exists(os.path.join(self.repo_path, ".git")):
             repo = Repo.init(self.repo_path)
-            self.logger.info(f"Initialized new Git repository in {self.repo_path}")
+            logger.info("Initialized new Git repository in %s", self.repo_path)
 
             # Create and commit an initial README.md file
             readme_path = os.path.join(self.repo_path, "README.md")
@@ -61,7 +27,7 @@ class GitManager:
                 f.write(
                     "# VM Execution Repository\n\nThis repository contains the execution history of the VM."
                 )
-            self.logger.info(f"Created README.md at {readme_path}")
+            logger.info("Created README.md at %s", readme_path)
 
             repo.index.add(["README.md"])
             # add a empty vm_state.json
@@ -72,7 +38,7 @@ class GitManager:
             repo.index.commit("Initial commit")
         else:
             repo = Repo(self.repo_path)
-            self.logger.info(f"Opened existing Git repository in {self.repo_path}")
+            logger.info("Opened existing Git repository in %s", self.repo_path)
 
         return repo
 
@@ -100,28 +66,28 @@ class GitManager:
                 return commit.hexsha  # Return the commit hash as a string
             else:
                 # If there are no changes to commit, return the latest commit hash
-                self.logger.info(
+                logger.info(
                     f"No changes to commit, returning the latest commit hash {self.repo.head.commit.hexsha}"
                 )
                 return (
                     self.repo.head.commit.hexsha
                 )  # Return the commit hash as a string
         except Exception as e:
-            self.logger.error(f"Error committing changes: {str(e)}")
+            logger.error(f"Error committing changes: {str(e)}")
             return None
 
     def get_current_commit(self, commit_hash:str):
         return self.repo.commit(commit_hash)
 
     def list_branches(self):
-        return [branch.name for branch in self.repo.branches]
+        return self.repo.branches
 
     def create_branch(self, branch_name):
         try:
             self.repo.create_head(branch_name)
             return True
         except GitCommandError as e:
-            self.logger.error(f"Failed to create branch {branch_name}: {str(e)}")
+            logger.error(f"Failed to create branch {branch_name}: {str(e)}")
             return False
 
     def checkout_branch(self, branch_name):
@@ -129,8 +95,11 @@ class GitManager:
             self.repo.git.checkout(branch_name)
             return True
         except GitCommandError as e:
-            self.logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
+            logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
             return False
+        
+    def delete_branch(self, branch_name):
+        self.repo.git.branch("-D", branch_name)
 
     def get_current_branch(self):
         return self.repo.active_branch.name
@@ -143,10 +112,47 @@ class GitManager:
 
             # Create a new branch from the specified commit hash
             self.repo.git.branch(branch_name, commit_hash)
-            self.logger.info(f"Created branch {branch_name} from commit {commit_hash}")
+            logger.info(f"Created branch {branch_name} from commit {commit_hash}")
             return True
         except GitCommandError as e:
-            self.logger.error(
+            logger.error(
                 f"Failed to create branch {branch_name} from commit {commit_hash}: {str(e)}"
             )
             return False
+
+    def get_commits(self, branch_name):
+        """Fetch commits for a given branch."""
+        try:
+            return list(self.repo.iter_commits(branch_name))
+        except GitCommandError as exc:
+            logger.error(
+                "Error fetching commits for branch %s: %s",
+                branch_name,
+                str(exc),
+                exc_info=True,
+            )
+            return []
+
+    def load_commit_state(self, commit_hash: str) -> Optional[Dict[str, Any]]:
+        """Load the state from a file based on the specific commit point."""
+        try:
+            state_content = self.repo.git.show(f"{commit_hash}:vm_state.json")
+            return json.loads(state_content)
+        except (GitCommandError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading state from commit {commit_hash}: {str(e)}")
+        except Exception as e:
+            logger.error(
+                "Unexpected error loading state from commit %s: %s", commit_hash, str(e)
+            )
+        return None
+
+    def get_commit(self, commit_hash: str):
+        return self.repo.commit(commit_hash)
+    
+    def get_code_diff(self, commit_hash: str):
+        commit = self.repo.commit(commit_hash)
+        if commit.parents:
+            parent = commit.parents[0]
+            return self.repo.git.diff(parent, commit, "--unified=3")
+        else:
+            return self.repo.git.show(commit, "--pretty=format:", "--no-commit-id", "-p")

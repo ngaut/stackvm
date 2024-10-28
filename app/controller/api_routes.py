@@ -19,34 +19,10 @@ from flask import (
     Response,
     stream_with_context,
 )
-
-from app.config.settings import (
-    LLM_PROVIDER,
-    GIT_REPO_PATH,
-    LLM_MODEL,
-    VM_SPEC_CONTENT,
-    LLM_PROVIDER,
-)
-from app.services import (
-    parse_commit_message,
-    StepType,
-    parse_step,
-)
-from app.services import (
-    LLMInterface,
-    PlanExecutionVM,
-    commit_message_wrapper,
-    get_step_update_prompt,
-)
-from app.instructions import global_tools_hub
-from .plan_repo import (
-    get_commits,
-    get_vm_state_for_commit,
-    commit_vm_changes,
-    get_repo,
-)
+from app.config.settings import GIT_REPO_PATH
+from app.services import parse_commit_message
 from app.services.plan_manager import PlanManager
-from .engine import generate_updated_plan, should_update_plan, generate_plan
+
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
 
@@ -83,18 +59,14 @@ def get_vm_data():
     if not task:
         return jsonify([]), 200
 
-    repo = get_repo(task.repo_path)
-    if not repo:
-        return jsonify([]), 200
-    commits = get_commits(repo, branch)
+    commits = task.git_manager.get_commits(branch)
 
     vm_states = []
     for commit in commits:
         commit_time = datetime.fromtimestamp(commit.committed_date)
         seq_no, title, details, commit_type = parse_commit_message(commit.message)
 
-        vm_state = get_vm_state_for_commit(repo, commit)
-
+        vm_state = task.git_manager.load_commit_state(commit.hexsha)
         vm_states.append(
             {
                 "time": commit_time.isoformat(),
@@ -117,14 +89,7 @@ def get_vm_state(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository {task.repo_path} not found for task {task_id}", "error", 404
-            )
-
-        commit = repo.commit(commit_hash)
-        vm_state = get_vm_state_for_commit(repo, commit)
+        vm_state = task.git_manager.load_commit_state(commit_hash)
         if vm_state is None:
             return log_and_return_error(
                 f"VM state not found for commit {commit_hash} for repo {task.repo_path}",
@@ -147,18 +112,7 @@ def code_diff(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found", "error", 404
-            )
-
-        commit = repo.commit(commit_hash)
-        if commit.parents:
-            parent = commit.parents[0]
-            diff = repo.git.diff(parent, commit, "--unified=3")
-        else:
-            diff = repo.git.show(commit, "--pretty=format:", "--no-commit-id", "-p")
+        diff = task.git_manager.get_code_diff(commit_hash)
         return jsonify({"diff": diff})
     except Exception as e:
         return log_and_return_error(
@@ -175,13 +129,7 @@ def commit_details(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
-            )
-
-        commit = repo.commit(commit_hash)
+        commit = task.git_manager.get_commit(commit_hash)
 
         if commit.parents:
             diff = commit.diff(commit.parents[0])
@@ -227,7 +175,7 @@ def execute_vm():
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        result = task.update(commit_hash, suggestion=suggestion, steps=steps)
+        result = task.auto_update(commit_hash, suggestion=suggestion, steps=steps)
         return jsonify(result), 200
     except Exception as e:
         current_app.logger.error(f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True)
@@ -267,15 +215,7 @@ def vm_state_details(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found", "error", 404
-            )
-
-        commit = repo.commit(commit_hash)
-        vm_state = get_vm_state_for_commit(repo, commit)
-
+        vm_state = task.git_manager.load_commit_state(commit_hash)
         if vm_state is None:
             return log_and_return_error(
                 f"vm_state.json not found for commit: {commit_hash} in repository '{task.repo_path}'",
@@ -314,19 +254,14 @@ def get_branches(task_id):
         task = ts.get_task(task_id)
         if not task:
             return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
-            )
 
-        branches = repo.branches
+        branches = task.git_manager.list_branches()
         branch_data = [
             {
                 "name": branch.name,
                 "last_commit_date": branch.commit.committed_datetime.isoformat(),
                 "last_commit_message": branch.commit.message.split("\n")[0],
-                "is_active": branch.name == repo.active_branch.name,
+                "is_active": branch.name == task.git_manager.get_current_branch(),
             }
             for branch in branches
         ]
@@ -359,29 +294,17 @@ def set_branch_route(task_id, branch_name):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
-            )
-
-        try:
-            repo.git.checkout(branch_name)
-            return jsonify(
-                {
-                    "success": True,
-                    "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
-                }
-            )
-        except GitCommandError as e:
-            return log_and_return_error(
-                f"Error switching to branch {branch_name}: {str(e)}", "error", 400
-            )
-    except TimeoutError as e:
-        return log_and_return_error(str(e), "error", 500)
-    except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return log_and_return_error("An unexpected error occurred.", "error", 500)
+        task.git_manager.checkout_branch(branch_name)
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
+            }
+        )
+    except GitCommandError as e:
+        return log_and_return_error(
+            f"Error switching to branch {branch_name}: {str(e)}", "error", 400
+        )
 
 
 @api_blueprint.route("/delete_branch/<task_id>/<branch_name>", methods=["POST"])
@@ -401,52 +324,39 @@ def delete_branch_route(task_id, branch_name):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        repo = get_repo(task.repo_path)
-        if not repo:
-            return log_and_return_error(
-                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
-            )
-
-        try:
-            if branch_name == repo.active_branch.name:
-                available_branches = [
-                    b.name for b in repo.branches if b.name != branch_name
-                ]
-                if not available_branches:
-                    return log_and_return_error(
-                        "Cannot delete the only branch in the repository",
-                        "error",
-                        400,
-                    )
-
-                switch_to = (
-                    "main"
-                    if "main" in available_branches
-                    else available_branches[0]
-                )
-                repo.git.checkout(switch_to)
-                current_app.logger.info(
-                    f"Switched to branch {switch_to} before deleting {branch_name}"
+        if branch_name == task.git_manager.get_current_branch():
+            available_branches = [
+                b.name for b in task.git_manager.list_branches() if b.name != branch_name
+            ]
+            if not available_branches:
+                return log_and_return_error(
+                    "Cannot delete the only branch in the repository",
+                    "error",
+                    400,
                 )
 
-            repo.git.branch("-D", branch_name)
-            return jsonify(
-                {
-                    "success": True,
-                    "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
-                    "new_active_branch": repo.active_branch.name,
-                }
+            switch_to = (
+                "main"
+                if "main" in available_branches
+                else available_branches[0]
             )
-        except GitCommandError as e:
-            return log_and_return_error(
-                f"Error deleting branch {branch_name}: {str(e)}", "error", 400
+            task.git_manager.checkout_branch(switch_to)
+            current_app.logger.info(
+                f"Switched to branch {switch_to} before deleting {branch_name}"
             )
-    except TimeoutError as e:
-        return log_and_return_error(str(e), "error", 500)
-    except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return log_and_return_error("An unexpected error occurred.", "error", 500)
 
+        task.git_manager.delete_branch(branch_name)
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
+                "new_active_branch": task.git_manager.get_current_branch(),
+            }
+        )
+    except GitCommandError as e:
+        return log_and_return_error(
+            f"Error deleting branch {branch_name}: {str(e)}", "error", 400
+        )
 
 @api_blueprint.route("/save_plan", methods=["POST"])
 def save_plan():
@@ -519,13 +429,11 @@ def stream_execute_vm():
         protocol = StreamingProtocol()
         task = ts.create_task(goal, repo_path)
         task_id = task.id
-        vm = task.vm
+
         try:
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
-            vm.set_goal(goal)
-
             # Generate Plan
-            plan = generate_plan(vm.llm_interface, goal)
+            plan = task.generate_plan()
             if not plan:
                 error_message = "Failed to generate plan."
                 current_app.logger.error(error_message)
@@ -533,12 +441,11 @@ def stream_execute_vm():
                 yield protocol.send_finish_message('error')
                 return
 
-            vm.state["current_plan"] = plan
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
             # Start executing steps
             while True:
-                step = vm.get_current_step()
+                step = task.vm.get_current_step()
                 if step['type'] == "calling":
                     params = step.get("parameters", {})
                     tool_call_id = step["seq_no"]
@@ -546,11 +453,11 @@ def stream_execute_vm():
                     tool_args = params.get("params", {})
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
-                step_result = vm.step()
+                step_result = task.vm.step()
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
-                    yield protocol.send_state(task_id, vm.state)
+                    yield protocol.send_state(task_id, task.vm.state)
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message('error')
                     return
@@ -560,7 +467,7 @@ def stream_execute_vm():
                         "error", "Unknown error during step execution."
                     )
                     current_app.logger.error(f"Error executing step: {error}")
-                    yield protocol.send_state(task_id, vm.state)
+                    yield protocol.send_state(task_id, task.vm.state)
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message('error')
                     return
@@ -575,14 +482,14 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
-                yield protocol.send_state(task_id, vm.state)
+                yield protocol.send_state(task_id, task.vm.state)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
-                if vm.state.get("goal_completed"):
+                if task.vm.state.get("goal_completed"):
                     current_app.logger.info("Goal completed during plan execution.")
                     # Fetch the final_answer
-                    final_answer = vm.get_variable("final_answer")
+                    final_answer = task.vm.get_variable("final_answer")
                     if final_answer:
                         # Stream the final_answer using Part 0
                         # You can customize the chunking strategy as needed

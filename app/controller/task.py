@@ -17,7 +17,8 @@ from app.services import (
 )
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
-from .engine import generate_updated_plan, should_update_plan, generate_plan
+
+from .plan import generate_updated_plan, should_update_plan, generate_plan
 
 
 logger = logging.getLogger(__name__)
@@ -27,60 +28,110 @@ class Task:
     def __init__(self, task_orm: TaskORM, llm_interface: LLMInterface):
         self.task_orm = task_orm
         self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
+        self.vm.set_goal(task_orm.goal)
 
     @property
     def id(self):
+        """Return the ID of the task."""
         return self.task_orm.id
 
     @property
     def repo_path(self):
+        """Return the repository path of the task."""
         return self.task_orm.repo_path
+    
+    @property
+    def git_manager(self):
+        """Return the repository of the task."""
+        return self.vm.git_manager
 
-    def run(self):
-        self.vm.set_goal(self.task_orm.goal)
+    def generate_plan(self):
+        """Generate a plan for the task."""
         plan = generate_plan(self.vm.llm_interface, self.task_orm.goal)
         if plan:
-            logger.info("Generated Plan:")
-            self.vm.state["current_plan"] = plan
+            self.vm.set_plan(plan)
+        return plan
 
-            while True:
-                execution_result = self.vm.step()
-                if execution_result.get("success") is not True:
-                    self.task_orm.status = "failed"
-                    self.task_orm.logs = f"Execution result is not successful:{execution_result.get('error')}"
-                    self.save()
-                    raise ValueError(self.task_orm.logs)
-                commit_hash = execution_result.get("commit_hash")
-                if not commit_hash:
-                    raise ValueError("Failed to commit changes")
-
-                if self.vm.state.get("goal_completed"):
-                    logger.info("Goal completed during plan execution.")
-                    break
+    def execute(self):
+        """Execute the plan for the task."""
+        while True:
+            execution_result = self.vm.step()
+            if execution_result.get("success") is not True:
+                raise ValueError(
+                    f"Failed to execute step:{execution_result.get('error')}"
+                )
 
             if self.vm.state.get("goal_completed"):
-                self.task_orm.status = "completed"
-                self.task_orm.logs = "Plan execution completed."
-                final_answer = self.vm.get_variable("final_answer")
-                if final_answer:
-                    logger.info("final_answer: %s", final_answer)
-                else:
-                    logger.info("No result was generated.")
+                logger.info("Goal completed during plan execution.")
+                break
+
+        if self.vm.state.get("goal_completed"):
+            self.task_orm.status = "completed"
+            self.task_orm.logs = "Plan execution completed."
+            self.save()
+            final_answer = self.vm.get_variable("final_answer")
+            if final_answer:
+                logger.info("final_answer: %s", final_answer)
             else:
-                self.task_orm.status = "failed"
-                self.task_orm.logs = self.vm.state.get("errors")
-                logger.error(
-                    "Plan execution failed or did not complete: %s",
-                    self.vm.state.get("errors"),
-                )
+                logger.info("No result was generated.")
         else:
+            raise ValueError(
+                "Plan execution failed or did not complete: %s",
+                self.vm.state.get("errors"),
+            )
+
+    def run(self):
+        try:
+            plan = self.generate_plan()
+            if not plan:
+                raise ValueError("Failed to generate plan")
+
+            logger.info("Generated Plan:%s", json.dumps(plan, indent=2))
+            self.execute()
+        except Exception as e:
             self.task_orm.status = "failed"
-            self.task_orm.logs = f"Failed to generate plan {plan}"
-            logger.error("task %s:%s", self.task_orm.id, self.task_orm.logs)
+            self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
+            logger.error(self.task_orm.logs, exc_info=True)
+            self.save()
+            raise e
 
-        self.save()
+    def update_plan(self, commit_hash: str, suggestion: str):
+        should_update, explanation, key_factors = should_update_plan(
+            self.vm, suggestion
+        )
+        if should_update:
+            updated_plan = generate_updated_plan(self.vm, explanation, key_factors)
+            logger.info(
+                "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
+            )
+            branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    def update(
+            if self.vm.git_manager.create_branch_from_commit(
+                branch_name, commit_hash
+            ) and self.vm.git_manager.checkout_branch(branch_name):
+                self.vm.set_plan(updated_plan)
+                self.vm.recalculate_variable_refs()
+                self.vm.save_state()
+                new_commit_hash = self.vm.git_manager.commit_changes(
+                    StepType.PLAN_UPDATE,
+                    str(self.vm.state["program_counter"]),
+                    explanation,
+                    {"updated_plan": updated_plan},
+                    {},
+                )
+                if new_commit_hash:
+                    logger.info(
+                        f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
+                    )
+                    return new_commit_hash
+                else:
+                    logger.error("Failed to commit updated plan")
+            else:
+                logger.error(f"Failed to create or checkout branch '{branch_name}'")
+
+        return None
+
+    def auto_update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
     ) -> Dict[str, Any]:
         try:
@@ -93,46 +144,10 @@ class Task:
             )
 
             for _ in range(steps):
-                should_update, explanation, key_factors = should_update_plan(
-                    self.vm, suggestion
-                )
-                if should_update:
-                    updated_plan = generate_updated_plan(
-                        self.vm, explanation, key_factors
-                    )
-                    logger.info(
-                        f"Generated updated plan: {json.dumps(updated_plan, indent=2)}"
-                    )
-                    branch_name = (
-                        f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    )
-
-                    if self.vm.git_manager.create_branch_from_commit(
-                        branch_name, last_commit_hash
-                    ) and self.vm.git_manager.checkout_branch(branch_name):
-                        self.vm.state["current_plan"] = updated_plan
-                        self.vm.recalculate_variable_refs()
-                        self.vm.save_state()
-                        new_commit_hash = self.vm.git_manager.commit_changes(
-                            StepType.PLAN_UPDATE,
-                            str(self.vm.state["program_counter"]),
-                            explanation,
-                            {"updated_plan": updated_plan},
-                            {},
-                        )
-                        if new_commit_hash:
-                            last_commit_hash = new_commit_hash
-                            logger.info(
-                                f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
-                            )
-                        else:
-                            logger.error("Failed to commit updated plan")
-                            break
-                    else:
-                        logger.error(
-                            f"Failed to create or checkout branch '{branch_name}'"
-                        )
-                        break
+                new_commit_hash = self.update_plan(last_commit_hash, suggestion)
+                if not new_commit_hash:
+                    raise ValueError("Failed to update plan")
+                last_commit_hash = new_commit_hash
 
                 try:
                     execution_result = self.vm.step()
@@ -141,16 +156,14 @@ class Task:
                     logger.error(error_msg, exc_info=True)
                     raise e
 
-                if execution_result.get("success") is not True:
+                if execution_result.get(
+                    "success"
+                ) is not True or not execution_result.get("commit_hash"):
                     raise ValueError(
                         f"Execution result is not successful:{execution_result.get('error')}"
                     )
 
-                commit_hash = execution_result.get("commit_hash")
-                if not commit_hash:
-                    raise ValueError("Failed to commit changes")
-
-                last_commit_hash = commit_hash
+                last_commit_hash = execution_result.get("commit_hash")
                 steps_executed += 1
 
                 if self.vm.state.get("goal_completed"):
@@ -166,12 +179,12 @@ class Task:
                 "success": True,
                 "steps_executed": steps_executed,
                 "current_branch": self.vm.git_manager.get_current_branch(),
-                "last_commit_hash": last_commit_hash,
             }
         except Exception as e:
-            logger.error(
-                f"Failed to run task {self.task_orm.id}: {str(e)}", exc_info=True
-            )
+            self.task_orm.status = "failed"
+            self.task_orm.logs = f"Failed to update task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
+            logger.error(self.task_orm.logs, exc_info=True)
+            self.save()
             raise e
 
     def optimize_step(
@@ -179,7 +192,6 @@ class Task:
     ) -> Dict[str, Any]:
         try:
             self.vm.set_state(commit_hash)
-            last_commit_hash = commit_hash
             prompt = get_step_update_prompt(
                 self.vm,
                 seq_no,
@@ -237,48 +249,16 @@ class Task:
             else:
                 raise ValueError(f"Failed to create or checkout branch '{branch_name}'")
 
-            # Re-execute the plan from the updated step
-            while True:
-                execution_result = self.vm.step()
-                if execution_result.get("success") is not True:
-                    raise ValueError(
-                        f"Execution result is not successful:{execution_result.get('error')}"
-                    )
-                commit_hash = execution_result.get("commit_hash")
-                if not commit_hash:
-                    raise ValueError("Failed to commit changes")
-
-                last_commit_hash = commit_hash
-
-                if self.vm.state.get("goal_completed"):
-                    logger.info("Goal completed during plan execution.")
-                    break
-
-            self.task_orm.status = (
-                "completed" if self.vm.state.get("goal_completed") else "failed"
-            )
-            self.save()
-
-            if self.vm.state.get("goal_completed"):
-                final_answer = self.vm.get_variable("final_answer")
-                if final_answer:
-                    logger.info("Final answer: %s", final_answer)
-                else:
-                    logger.info("No result was generated.")
-            else:
-                logger.warning("Plan execution failed or did not complete.")
-                logger.error(self.vm.state.get("errors"))
-
+            self.execute()
             return {
                 "success": True,
                 "current_branch": self.vm.git_manager.get_current_branch(),
-                "last_commit_hash": last_commit_hash,
             }
         except Exception as e:
-            logger.error(
-                f"Failed to optimize step {seq_no} for task {self.task_orm.id}: {str(e)}",
-                exc_info=True,
-            )
+            self.task_orm.status = "failed"
+            self.task_orm.logs = f"Failed to optimize step {seq_no} for task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
+            logger.error(self.task_orm.logs, exc_info=True)
+            self.save()
             raise e
 
     def save(self):

@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from app.instructions import InstructionHandlers
 from app.services import load_state, save_state, StepType
 from app.services import GitManager, commit_message_wrapper, VariableManager
@@ -69,6 +69,12 @@ class PlanExecutionVM:
         """Set the goal for the VM and save the state."""
         self.state["goal"] = goal
         self.logger.info("Goal set: %s", goal)
+        self.save_state()
+
+    def set_plan(self, plan: List[Dict[str, Any]]) -> None:
+        """Set the plan for the VM and save the state."""
+        self.state["current_plan"] = plan
+        self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:

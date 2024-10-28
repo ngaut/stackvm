@@ -21,7 +21,6 @@ from app.services import (
     get_generate_plan_prompt,
 )
 from app.instructions import global_tools_hub
-from .plan_repo import commit_vm_changes
 
 logger = logging.getLogger(__name__)
 
