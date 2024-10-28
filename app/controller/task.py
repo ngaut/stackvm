@@ -12,6 +12,7 @@ from app.services import (
     PlanExecutionVM,
     get_step_update_prompt,
     parse_step,
+    StepType
 )
 
 from .engine import generate_updated_plan, should_update_plan, generate_plan
@@ -49,17 +50,17 @@ class Task:
                     logger.info("Goal completed during plan execution.")
                     break
 
-            if vm.state.get("goal_completed"):
-                final_answer = vm.get_variable("final_answer")
+            if self.vm.state.get("goal_completed"):
+                final_answer = self.vm.get_variable("final_answer")
                 if final_answer:
                     logger.info("final_answer: %s", final_answer)
                 else:
                     logger.info("No result was generated.")
             else:
                 logger.warning("Plan execution failed or did not complete.")
-                logger.error("%s", vm.state.get("errors"))
+                logger.error("%s", self.vm.state.get("errors"))
         else:
-            logger.error("Failed to generate plan.")
+            logger.error(f"Failed to generate plan {plan} for task {self.task_orm.id}.")
 
     def update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
@@ -95,7 +96,7 @@ class Task:
                         self.vm.recalculate_variable_refs()
                         self.vm.save_state()
 
-                        new_commit_hash = commiself.vm.git_manager.commit_changes(
+                        new_commit_hash = self.vm.git_manager.commit_changes(
                             StepType.PLAN_UPDATE,
                             str(self.vm.state["program_counter"]),
                             explanation,
