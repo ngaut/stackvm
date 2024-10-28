@@ -1,11 +1,12 @@
 import os
-from git import Repo, GitCommandError
+from git import Repo, GitCommandError, NULL_TREE
 import logging
 import json
 from typing import Dict, Any, Optional
-from .utils import StepType
+from .utils import StepType, parse_commit_message
 
 logger = logging.getLogger(__name__)
+
 
 class GitManager:
     def __init__(self, repo_path):
@@ -76,7 +77,7 @@ class GitManager:
             logger.error(f"Error committing changes: {str(e)}")
             return None
 
-    def get_current_commit(self, commit_hash:str):
+    def get_current_commit(self, commit_hash: str):
         return self.repo.commit(commit_hash)
 
     def list_branches(self):
@@ -97,7 +98,7 @@ class GitManager:
         except GitCommandError as e:
             logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
             return False
-        
+
     def delete_branch(self, branch_name):
         self.repo.git.branch("-D", branch_name)
 
@@ -148,11 +149,31 @@ class GitManager:
 
     def get_commit(self, commit_hash: str):
         return self.repo.commit(commit_hash)
-    
+
     def get_code_diff(self, commit_hash: str):
         commit = self.repo.commit(commit_hash)
         if commit.parents:
             parent = commit.parents[0]
             return self.repo.git.diff(parent, commit, "--unified=3")
         else:
-            return self.repo.git.show(commit, "--pretty=format:", "--no-commit-id", "-p")
+            return self.repo.git.show(
+                commit, "--pretty=format:", "--no-commit-id", "-p"
+            )
+
+    def get_commit_detail(self, commit_hash: str):
+        commit = self.get_commit(commit_hash)
+
+        if commit.parents:
+            diff = commit.diff(commit.parents[0])
+        else:
+            diff = commit.diff(NULL_TREE)
+
+        seq_no, _, _, _ = parse_commit_message(commit.message)
+        return {
+            "hash": commit.hexsha,
+            "author": commit.author.name,
+            "date": commit.committed_datetime.isoformat(),
+            "message": commit.message,
+            "seq_no": seq_no,
+            "files_changed": [item.a_path for item in diff],
+        }

@@ -1,6 +1,8 @@
 import logging
 import json
+import os
 import uuid
+import shutil
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
@@ -14,6 +16,7 @@ from app.services import (
     get_step_update_prompt,
     parse_step,
     StepType,
+    parse_commit_message,
 )
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
@@ -39,11 +42,39 @@ class Task:
     def repo_path(self):
         """Return the repository path of the task."""
         return self.task_orm.repo_path
-    
+
     @property
     def git_manager(self):
         """Return the repository of the task."""
         return self.vm.git_manager
+
+    def get_commit_details(
+        self, branch_name: Optional[str] = None, commit_hash: Optional[str] = None
+    ):
+        commits = []
+        if commit_hash:
+            commit = self.git_manager.get_commit(commit_hash)
+            commits = [commit]
+        elif branch_name:
+            commits = self.git_manager.get_commits(branch_name)
+
+        vm_states = []
+        for commit in commits:
+            commit_time = datetime.fromtimestamp(commit.committed_date)
+            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+
+            vm_state = self.git_manager.load_commit_state(commit.hexsha)
+            vm_states.append(
+                {
+                    "time": commit_time.isoformat(),
+                    "title": title,
+                    "details": details,
+                    "commit_hash": commit.hexsha,
+                    "seq_no": seq_no,
+                    "vm_state": vm_state,
+                    "commit_type": commit_type,
+                }
+            )
 
     def generate_plan(self):
         """Generate a plan for the task."""
@@ -287,6 +318,48 @@ class Task:
                 "Failed to delete task %s: %s", self.task_orm.id, str(e), exc_info=True
             )
             raise e
+
+    def backup(self, target_directory: str) -> bool:
+        """
+        Save the current plan's project directory to the specified target directory.
+
+        :param repo_name: Name of the repository to save.
+        :param target_directory: Path to the target directory where the plan will be saved.
+        :return: True if save is successful, False otherwise.
+        """
+        if not os.path.exists(self.repo_path):
+            logger.error(
+                f"Source repository '{self.id}' does not exist at {self.repo_path}."
+            )
+            return False
+
+        if not os.path.exists(target_directory):
+            try:
+                os.makedirs(target_directory)
+                self.logger.info(f"Created target directory at {target_directory}.")
+            except Exception as e:
+                logger.error(
+                    f"Failed to create target directory {target_directory}: {str(e)}"
+                )
+                return False
+
+        destination_path = os.path.join(target_directory, self.repo_path)
+        try:
+            if os.path.exists(destination_path):
+                self.logger.info(
+                    f"Destination path '{destination_path}' already exists. Removing it."
+                )
+                shutil.rmtree(destination_path)
+            shutil.copytree(self.repo_path, destination_path)
+            logger.info(
+                f"Successfully saved task({self.id}) from '{ self.repo_path}' to '{destination_path}'."
+            )
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"Failed to save task({self.id}) from '{ self.repo_path}' to '{destination_path}': {str(e)}"
+            )
+            return False
 
 
 class TaskService:

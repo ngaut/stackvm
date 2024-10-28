@@ -35,6 +35,7 @@ plan_manager = PlanManager()
 
 ts = TaskService()
 
+
 def log_and_return_error(message, error_type, status_code):
     if error_type == "warning":
         current_app.logger.warning("%s", message)
@@ -54,30 +55,11 @@ def index():
 def get_vm_data():
     branch = request.args.get("branch", "main")
     task_id = request.args.get("task_id")
-
     task = ts.get_task(task_id)
     if not task:
         return jsonify([]), 200
 
-    commits = task.git_manager.get_commits(branch)
-
-    vm_states = []
-    for commit in commits:
-        commit_time = datetime.fromtimestamp(commit.committed_date)
-        seq_no, title, details, commit_type = parse_commit_message(commit.message)
-
-        vm_state = task.git_manager.load_commit_state(commit.hexsha)
-        vm_states.append(
-            {
-                "time": commit_time.isoformat(),
-                "title": title,
-                "details": details,
-                "commit_hash": commit.hexsha,
-                "seq_no": seq_no,
-                "vm_state": vm_state,
-                "commit_type": commit_type,
-            }
-        )
+    vm_states = task.get_commit_details(branch)
 
     return jsonify(vm_states)
 
@@ -89,17 +71,17 @@ def get_vm_state(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        vm_state = task.git_manager.load_commit_state(commit_hash)
-        if vm_state is None:
+        vm_states = task.get_commit_details(commit_hash=commit_hash)
+        if vm_states is None or len(vm_states) != 1:
             return log_and_return_error(
-                f"VM state not found for commit {commit_hash} for repo {task.repo_path}",
+                f"VM state not found for commit {commit_hash} for task {task_id}: {vm_states}",
                 "warning",
                 404,
             )
-        return jsonify(vm_state)
+        return jsonify(vm_states[0])
     except Exception as e:
         return log_and_return_error(
-            f"Unexpected error fetching VM state for commit {commit_hash} for repo {task.repo_path}: {str(e)}",
+            f"Unexpected error fetching VM state for commit {commit_hash} for task {task_id}: {str(e)}",
             "error",
             500,
         )
@@ -129,23 +111,8 @@ def commit_details(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        commit = task.git_manager.get_commit(commit_hash)
-
-        if commit.parents:
-            diff = commit.diff(commit.parents[0])
-        else:
-            diff = commit.diff(NULL_TREE)
-
-        seq_no, _, _, _ = parse_commit_message(commit.message)
-        details = {
-            "hash": commit.hexsha,
-            "author": commit.author.name,
-            "date": commit.committed_datetime.isoformat(),
-            "message": commit.message,
-            "seq_no": seq_no,
-            "files_changed": [item.a_path for item in diff],
-        }
-        return jsonify(details)
+        detail = task.git_manager.get_commit_detail(commit_hash)
+        return jsonify(detail)
     except Exception as e:
         return log_and_return_error(
             f"Error fetching commit details for {commit_hash} in repository '{task.repo_path}': {str(e)}",
@@ -178,7 +145,9 @@ def execute_vm():
         result = task.auto_update(commit_hash, suggestion=suggestion, steps=steps)
         return jsonify(result), 200
     except Exception as e:
-        current_app.logger.error(f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True)
+        current_app.logger.error(
+            f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True
+        )
         return log_and_return_error("Failed to execute VM.", "error", 500)
 
 
@@ -204,7 +173,10 @@ def optimize_step():
         result = task.optimize_step(commit_hash, seq_no, suggestion)
         return jsonify(result), 200
     except Exception as e:
-        current_app.logger.error(f"Failed to optimize step {seq_no} for task {task_id}: {str(e)}", exc_info=True)
+        current_app.logger.error(
+            f"Failed to optimize step {seq_no} for task {task_id}: {str(e)}",
+            exc_info=True,
+        )
         return log_and_return_error("Failed to optimize step.", "error", 500)
 
 
@@ -215,15 +187,15 @@ def vm_state_details(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        vm_state = task.git_manager.load_commit_state(commit_hash)
-        if vm_state is None:
+        details = task.get_commit_details(commit_hash=commit_hash)
+
+        if details is None or len(details) != 1:
             return log_and_return_error(
-                f"vm_state.json not found for commit: {commit_hash} in repository '{task.repo_path}'",
+                f"Task Detail not found for commit {commit_hash} for task {task_id}: {details}",
                 "warning",
                 404,
             )
-
-        variables = vm_state.get("variables", {})
+        variables = details[0]["vm_state"].get("variables", {})
 
         return jsonify({"variables": variables})
     except git.exc.BadName:
@@ -253,7 +225,9 @@ def get_branches(task_id):
     try:
         task = ts.get_task(task_id)
         if not task:
-            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
 
         branches = task.git_manager.list_branches()
         branch_data = [
@@ -326,7 +300,9 @@ def delete_branch_route(task_id, branch_name):
     try:
         if branch_name == task.git_manager.get_current_branch():
             available_branches = [
-                b.name for b in task.git_manager.list_branches() if b.name != branch_name
+                b.name
+                for b in task.git_manager.list_branches()
+                if b.name != branch_name
             ]
             if not available_branches:
                 return log_and_return_error(
@@ -336,9 +312,7 @@ def delete_branch_route(task_id, branch_name):
                 )
 
             switch_to = (
-                "main"
-                if "main" in available_branches
-                else available_branches[0]
+                "main" if "main" in available_branches else available_branches[0]
             )
             task.git_manager.checkout_branch(switch_to)
             current_app.logger.info(
@@ -357,6 +331,7 @@ def delete_branch_route(task_id, branch_name):
         return log_and_return_error(
             f"Error deleting branch {branch_name}: {str(e)}", "error", 400
         )
+
 
 @api_blueprint.route("/save_plan", methods=["POST"])
 def save_plan():
@@ -378,15 +353,10 @@ def save_plan():
     try:
         task = ts.get_task(task_id)
         if not task:
-            return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
-        repo = get_repo(task.repo_path)
-        if not repo:
             return log_and_return_error(
-                f"Repository '{task.repo_path}' not found for task {task_id}", "error", 404
+                f"Task with ID {task_id} not found.", "error", 404
             )
-
-        success = plan_manager.save_current_plan(repo, target_directory)
-
+        success = task.backup(target_directory)
         if success:
             return (
                 jsonify(
@@ -421,9 +391,7 @@ def stream_execute_vm():
     goal = data.get("goal")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
-    repo_path = os.path.join(
-        GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S")
-    )
+    repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
 
     def event_stream():
         protocol = StreamingProtocol()
@@ -438,7 +406,7 @@ def stream_execute_vm():
                 error_message = "Failed to generate plan."
                 current_app.logger.error(error_message)
                 yield protocol.send_error(error_message)
-                yield protocol.send_finish_message('error')
+                yield protocol.send_finish_message("error")
                 return
 
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
@@ -446,7 +414,7 @@ def stream_execute_vm():
             # Start executing steps
             while True:
                 step = task.vm.get_current_step()
-                if step['type'] == "calling":
+                if step["type"] == "calling":
                     params = step.get("parameters", {})
                     tool_call_id = step["seq_no"]
                     tool_name = params.get("tool", "Unknown")
@@ -459,7 +427,7 @@ def stream_execute_vm():
                     current_app.logger.error(error_message)
                     yield protocol.send_state(task_id, task.vm.state)
                     yield protocol.send_error(error_message)
-                    yield protocol.send_finish_message('error')
+                    yield protocol.send_finish_message("error")
                     return
 
                 if not step_result.get("success", False):
@@ -469,7 +437,7 @@ def stream_execute_vm():
                     current_app.logger.error(f"Error executing step: {error}")
                     yield protocol.send_state(task_id, task.vm.state)
                     yield protocol.send_error(error)
-                    yield protocol.send_finish_message('error')
+                    yield protocol.send_finish_message("error")
                     return
 
                 step_type = step_result.get("step_type")
@@ -509,6 +477,10 @@ def stream_execute_vm():
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers={
-        "X-Content-Type-Options": "nosniff",
-    })
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
