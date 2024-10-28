@@ -110,7 +110,7 @@ class GitManager:
             self.logger.error(f"Error committing changes: {str(e)}")
             return None
 
-    def get_current_commit(self, hash:str):
+    def get_current_commit(self, commit_hash:str):
         return self.repo.commit(commit_hash)
 
     def list_branches(self):

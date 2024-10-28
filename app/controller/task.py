@@ -14,7 +14,8 @@ from app.services import (
     parse_step,
     StepType
 )
-
+from app.instructions import global_tools_hub
+from app.config.settings import VM_SPEC_CONTENT
 from .engine import generate_updated_plan, should_update_plan, generate_plan
 
 
@@ -38,7 +39,7 @@ class Task:
 
             while True:
                 execution_result = self.vm.step()
-                if execution_result.get("success") != True:
+                if execution_result.get("success") is not True:
                     raise ValueError(
                         f"Execution result is not successful:{execution_result.get('error')}"
                     )
@@ -185,7 +186,7 @@ class Task:
                 f"Updating step: {updated_step}, program_counter: {self.vm.state['program_counter']}"
             )
 
-            current_commit = self.vm.git_manage.git_manget_commit(commit_hash)
+            current_commit = self.vm.git_manager.get_current_commit(commit_hash)
             if current_commit.parents:
                 previous_commit_hash = current_commit.parents[0].hexsha
             else:
@@ -197,8 +198,8 @@ class Task:
             if self.vm.git_manager.create_branch_from_commit(
                 branch_name, previous_commit_hash
             ) and self.vm.git_manager.checkout_branch(branch_name):
-                self.vm.state["current_plan"][step_index] = updated_step
-                self.vm.state["program_counter"] = step_index
+                self.vm.state["current_plan"][seq_no] = updated_step
+                self.vm.state["program_counter"] = seq_no
                 self.vm.recalculate_variable_refs()
                 self.vm.save_state()
 
@@ -259,7 +260,7 @@ class Task:
             }
         except Exception as e:
             logger.error(
-                f"Failed to optimize step {step_index} for task {self.task_orm.id}: {str(e)}",
+                f"Failed to optimize step {seq_no} for task {self.task_orm.id}: {str(e)}",
                 exc_info=True,
             )
             raise e
@@ -271,10 +272,10 @@ class Task:
             session.commit()
             session.refresh(self.task_orm)
             session.close()
-            logger.info(f"Saved task {self.task_orm.id} to the database.")
+            logger.info("Saved task %s to the database.", self.task_orm.id)
         except Exception as e:
             logger.error(
-                f"Failed to save task {self.task_orm.id}: {str(e)}", exc_info=True
+                "Failed to save task %s: %s", self.task_orm.id, str(e), exc_info=True
             )
             raise e
 
@@ -284,11 +285,10 @@ class Task:
             session.delete(self.task_orm)
             session.commit()
             session.close()
-            self.repo.delete_branch(self.task_orm.branch_name)
-            logger.info(f"Deleted task {self.task_orm.id} and associated Git branch.")
+            logger.info("Deleted task %s and associated Git branch.", self.task_orm.id)
         except Exception as e:
             logger.error(
-                f"Failed to delete task {self.task_orm.id}: {str(e)}", exc_info=True
+                "Failed to delete task %s: %s", self.task_orm.id, str(e), exc_info=True
             )
             raise e
 
@@ -345,48 +345,10 @@ class TaskService:
             task = self.get_task(task_id)
             if task:
                 task.delete()
-                logger.info(f"Deleted task {task_id}")
+                logger.info("Deleted task %s", task_id)
                 return True
             return False
         except Exception as e:
             logger.error(f"Failed to delete task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def update_task_plan(
-        self,
-        task_id: int,
-        commit_hash: str,
-        suggestion: Optional[str] = None,
-        steps: int = 20,
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            task = self.get_task(task_id)
-            if task:
-                result = task.update(
-                    commit_hash=commit_hash, steps=steps, suggestion=suggestion
-                )
-                logger.info(f"Ran task {task_id} with result: {result}")
-                return result
-            return None
-        except Exception as e:
-            logger.error(f"Failed to run task {task_id}: {str(e)}", exc_info=True)
-            raise e
-
-    def optimize_task_step(
-        self, task_id: int, commit_hash: str, step_no: int, suggestion: str
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            task = self.get_task(task_id)
-            if task:
-                result = task.optimize_step(commit_hash, step_no, suggestion)
-                logger.info(
-                    f"Optimized step {step_index} for task {task_id} with result: {result}"
-                )
-                return result
-            return None
-        except Exception as e:
-            logger.error(
-                f"Failed to optimize step {step_index} for task {task_id}: {str(e)}",
-                exc_info=True,
-            )
-            raise e
