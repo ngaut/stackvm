@@ -76,6 +76,8 @@ class Task:
                 }
             )
 
+        return vm_states
+
     def generate_plan(self):
         """Generate a plan for the task."""
         plan = generate_plan(self.vm.llm_interface, self.task_orm.goal)
