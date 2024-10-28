@@ -31,6 +31,7 @@ class PlanExecutionVM:
         self.llm_interface = llm_interface
         self.repo_path = repo_path
         self.git_manager = GitManager(self.repo_path)
+        self.set_state(self.git_manager.get_latest_commit_hash())
 
         os.chdir(self.repo_path)
 

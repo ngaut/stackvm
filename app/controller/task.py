@@ -256,9 +256,9 @@ class Task:
             self.vm.set_state(previous_commit_hash)
             branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            if self.vm.git_manager.create_branch_from_commit(
+            if self.git_manager.create_branch_from_commit(
                 branch_name, previous_commit_hash
-            ) and self.vm.git_manager.checkout_branch(branch_name):
+            ) and self.git_manager.checkout_branch(branch_name):
                 self.vm.state["current_plan"][seq_no] = updated_step
                 self.vm.state["program_counter"] = seq_no
                 self.vm.recalculate_variable_refs()
@@ -273,7 +273,6 @@ class Task:
                 )
 
                 if new_commit_hash:
-                    last_commit_hash = new_commit_hash
                     logger.info(
                         f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
                     )
@@ -286,6 +285,7 @@ class Task:
             return {
                 "success": True,
                 "current_branch": self.vm.git_manager.get_current_branch(),
+                "latest_commit_hash": self.vm.git_manager.get_latest_commit_hash(),
             }
         except Exception as e:
             self.task_orm.status = "failed"
@@ -429,7 +429,9 @@ class TaskService:
         try:
             session: Session = SessionLocal()
             tasks = session.query(TaskORM).all()
+            # filter out tasks that are not found
             session.close()
+            tasks = [task for task in tasks if os.path.exists(task.repo_path)]
             return tasks
         except Exception as e:
             logger.error(f"Failed to list tasks: {str(e)}", exc_info=True)

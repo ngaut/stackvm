@@ -93,9 +93,17 @@ class GitManager:
 
     def checkout_branch(self, branch_name):
         try:
+            # Check if the branch exists
+            if branch_name not in self.repo.branches:
+                logger.error(f"Branch {branch_name} does not exist.")
+                return False
+
+            # Attempt to checkout the branch
             self.repo.git.checkout(branch_name)
+            logger.info(f"Checked out branch {branch_name}.")
             return True
         except GitCommandError as e:
+            # Log specific error details
             logger.error(f"Failed to checkout branch {branch_name}: {str(e)}")
             return False
 
@@ -104,6 +112,10 @@ class GitManager:
 
     def get_current_branch(self):
         return self.repo.active_branch.name
+
+    def get_latest_commit_hash(self):
+        """Retrieve the latest commit hash of the current branch."""
+        return self.repo.head.commit.hexsha
 
     def create_branch_from_commit(self, branch_name, commit_hash=None):
         try:
