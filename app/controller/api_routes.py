@@ -514,10 +514,12 @@ def stream_execute_vm():
     repo_path = os.path.join(
         GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S")
     )
-    task = ts.create_task(goal, repo_path)
 
-    def event_stream(task_id, vm):
+    def event_stream():
         protocol = StreamingProtocol()
+        task = ts.create_task(goal, repo_path)
+        task_id = task.id
+        vm = task.vm
         try:
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
             vm.set_goal(goal)
@@ -600,6 +602,6 @@ def stream_execute_vm():
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
 
-    return Response(stream_with_context(event_stream(task.id(), task.vm)), mimetype="text/event-stream", headers={
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream", headers={
         "X-Content-Type-Options": "nosniff",
     })
