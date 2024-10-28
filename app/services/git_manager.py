@@ -171,21 +171,3 @@ class GitManager:
             return self.repo.git.show(
                 commit, "--pretty=format:", "--no-commit-id", "-p"
             )
-
-    def get_commit_detail(self, commit_hash: str):
-        commit = self.get_commit(commit_hash)
-
-        if commit.parents:
-            diff = commit.diff(commit.parents[0])
-        else:
-            diff = commit.diff(NULL_TREE)
-
-        seq_no, _, _, _ = parse_commit_message(commit.message)
-        return {
-            "hash": commit.hexsha,
-            "author": commit.author.name,
-            "date": commit.committed_datetime.isoformat(),
-            "message": commit.message,
-            "seq_no": seq_no,
-            "files_changed": [item.a_path for item in diff],
-        }

@@ -46,34 +46,34 @@ def index():
     return render_template("index.html")
 
 
-@api_blueprint.route("/vm_data")
-def get_vm_data():
+@api_blueprint.route("/execution_details")
+def get_execution_details():
     branch = request.args.get("branch", "main")
     task_id = request.args.get("task_id")
     task = ts.get_task(task_id)
     if not task:
         return jsonify([]), 200
 
-    vm_states = task.get_commit_details(branch)
+    vm_states = task.get_execution_details(branch)
 
     return jsonify(vm_states)
 
 
-@api_blueprint.route("/vm_state/<task_id>/<commit_hash>")
-def get_vm_state(task_id, commit_hash):
+@api_blueprint.route("/execution_details/<task_id>/<commit_hash>")
+def get_execution_detail(task_id, commit_hash):
     task = ts.get_task(task_id)
     if not task:
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        vm_states = task.get_commit_details(commit_hash=commit_hash)
+        vm_states = task.get_execution_details(commit_hash=commit_hash)
         if vm_states is None or len(vm_states) != 1:
             return log_and_return_error(
                 f"VM state not found for commit {commit_hash} for task {task_id}: {vm_states}",
                 "warning",
                 404,
             )
-        return jsonify(vm_states[0]["vm_state"])
+        return jsonify(vm_states[0])
     except Exception as e:
         return log_and_return_error(
             f"Unexpected error fetching VM state for commit {commit_hash} for task {task_id}: {str(e)}",
@@ -94,23 +94,6 @@ def code_diff(task_id, commit_hash):
     except Exception as e:
         return log_and_return_error(
             f"Error generating diff for commit {commit_hash} in repository '{task.repo_path}': {str(e)}",
-            "error",
-            404,
-        )
-
-
-@api_blueprint.route("/commit_details/<task_id>/<commit_hash>")
-def commit_details(task_id, commit_hash):
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
-
-    try:
-        detail = task.git_manager.get_commit_detail(commit_hash)
-        return jsonify(detail)
-    except Exception as e:
-        return log_and_return_error(
-            f"Error fetching commit details for {commit_hash} in repository '{task.repo_path}': {str(e)}",
             "error",
             404,
         )
@@ -173,36 +156,6 @@ def optimize_step():
             exc_info=True,
         )
         return log_and_return_error("Failed to optimize step.", "error", 500)
-
-
-@api_blueprint.route("/vm_state_details/<task_id>/<commit_hash>")
-def vm_state_details(task_id, commit_hash):
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
-
-    try:
-        details = task.get_commit_details(commit_hash=commit_hash)
-
-        if details is None or len(details) != 1:
-            return log_and_return_error(
-                f"Task Detail not found for commit {commit_hash} for task {task_id}: {details}",
-                "warning",
-                404,
-            )
-        variables = details[0]["vm_state"].get("variables", {})
-
-        return jsonify({"variables": variables})
-    except git.exc.BadName:
-        return log_and_return_error(
-            f"Invalid commit hash: {commit_hash} in repository '{task.repo_path}'",
-            "error",
-            404,
-        )
-    except Exception as e:
-        return log_and_return_error(
-            f"Unexpected error: {str(e)} in repository '{task.repo_path}'", "error", 500
-        )
 
 
 @api_blueprint.route("/get_tasks")

@@ -48,7 +48,7 @@ class Task:
         """Return the repository of the task."""
         return self.vm.git_manager
 
-    def get_commit_details(
+    def get_execution_details(
         self, branch_name: Optional[str] = None, commit_hash: Optional[str] = None
     ):
         commits = []
@@ -73,6 +73,7 @@ class Task:
                     "seq_no": seq_no,
                     "vm_state": vm_state,
                     "commit_type": commit_type,
+                    "message": commit.message,
                 }
             )
 

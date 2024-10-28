@@ -96,7 +96,7 @@ async function setBranch() {
         currentBranch = branchName;
         showNotification(data.message, 'success');
         highlightCurrentBranch();
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branchName)}&task_id=${encodeURIComponent(currentTaskId)}`);
+        const branchData = await fetchWithErrorHandling(`/execution_details?branch=${encodeURIComponent(branchName)}&task_id=${encodeURIComponent(currentTaskId)}`);
         updateStepList(branchData);
         if (branchData.length > 0) {
             showCommitDetailsAndHighlight(branchData[0].commit_hash);
@@ -112,7 +112,7 @@ async function setBranch() {
 async function updateChart(branches) {
     const branchesData = await Promise.all(branches.map(async branch => {
         try {
-            const data = await fetchWithErrorHandling(`/vm_data?branch=${branch}&task_id=${encodeURIComponent(currentTaskId)}`);
+            const data = await fetchWithErrorHandling(`/execution_details?branch=${branch}&task_id=${encodeURIComponent(currentTaskId)}`);
             return data.length > 0 ? data : null;
         } catch (error) {
             console.warn(`Failed to fetch data for branch ${branch}:`, error);
@@ -234,7 +234,7 @@ async function updateChart(branches) {
                 currentBranch = branch;
                 document.getElementById('branchDropdown').value = branch;
                 try {
-                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&task_id=${encodeURIComponent(currentTaskId)}`);
+                    const branchData = await fetchWithErrorHandling(`/execution_details?branch=${encodeURIComponent(branch)}&task_id=${encodeURIComponent(currentTaskId)}`);
                     if (branchData.length === 0) {
                         showNotification(`No VM states found for branch: ${branch}`, 'warning');
                         updateStepList([]);
@@ -359,18 +359,16 @@ async function showCommitDetailsAndHighlight(commitHash) {
     highlightStep(commitHash);
     
     try {
-        const [commitDetails, vmState, codeDiff, vmStateDetails] = await Promise.all([
-            fetchWithErrorHandling(`/commit_details/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
+        const [vmState, codeDiff] = await Promise.all([
+            fetchWithErrorHandling(`/execution_details/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
             fetchWithErrorHandling(`/code_diff/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state_details/${encodeURIComponent(currentTaskId)}/${encodeURIComponent(commitHash)}`)
         ]);
 
-        updateCommitDetails(commitDetails);
-        updateVMState(vmState);
+        updateCommitDetails(vmState);
+        updateVMState(vmState.vm_state);
         updateCodeDiff(codeDiff);
-        updateVMStateDetails(vmStateDetails, commitHash);
-        updateVMVariables(vmStateDetails, vmState)
+        // updateVMStateDetails(vmStateDetails, commitHash);
+        updateVMVariables(vmState.vm_state)
 
         hljs.highlightAll();
     } catch (error) {
@@ -384,16 +382,10 @@ function updateCommitDetails(commitDetails) {
     document.getElementById('commitDetails').innerHTML = `
         <h2>Commit Details</h2>
         <p><strong>Branch:</strong> ${currentBranch}</p>
-        <p><strong>Hash:</strong> ${commitDetails.hash}</p>
-        <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
+        <p><strong>Hash:</strong> ${commitDetails.commit_hash}</p>
+        <p><strong>Date:</strong> ${moment(commitDetails.time).format('YYYY-MM-DD HH:mm:ss')}</p>
         <p><strong>Message:</strong> ${commitDetails.message}</p>
         <p><strong>Commit Type:</strong> ${commitDetails.commit_type}</p>
-        <p><strong>Input Parameters:</strong></p>
-        <pre><code class="json">${JSON.stringify(commitDetails.input_parameters, null, 2)}</code></pre>
-        <p><strong>Output Variables:</strong></p>
-        <pre><code class="json">${JSON.stringify(commitDetails.output_variables, null, 2)}</code></pre>
-        <p><strong>Files changed:</strong></p>
-        <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
     `;
 }
 
@@ -548,7 +540,7 @@ async function updateUIAfterExecution(newBranch, lastCommitHash) {
     highlightCurrentBranch();
     
     try {
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(newBranch)}&task_id=${encodeURIComponent(currentTaskId)}`);
+        const branchData = await fetchWithErrorHandling(`/execution_details?branch=${encodeURIComponent(newBranch)}&task_id=${encodeURIComponent(currentTaskId)}`);
         
         if (branchData.length === 0) {
             showNotification(`No VM states found for branch: ${newBranch}`, 'warning');
@@ -847,15 +839,15 @@ document.addEventListener('DOMContentLoaded', () => {
 loadTasks();
 window.addEventListener('resize', () => { if (chart) chart.resize(); });
 
-function updateVMVariables(vmVariablesData, vmState) {
+function updateVMVariables(vmState) {
     const vmVariablesElement = document.getElementById('vmVariables');
-    if (vmVariablesData && vmVariablesData.variables) {
+    if (vmState && vmState.variables) {
         vmVariablesElement.innerHTML = `
             <h2>VM Variables</h2>
-            <pre><code class="json">${JSON.stringify(vmVariablesData.variables, null, 2)}</code></pre>
+            <pre><code class="json">${JSON.stringify(vmState.variables, null, 2)}</code></pre>
         `;
 
-        const finalAnswer = vmVariablesData.variables.final_answer;
+        const finalAnswer = vmState.variables.final_answer;
         console.log('Final Answer:', finalAnswer);
 
         const goal = vmState ? vmState.goal : undefined;
