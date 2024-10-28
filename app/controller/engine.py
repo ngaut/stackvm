@@ -88,34 +88,3 @@ def should_update_plan(vm: PlanExecutionVM, suggestion: str):
         logger.info("LLM suggests keeping the current plan: %s", explanation)
 
     return should_update, explanation, key_factors
-
-
-def run_vm_with_goal(vm: PlanExecutionVM, goal: str):
-    vm.set_goal(goal)
-    plan = generate_plan(vm.llm_interface, goal)
-    if plan:
-        logger.info("Generated Plan:")
-        vm.state["current_plan"] = plan
-
-        while True:
-            step_result = vm.step()
-            commit_vm_changes(vm)
-            if not step_result.get("success", False):
-                logger.error("Failed to execute step, result: %s", step_result)
-                break
-
-            if vm.state.get("goal_completed"):
-                logger.info("Goal completed during plan execution.")
-                break
-
-        if vm.state.get("goal_completed"):
-            final_answer = vm.get_variable("final_answer")
-            if final_answer:
-                logger.info("final_answer: %s", final_answer)
-            else:
-                logger.info("No result was generated.")
-        else:
-            logger.warning("Plan execution failed or did not complete.")
-            logger.error("%s", vm.state.get("errors"))
-    else:
-        logger.error("Failed to generate plan.")

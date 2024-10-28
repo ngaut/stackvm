@@ -2,19 +2,23 @@ import logging
 import json
 from datetime import datetime
 from typing import Any, Dict, Optional
-
 from sqlalchemy.orm import Session
+
+from app.database import SessionLocal
+from app.models import Task as TaskORM
+from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
     LLMInterface,
-    GitManager,
     PlanExecutionVM,
-    commit_message_wrapper,
     get_step_update_prompt,
     parse_step,
 )
-from app.config.settings import LLM_PROVIDER, LLM_MODEL
+
+from .engine import generate_updated_plan, should_update_plan, generate_plan
+
 
 logger = logging.getLogger(__name__)
+
 
 class Task:
     def __init__(self, task_orm: TaskORM, llm_interface: LLMInterface):
@@ -24,6 +28,39 @@ class Task:
     def id(self):
         return self.task_orm.id
 
+    def run(self):
+        self.vm.set_goal(self.task_orm.goal)
+        plan = generate_plan(self.vm.llm_interface, self.task_orm.goal)
+        if plan:
+            logger.info("Generated Plan:")
+            self.vm.state["current_plan"] = plan
+
+            while True:
+                execution_result = self.vm.step()
+                if execution_result.get("success") != True:
+                    raise ValueError(
+                        f"Execution result is not successful:{step_result.get('error')}"
+                    )
+                commit_hash = step_result.get("commit_hash")
+                if not commit_hash:
+                    raise ValueError("Failed to commit changes")
+
+                if self.vm.state.get("goal_completed"):
+                    logger.info("Goal completed during plan execution.")
+                    break
+
+            if vm.state.get("goal_completed"):
+                final_answer = vm.get_variable("final_answer")
+                if final_answer:
+                    logger.info("final_answer: %s", final_answer)
+                else:
+                    logger.info("No result was generated.")
+            else:
+                logger.warning("Plan execution failed or did not complete.")
+                logger.error("%s", vm.state.get("errors"))
+        else:
+            logger.error("Failed to generate plan.")
+
     def update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
     ) -> Dict[str, Any]:
@@ -32,7 +69,7 @@ class Task:
             steps_executed = 0
             last_commit_hash = commit_hash
 
-            current_app.logger.info(
+            logger.info(
                 f"Starting VM execution for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
             )
 
@@ -87,7 +124,9 @@ class Task:
                     raise e
 
                 if execution_result.get("success") != True:
-                    raise ValueError(f"Execution result is not successful:{execution_result.get('error')}")
+                    raise ValueError(
+                        f"Execution result is not successful:{execution_result.get('error')}"
+                    )
 
                 commit_hash = execution_result.get("commit_hash")
                 if not commit_hash:
@@ -184,7 +223,9 @@ class Task:
             while True:
                 execution_result = self.vm.step()
                 if execution_result.get("success") != True:
-                    raise ValueError(f"Execution result is not successful:{execution_result.get('error')}")
+                    raise ValueError(
+                        f"Execution result is not successful:{execution_result.get('error')}"
+                    )
                 commit_hash = execution_result.get("commit_hash")
                 if not commit_hash:
                     raise ValueError("Failed to commit changes")
@@ -310,13 +351,19 @@ class TaskService:
             logger.error(f"Failed to delete task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def run_task(
-        self, task_id: int, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20,
+    def update_task_plan(
+        self,
+        task_id: int,
+        commit_hash: str,
+        suggestion: Optional[str] = None,
+        steps: int = 20,
     ) -> Optional[Dict[str, Any]]:
         try:
             task = self.get_task(task_id)
             if task:
-                result = task.run(commit_hash=commit_hash, steps=steps, suggestion=suggestion)
+                result = task.update(
+                    commit_hash=commit_hash, steps=steps, suggestion=suggestion
+                )
                 logger.info(f"Ran task {task_id} with result: {result}")
                 return result
             return None
