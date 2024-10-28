@@ -39,9 +39,9 @@ class Task:
                 execution_result = self.vm.step()
                 if execution_result.get("success") != True:
                     raise ValueError(
-                        f"Execution result is not successful:{step_result.get('error')}"
+                        f"Execution result is not successful:{execution_result.get('error')}"
                     )
-                commit_hash = step_result.get("commit_hash")
+                commit_hash = execution_result.get("commit_hash")
                 if not commit_hash:
                     raise ValueError("Failed to commit changes")
 
