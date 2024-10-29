@@ -59,7 +59,7 @@ To switch back to OpenAI:
 - `app/controller/plan_repo.py`: Handles Git repository management and commit operations.
 - `app/services/prompts.py`: Contains functions to generate prompts for updating VM execution steps.
 - `app/services/utils.py`: Utility functions for state management and commit message parsing.
-- `app/services/git_manager.py`: Manages Git repository initialization and operations.
+- `app/services/branch_manager.py`: Manages Git repository initialization and operations.
 - `app/services/llm_interface.py`: Interface for interacting with the OpenAI language model.
 - `app/services/variable_manager.py`: Manages variable interpolation and reference within the VM.
 - `app/tools/instruction_handlers.py`: Handles instruction execution and API interactions for knowledge graph searches.

@@ -102,7 +102,7 @@ if __name__ == "__main__":
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         ts = TaskService()
         task = ts.create_task(args.goal, repo_path)
-        task.run()
+        task.execute()
         logger.info("VM execution completed")
     elif args.server:
         logger.info("Starting visualization server...")

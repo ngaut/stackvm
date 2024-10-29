@@ -44,40 +44,35 @@ class Task:
         return self.task_orm.repo_path
 
     @property
-    def git_manager(self):
+    def branch_manager(self):
         """Return the repository of the task."""
-        return self.vm.git_manager
+        return self.vm.branch_manager
+
+    def get_current_branch(self):
+        return self.branch_manager.get_current_branch()
+
+    def get_branches(self):
+        return self.branch_manager.list_branches()
+
+    def set_branch(self, branch_name: str):
+        self.branch_manager.checkout_branch(branch_name)
+
+    def delete_branch(self, branch_name: str):
+        self.branch_manager.delete_branch(branch_name)
 
     def get_execution_details(
         self, branch_name: Optional[str] = None, commit_hash: Optional[str] = None
     ):
-        commits = []
         if commit_hash:
-            commit = self.git_manager.get_commit(commit_hash)
-            commits = [commit]
-        elif branch_name:
-            commits = self.git_manager.get_commits(branch_name)
+            return [self.branch_manager.get_commit(commit_hash)]
 
-        vm_states = []
-        for commit in commits:
-            commit_time = datetime.fromtimestamp(commit.committed_date)
-            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+        if not branch_name:
+            raise ValueError("Branch name or commit hash is required.")
 
-            vm_state = self.git_manager.load_commit_state(commit.hexsha)
-            vm_states.append(
-                {
-                    "time": commit_time.isoformat(),
-                    "title": title,
-                    "details": details,
-                    "commit_hash": commit.hexsha,
-                    "seq_no": seq_no,
-                    "vm_state": vm_state,
-                    "commit_type": commit_type,
-                    "message": commit.message,
-                }
-            )
+        return self.branch_manager.get_commits(branch_name)
 
-        return vm_states
+    def get_state_diff(self, commit_hash: str):
+        return self.branch_manager.get_state_diff(commit_hash)
 
     def generate_plan(self):
         """Generate a plan for the task."""
@@ -86,7 +81,7 @@ class Task:
             self.vm.set_plan(plan)
         return plan
 
-    def execute(self):
+    def _run(self):
         """Execute the plan for the task."""
         while True:
             execution_result = self.vm.step()
@@ -114,14 +109,14 @@ class Task:
                 self.vm.state.get("errors"),
             )
 
-    def run(self):
+    def execute(self):
         try:
             plan = self.generate_plan()
             if not plan:
                 raise ValueError("Failed to generate plan")
 
             logger.info("Generated Plan:%s", json.dumps(plan, indent=2))
-            self.execute()
+            self._run()
         except Exception as e:
             self.task_orm.status = "failed"
             self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
@@ -140,18 +135,20 @@ class Task:
             )
             branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            if self.vm.git_manager.create_branch_from_commit(
+            if self.vm.branch_manager.checkout_branch_from_commit(
                 branch_name, commit_hash
-            ) and self.vm.git_manager.checkout_branch(branch_name):
+            ) and self.vm.branch_manager.checkout_branch(branch_name):
                 self.vm.set_plan(updated_plan)
                 self.vm.recalculate_variable_refs()
                 self.vm.save_state()
-                new_commit_hash = self.vm.git_manager.commit_changes(
-                    StepType.PLAN_UPDATE,
-                    str(self.vm.state["program_counter"]),
-                    explanation,
-                    {"updated_plan": updated_plan},
-                    {},
+                new_commit_hash = self.vm.branch_manager.commit_changes(
+                    commit_info={
+                        "type": StepType.PLAN_UPDATE.value,
+                        "seq_no": str(self.vm.state["program_counter"]),
+                        "description": explanation,
+                        "input_parameters": {"updated_plan": updated_plan},
+                        "output_variables": {},
+                    }
                 )
                 if new_commit_hash:
                     logger.info(
@@ -212,7 +209,7 @@ class Task:
             return {
                 "success": True,
                 "steps_executed": steps_executed,
-                "current_branch": self.vm.git_manager.get_current_branch(),
+                "current_branch": self.vm.branch_manager.get_current_branch(),
             }
         except Exception as e:
             self.task_orm.status = "failed"
@@ -248,29 +245,27 @@ class Task:
                 f"Updating step: {updated_step}, program_counter: {self.vm.state['program_counter']}"
             )
 
-            current_commit = self.vm.git_manager.get_current_commit(commit_hash)
-            if current_commit.parents:
-                previous_commit_hash = current_commit.parents[0].hexsha
-            else:
-                raise ValueError("Cannot update the first commit")
+            previous_commit_hash = self.branch_manager.get_parent_commit_hash(commit_hash)
 
             self.vm.set_state(previous_commit_hash)
             branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            if self.git_manager.create_branch_from_commit(
+            if self.branch_manager.checkout_branch_from_commit(
                 branch_name, previous_commit_hash
-            ) and self.git_manager.checkout_branch(branch_name):
+            ) and self.branch_manager.checkout_branch(branch_name):
                 self.vm.state["current_plan"][seq_no] = updated_step
                 self.vm.state["program_counter"] = seq_no
                 self.vm.recalculate_variable_refs()
                 self.vm.save_state()
 
-                new_commit_hash = self.vm.git_manager.commit_changes(
-                    StepType.STEP_OPTIMIZATION,
-                    str(self.vm.state["program_counter"]),
-                    suggestion,
-                    {"updated_step": updated_step},
-                    {},
+                new_commit_hash = self.vm.branch_manager.commit_changes(
+                    commit_info={
+                        "type": StepType.STEP_OPTIMIZATION.value,
+                        "seq_no": str(self.vm.state["program_counter"]),
+                        "description": suggestion,
+                        "input_parameters": {"updated_step": updated_step},
+                        "output_variables": {},
+                    }
                 )
 
                 if new_commit_hash:
@@ -282,11 +277,11 @@ class Task:
             else:
                 raise ValueError(f"Failed to create or checkout branch '{branch_name}'")
 
-            self.execute()
+            self._run()
             return {
                 "success": True,
-                "current_branch": self.vm.git_manager.get_current_branch(),
-                "latest_commit_hash": self.vm.git_manager.get_latest_commit_hash(),
+                "current_branch": self.vm.branch_manager.get_current_branch(),
+                "latest_commit_hash": self.vm.branch_manager.get_current_commit_hash(),
             }
         except Exception as e:
             self.task_orm.status = "failed"
@@ -294,6 +289,7 @@ class Task:
             logger.error(self.task_orm.logs, exc_info=True)
             self.save()
             raise e
+
 
     def save(self):
         try:
@@ -308,62 +304,6 @@ class Task:
                 "Failed to save task %s: %s", self.task_orm.id, str(e), exc_info=True
             )
             raise e
-
-    def delete(self):
-        try:
-            session: Session = SessionLocal()
-            session.delete(self.task_orm)
-            session.commit()
-            session.close()
-            logger.info("Deleted task %s and associated Git branch.", self.task_orm.id)
-        except Exception as e:
-            logger.error(
-                "Failed to delete task %s: %s", self.task_orm.id, str(e), exc_info=True
-            )
-            raise e
-
-    def backup(self, target_directory: str) -> bool:
-        """
-        Save the current plan's project directory to the specified target directory.
-
-        :param repo_name: Name of the repository to save.
-        :param target_directory: Path to the target directory where the plan will be saved.
-        :return: True if save is successful, False otherwise.
-        """
-        if not os.path.exists(self.repo_path):
-            logger.error(
-                f"Source repository '{self.id}' does not exist at {self.repo_path}."
-            )
-            return False
-
-        if not os.path.exists(target_directory):
-            try:
-                os.makedirs(target_directory)
-                self.logger.info(f"Created target directory at {target_directory}.")
-            except Exception as e:
-                logger.error(
-                    f"Failed to create target directory {target_directory}: {str(e)}"
-                )
-                return False
-
-        destination_path = os.path.join(target_directory, self.repo_path)
-        try:
-            if os.path.exists(destination_path):
-                self.logger.info(
-                    f"Destination path '{destination_path}' already exists. Removing it."
-                )
-                shutil.rmtree(destination_path)
-            shutil.copytree(self.repo_path, destination_path)
-            logger.info(
-                f"Successfully saved task({self.id}) from '{ self.repo_path}' to '{destination_path}'."
-            )
-            return True
-        except Exception as e:
-            self.logger.error(
-                f"Failed to save task({self.id}) from '{ self.repo_path}' to '{destination_path}': {str(e)}"
-            )
-            return False
-
 
 class TaskService:
     def __init__(self):
@@ -418,7 +358,8 @@ class TaskService:
         try:
             task = self.get_task(task_id)
             if task:
-                task.delete()
+                task.status = "deleted"
+                task.save()
                 logger.info("Deleted task %s", task_id)
                 return True
             return False
@@ -432,8 +373,14 @@ class TaskService:
             tasks = session.query(TaskORM).all()
             # filter out tasks that are not found
             session.close()
-            tasks = [task for task in tasks if os.path.exists(task.repo_path)]
-            return tasks
+            vaild_tasks = []
+            for task in tasks:
+                if os.path.exists(task.repo_path):
+                    vaild_tasks.append(task)
+                else:
+                    self.delete_task(task.id)
+
+            return vaild_tasks
         except Exception as e:
             logger.error(f"Failed to list tasks: {str(e)}", exc_info=True)
             raise e

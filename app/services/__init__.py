@@ -1,4 +1,4 @@
-from .git_manager import GitManager
+from .branch_manager import GitManager, BranchManager
 from .llm_interface import LLMInterface
 from .utils import *
 from .variable_manager import VariableManager

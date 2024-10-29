@@ -4,7 +4,7 @@ import os
 import traceback
 from typing import Any, Dict, Optional, List
 from app.instructions import InstructionHandlers
-from app.services import load_state, save_state, StepType
+from app.services import StepType
 from app.services import GitManager, VariableManager
 
 # Constants
@@ -30,8 +30,8 @@ class PlanExecutionVM:
         self.logger = self._setup_logger()
         self.llm_interface = llm_interface
         self.repo_path = repo_path
-        self.git_manager = GitManager(self.repo_path)
-        self.set_state(self.git_manager.get_latest_commit_hash())
+        self.branch_manager = GitManager(self.repo_path)
+        self.set_state(self.branch_manager.get_current_commit_hash())
 
         os.chdir(self.repo_path)
 
@@ -221,10 +221,12 @@ class PlanExecutionVM:
                 self.garbage_collect()
 
             self.save_state()
-            commit_hash = self.git_manager.commit_changes(
-                StepType.STEP_EXECUTION,
-                str(step.get("seq_no", "Unknown")),
-                **step_result.get("execution_result", {}),
+            commit_hash = self.branch_manager.commit_changes(
+                commit_info={
+                    "type": StepType.STEP_EXECUTION.value,
+                    "seq_no": str(step.get("seq_no", "Unknown")),
+                    **step_result.get("execution_result", {}),
+                }
             )
 
             step_result["commit_hash"] = commit_hash
@@ -301,7 +303,7 @@ class PlanExecutionVM:
 
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
-        loaded_state = load_state(commit_hash, self.repo_path)
+        loaded_state = self.branch_manager.load_state(commit_hash)
         if loaded_state:
             self.state = loaded_state
             self.variable_manager.set_all_variables(
@@ -318,7 +320,7 @@ class PlanExecutionVM:
         state_data["variables_refs"] = (
             self.variable_manager.get_all_variables_reference_count()
         )
-        save_state(state_data, self.repo_path)
+        self.branch_manager.update_state(state_data)
 
     def find_step_index(self, seq_no: int) -> Optional[int]:
         """Find the index of a step with the given sequence number."""

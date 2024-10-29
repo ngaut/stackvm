@@ -46,10 +46,8 @@ def index():
     return render_template("index.html")
 
 
-@api_blueprint.route("/execution_details")
-def get_execution_details():
-    branch = request.args.get("branch", "main")
-    task_id = request.args.get("task_id")
+@api_blueprint.route("/execution_details/<task_id>/branch/<branch>")
+def get_execution_details(task_id, branch):
     task = ts.get_task(task_id)
     if not task:
         return jsonify([]), 200
@@ -59,7 +57,7 @@ def get_execution_details():
     return jsonify(vm_states)
 
 
-@api_blueprint.route("/execution_details/<task_id>/<commit_hash>")
+@api_blueprint.route("/api/task/<task_id>/commit/<commit_hash>")
 def get_execution_detail(task_id, commit_hash):
     task = ts.get_task(task_id)
     if not task:
@@ -81,7 +79,6 @@ def get_execution_detail(task_id, commit_hash):
             500,
         )
 
-
 @api_blueprint.route("/code_diff/<task_id>/<commit_hash>")
 def code_diff(task_id, commit_hash):
     task = ts.get_task(task_id)
@@ -89,7 +86,7 @@ def code_diff(task_id, commit_hash):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        diff = task.git_manager.get_code_diff(commit_hash)
+        diff = task.get_state_diff(commit_hash)
         return jsonify({"diff": diff})
     except Exception as e:
         return log_and_return_error(
@@ -99,13 +96,13 @@ def code_diff(task_id, commit_hash):
         )
 
 
-@api_blueprint.route("/execute_vm", methods=["POST"])
-def execute_vm():
+@api_blueprint.route("/auto_update", methods=["POST"])
+def auto_update():
     """
-    API endpoint to execute VM operations.
+    API endpoint to auto update the plan and execute the VM.
     """
     data = request.json
-    current_app.logger.info(f"Received execute_vm request with data: {data}")
+    current_app.logger.info(f"Received auto_update request with data: {data}")
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
@@ -177,19 +174,7 @@ def get_branches(task_id):
                 f"Task with ID {task_id} not found.", "error", 404
             )
 
-        branches = task.git_manager.list_branches()
-        branch_data = [
-            {
-                "name": branch.name,
-                "last_commit_date": branch.commit.committed_datetime.isoformat(),
-                "last_commit_message": branch.commit.message.split("\n")[0],
-                "is_active": branch.name == task.git_manager.get_current_branch(),
-            }
-            for branch in branches
-        ]
-        branch_data.sort(
-            key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
-        )
+        branch_data = task.get_branches()
         return jsonify(branch_data)
     except GitCommandError as e:
         return log_and_return_error(
@@ -216,7 +201,7 @@ def set_branch_route(task_id, branch_name):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        task.git_manager.checkout_branch(branch_name)
+        task.set_branch(branch_name)
         return jsonify(
             {
                 "success": True,
@@ -246,87 +231,18 @@ def delete_branch_route(task_id, branch_name):
         return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
     try:
-        if branch_name == task.git_manager.get_current_branch():
-            available_branches = [
-                b.name
-                for b in task.git_manager.list_branches()
-                if b.name != branch_name
-            ]
-            if not available_branches:
-                return log_and_return_error(
-                    "Cannot delete the only branch in the repository",
-                    "error",
-                    400,
-                )
-
-            switch_to = (
-                "main" if "main" in available_branches else available_branches[0]
-            )
-            task.git_manager.checkout_branch(switch_to)
-            current_app.logger.info(
-                f"Switched to branch {switch_to} before deleting {branch_name}"
-            )
-
-        task.git_manager.delete_branch(branch_name)
+        task.delete_branch(branch_name)
         return jsonify(
             {
                 "success": True,
                 "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
-                "new_active_branch": task.git_manager.get_current_branch(),
+                "new_active_branch": task.get_current_branch(),
             }
         )
     except GitCommandError as e:
         return log_and_return_error(
             f"Error deleting branch {branch_name}: {str(e)}", "error", 400
         )
-
-
-@api_blueprint.route("/save_plan", methods=["POST"])
-def save_plan():
-    """
-    API endpoint to save the current plan's project directory to a specified folder.
-    Expects JSON payload with 'task_id' and 'target_directory'.
-    """
-    data = request.json
-    current_app.logger.info(f"Received save_plan request with data: {data}")
-
-    task_id = data.get("task_id")
-    target_directory = data.get("target_directory")
-
-    if not all([task_id, target_directory]):
-        return log_and_return_error(
-            "Missing 'task_id' or 'target_directory' parameters.", "error", 400
-        )
-
-    try:
-        task = ts.get_task(task_id)
-        if not task:
-            return log_and_return_error(
-                f"Task with ID {task_id} not found.", "error", 404
-            )
-        success = task.backup(target_directory)
-        if success:
-            return (
-                jsonify(
-                    {
-                        "success": True,
-                        "message": f"Plan '{task.repo_path}' saved successfully to '{target_directory}'.",
-                    }
-                ),
-                200,
-            )
-        else:
-            return log_and_return_error(
-                f"Failed to save plan '{task.repo_path}' to '{target_directory}'.",
-                "error",
-                500,
-            )
-    except TimeoutError as e:
-        return log_and_return_error(str(e), "error", 500)
-    except Exception as e:
-        current_app.logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        return log_and_return_error("An unexpected error occurred.", "error", 500)
-
 
 @api_blueprint.route("/stream_execute_vm", methods=["POST"])
 def stream_execute_vm():

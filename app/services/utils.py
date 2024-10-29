@@ -70,31 +70,6 @@ def parse_step(step_response: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def load_state(commit_hash: str, repo_path: str) -> Optional[Dict[str, Any]]:
-    """Load the state from a file based on the specific commit point."""
-    try:
-        repo = git.Repo(repo_path)
-        state_content = repo.git.show(f"{commit_hash}:vm_state.json")
-        return json.loads(state_content)
-    except (git.exc.GitCommandError, json.JSONDecodeError) as e:
-        logger.error(f"Error loading state from commit {commit_hash}: {str(e)}")
-    except Exception as e:
-        logger.error(
-            "Unexpected error loading state from commit %s: %s", commit_hash, str(e)
-        )
-    return None
-
-
-def save_state(state: Dict[str, Any], repo_path: str) -> None:
-    """Save the state to a file in the repository."""
-    try:
-        state_file = os.path.join(repo_path, "vm_state.json")
-        with open(state_file, "w") as f:
-            json.dump(state, f, indent=2, default=str, sort_keys=True)
-    except Exception as e:
-        logger.error(f"Error saving state: {str(e)}")
-
-
 def parse_commit_message(message: str) -> tuple:
     """Parse a commit message and return its components."""
     seq_no = "Unknown"
