@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime
 from typing import Optional
 
-from app.controller.api_routes import api_blueprint
+from app.controller.api_routes import api_blueprint, main_blueprint
 from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL
 from app.services import LLMInterface
 from app.controller.task import TaskService
@@ -14,6 +14,7 @@ from app.instructions import global_tools_hub, tool
 # Initialize Flask app
 app = Flask(__name__)
 app.register_blueprint(api_blueprint)
+app.register_blueprint(main_blueprint)
 
 # Setup logging
 def setup_logging(app):

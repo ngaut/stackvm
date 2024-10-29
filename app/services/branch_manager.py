@@ -219,6 +219,7 @@ class GitManager(BranchManager):
                         "message": commit.message,
                     }
                 )
+            return vm_states
         except Exception as e:
             logger.error(
                 "Error fetching commits for branch %s: %s",

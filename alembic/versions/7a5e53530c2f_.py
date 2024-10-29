@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 27aebe1c07ac
+Revision ID: 7a5e53530c2f
 Revises: 
-Create Date: 2024-10-28 12:15:48.775627
+Create Date: 2024-10-29 13:37:23.737309
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '27aebe1c07ac'
+revision: str = '7a5e53530c2f'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -23,9 +23,12 @@ def upgrade() -> None:
     op.create_table('tasks',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('goal', sa.Text(), nullable=False),
-    sa.Column('status', sa.Enum('pending', 'in_progress', 'completed', 'failed', name='task_status'), nullable=True),
+    sa.Column('status', sa.Enum('pending', 'in_progress', 'completed', 'failed', 'deleted', name='task_status'), nullable=True),
     sa.Column('repo_path', sa.String(length=255), nullable=False),
     sa.Column('logs', sa.Text(), nullable=True),
+    sa.Column('tenant_id', sa.String(length=36), nullable=True),
+    sa.Column('project_id', sa.String(length=36), nullable=True),
+    sa.Column('best_plan', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id')
