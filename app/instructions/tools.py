@@ -37,11 +37,10 @@ class ToolsHub:
 
     def get_tools_description(self) -> str:
         """Get the description of all registered tools."""
-        description = "# Tools calling\n\nBelow are the supported tools for calling instruction.\n\n"
+        description = "\n\nBelow are the supported tools for calling instruction.\n\n"
         for tool_name, docstring in self.tools_docstrings.items():
-            description += f"## {tool_name}\n\n{docstring}\n\n"
+            description += f"### {tool_name}\n\n{docstring}\n\n"
         return description
-
 
     def load_tools(self, tools_package: str):
         """
@@ -86,8 +85,10 @@ def tool(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
+
     # We'll register the tool later in __init__.py
     wrapper.is_tool = True
     return wrapper
+
 
 # You can add other tool-related functions or classes here if needed

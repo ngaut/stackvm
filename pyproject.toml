@@ -12,7 +12,10 @@ flask = "^3.0.3"
 openai = "^1.51.2"
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
+alembic = "^1.13.3"
+pymysql = "^1.1.1"
 readerwriterlock = "^1.0.9"
+sqlalchemy = "^2.0.36"
 
 
 [build-system]

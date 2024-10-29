@@ -2,3 +2,4 @@
 *.env
 *_dev.ipynb
 .idea
+.vscode/

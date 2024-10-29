@@ -1,4 +1,4 @@
-let chart, currentBranch = 'main', currentRepo = '', currentHighlightedCommit = null;
+let chart, currentBranch = 'main', currentTaskId = '', currentHighlightedCommit = null;
 
 // Utility functions
 function showLoading(show = true) {
@@ -31,72 +31,72 @@ async function fetchWithErrorHandling(url, options = {}) {
     }
 }
 
-// Repository and Branch Management
-async function loadDirectories() {
-    const data = await fetchWithErrorHandling('/get_directories');
-    const select = document.getElementById('directorySelect');
-    select.innerHTML = data.map(dir => `<option value="${dir}">${dir}</option>`).join('');
+// Task and Branch Management
+async function loadTasks() {
+    const data = await fetchWithErrorHandling('/api/tasks');
+    const select = document.getElementById('taskSelect');
+    select.innerHTML = data.map(taskId => `<option value="${taskId}">${taskId}</option>`).join('');
     select.style.display = 'block';
-    document.getElementById('savePlanButton').style.display = 'none'; // Hide initially
 
-    // Automatically select plan.
+    // Automatically select task.
     if (data.length > 0) {
-        const selectedPlanId = (new URLSearchParams(location.search)).get('plan');``
-        const selectedIndex = data.indexOf(String(selectedPlanId));
+        const selectedTaskId = (new URLSearchParams(location.search)).get('task_id');
+        const selectedIndex = data.indexOf(String(selectedTaskId));
         if (selectedIndex !== -1) {
-            // Select the plan if specified in the query string.
+            // Select the task if specified in the query string.
             select.value = data[selectedIndex];
-            await loadRepoData(data[selectedIndex]);
+            await loadTaskData(data[selectedIndex]);
         } else {
-            // Select the first directory by default.
+            // Select the first task by default.
             select.value = data[0];
-            await loadRepoData(data[0]);
+            await loadTaskData(data[0]);
         }
     }
 
-    // Add event listener to load data when a new repo is selected
+    // Add event listener to load data when a new task is selected
     select.addEventListener('change', async (event) => {
-        const selectedRepo = event.target.value;
-        await loadRepoData(selectedRepo);
+        const selectedTaskId = event.target.value;
+        await loadTaskData(selectedTaskId);
     });
 }
 
-async function loadRepoData(repoName) {
-    currentRepo = repoName;
+async function loadTaskData(taskId) {
+    currentTaskId = taskId;
     await loadBranches();
     clearDetails();
-    document.getElementById('savePlanButton').style.display = 'inline-block'; // Show Save Plan Button
 }
 
-async function setRepo() {
-    const selectedRepo = document.getElementById('directorySelect').value;
-    const data = await fetchWithErrorHandling(`/set_repo/${selectedRepo}?repo=${encodeURIComponent(selectedRepo)}`);
+async function setTask() {
+    const selectedTaskId = document.getElementById('taskSelect').value;
+    const data = await fetchWithErrorHandling(`/set_task/${selectedTaskId}?task_id=${encodeURIComponent(selectedTaskId)}`);
     if (data.success) {
         showNotification(data.message, 'success');
-        currentRepo = selectedRepo;
+        currentTaskId = selectedTaskId;
         await loadBranches();
         clearDetails();
-        // Show Save Plan Button after setting repository
-        document.getElementById('savePlanButton').style.display = 'inline-block';
     } else {
         showNotification(data.message, 'danger');
     }
 }
 
 async function loadBranches() {
-    const data = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
+    const data = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches`);
     updateBranchSelector(data);
     return updateChart(data.map(branch => branch.name));
 }
 
 async function setBranch() {
     const branchName = document.getElementById('branchDropdown').value;
-    const data = await fetchWithErrorHandling(`/set_branch/${encodeURIComponent(currentRepo)}/${encodeURIComponent(branchName)}`);
+    const data = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/set_branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branch_name: branchName })
+    });
     if (data.success) {
         currentBranch = branchName;
         showNotification(data.message, 'success');
         highlightCurrentBranch();
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branchName)}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches/${encodeURIComponent(branchName)}/details`);
         updateStepList(branchData);
         if (branchData.length > 0) {
             showCommitDetailsAndHighlight(branchData[0].commit_hash);
@@ -112,7 +112,7 @@ async function setBranch() {
 async function updateChart(branches) {
     const branchesData = await Promise.all(branches.map(async branch => {
         try {
-            const data = await fetchWithErrorHandling(`/vm_data?branch=${branch}&repo=${encodeURIComponent(currentRepo)}`);
+            const data = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches/${encodeURIComponent(branch)}/details`);
             return data.length > 0 ? data : null;
         } catch (error) {
             console.warn(`Failed to fetch data for branch ${branch}:`, error);
@@ -234,7 +234,7 @@ async function updateChart(branches) {
                 currentBranch = branch;
                 document.getElementById('branchDropdown').value = branch;
                 try {
-                    const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(branch)}&repo=${encodeURIComponent(currentRepo)}`);
+                    const branchData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches/${encodeURIComponent(branch)}/details`);
                     if (branchData.length === 0) {
                         showNotification(`No VM states found for branch: ${branch}`, 'warning');
                         updateStepList([]);
@@ -359,18 +359,15 @@ async function showCommitDetailsAndHighlight(commitHash) {
     highlightStep(commitHash);
     
     try {
-        const [commitDetails, vmState, codeDiff, vmStateDetails] = await Promise.all([
-            fetchWithErrorHandling(`/commit_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/code_diff/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`),
-            fetchWithErrorHandling(`/vm_state_details/${encodeURIComponent(currentRepo)}/${encodeURIComponent(commitHash)}`)
+        const [vmState, codeDiff] = await Promise.all([
+            fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/commits/${encodeURIComponent(commitHash)}/detail`),
+            fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/commits/${encodeURIComponent(commitHash)}/diff`)
         ]);
 
-        updateCommitDetails(commitDetails);
-        updateVMState(vmState);
+        updateCommitDetails(vmState);
+        updateVMState(vmState.vm_state);
         updateCodeDiff(codeDiff);
-        updateVMStateDetails(vmStateDetails, commitHash);
-        updateVMVariables(vmStateDetails, vmState)
+        updateVMVariables(vmState.vm_state);
 
         hljs.highlightAll();
     } catch (error) {
@@ -384,16 +381,10 @@ function updateCommitDetails(commitDetails) {
     document.getElementById('commitDetails').innerHTML = `
         <h2>Commit Details</h2>
         <p><strong>Branch:</strong> ${currentBranch}</p>
-        <p><strong>Hash:</strong> ${commitDetails.hash}</p>
-        <p><strong>Date:</strong> ${moment(commitDetails.date).format('YYYY-MM-DD HH:mm:ss')}</p>
+        <p><strong>Hash:</strong> ${commitDetails.commit_hash}</p>
+        <p><strong>Date:</strong> ${moment(commitDetails.time).format('YYYY-MM-DD HH:mm:ss')}</p>
         <p><strong>Message:</strong> ${commitDetails.message}</p>
         <p><strong>Commit Type:</strong> ${commitDetails.commit_type}</p>
-        <p><strong>Input Parameters:</strong></p>
-        <pre><code class="json">${JSON.stringify(commitDetails.input_parameters, null, 2)}</code></pre>
-        <p><strong>Output Variables:</strong></p>
-        <pre><code class="json">${JSON.stringify(commitDetails.output_variables, null, 2)}</code></pre>
-        <p><strong>Files changed:</strong></p>
-        <ul>${commitDetails.files_changed.map(file => `<li>${file}</li>`).join('')}</ul>
     `;
 }
 
@@ -502,16 +493,14 @@ async function executeFromStep(commitHash, seqNo) {
         modal.appendChild(spinner);
 
         try {
-            showLoading(true);
-            const executeData = await fetchWithErrorHandling('/execute_vm', {
+            const executeData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/auto_update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    repo: currentRepo,
                     commit_hash: commitHash,
                     seq_no: seqNo,
-                    suggestion: suggestion // Include suggestion parameter
-                }),
+                    suggestion: suggestion
+                })
             });
 
             if (executeData.success) {
@@ -548,7 +537,7 @@ async function updateUIAfterExecution(newBranch, lastCommitHash) {
     highlightCurrentBranch();
     
     try {
-        const branchData = await fetchWithErrorHandling(`/vm_data?branch=${encodeURIComponent(newBranch)}&repo=${encodeURIComponent(currentRepo)}`);
+        const branchData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches/${encodeURIComponent(newBranch)}/details`);
         
         if (branchData.length === 0) {
             showNotification(`No VM states found for branch: ${newBranch}`, 'warning');
@@ -590,14 +579,13 @@ function updateBranchSelector(branches) {
 
 async function deleteBranch() {
     const branchName = document.getElementById('branchDropdown').value;
-    if (!confirm(`Are you sure you want to delete the branch "${branchName}"?`)) {
+    if (!confirm(`Are you sure you want to delete branch "${branchName}"?`)) {
         return;
     }
     
-    showLoading(true);
     try {
-        const data = await fetchWithErrorHandling(`/delete_branch/${branchName}?repo=${encodeURIComponent(currentRepo)}`, {
-            method: 'POST'
+        const data = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches/${encodeURIComponent(branchName)}`, {
+            method: 'DELETE'
         });
         
         if (data.success) {
@@ -608,13 +596,11 @@ async function deleteBranch() {
         }
     } catch (error) {
         showNotification(`Error deleting branch: ${error.message}`, 'danger');
-    } finally {
-        showLoading(false);
     }
 }
 
 async function updateBranchesAndChart() {
-    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentRepo)}`);
+    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentTaskId)}`);
     updateBranchSelector(branches);
     await updateChart(branches.map(branch => branch.name));
 }
@@ -677,35 +663,30 @@ async function optimizeStep(commitHash, seqNo) {
         spinner.style.margin = '10px auto';
         modal.appendChild(spinner);
 
-        const executeData = await fetchWithErrorHandling('/optimize_step', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                commit_hash: commitHash,
-                suggestion: suggestion,
-                seq_no: seqNo,
-                repo: currentRepo
-            })
-        });
+        try {
+            const executeData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/optimize_step`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    commit_hash: commitHash,
+                    suggestion: suggestion,
+                    seq_no: seqNo
+                })
+            });
 
-        // Remove the spinner
-        modal.removeChild(spinner);
-
-        // Re-enable the input and buttons
-        suggestionInput.disabled = false;
-        submitButton.disabled = false;
-        cancelButton.disabled = false;
-
-        if (executeData.success) {
-            await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
-            showNotification('Execution completed successfully', 'success');
-        } else {
-            showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+            if (executeData.success) {
+                await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                showNotification('Execution completed successfully', 'success');
+            } else {
+                showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
+            }
+        } catch (error) {
+            showNotification('An error occurred: ' + error.message, 'danger');
+        } finally {
+            document.body.removeChild(modal);
         }
-
-        document.body.removeChild(modal);
     };
     modal.appendChild(submitButton);
 
@@ -719,143 +700,19 @@ async function optimizeStep(commitHash, seqNo) {
     document.body.appendChild(modal);
 }
 
-// New Save Plan Functionality
-async function savePlan() {
-    // Create a modal dialog for user input
-    const modal = createModal('Save Plan', 'Enter the target directory to save the plan:', async () => {
-        const targetDirectory = document.getElementById('targetDirectoryInput').value.trim();
-        if (!targetDirectory) {
-            alert("Please enter a target directory.");
-            return;
-        }
-
-        // Disable buttons and input
-        document.getElementById('modalSubmitButton').disabled = true;
-        document.getElementById('modalCancelButton').disabled = true;
-        showLoading(true);
-
-        try {
-            const response = await fetch('/save_plan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    repo_name: currentRepo,
-                    target_directory: targetDirectory
-                }),
-            });
-
-            const result = await response.json();
-            if (response.ok && result.success) {
-                showNotification(result.message, 'success');
-            } else {
-                showNotification(result.message || 'Failed to save the plan.', 'danger');
-            }
-        } catch (error) {
-            console.error('Error saving plan:', error);
-            showNotification('An error occurred while saving the plan.', 'danger');
-        } finally {
-            showLoading(false);
-            document.body.removeChild(modal);
-        }
-    });
-
-    document.body.appendChild(modal);
-}
-
-// Utility function to create a modal
-function createModal(title, message, onSubmit) {
-    // Create overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-
-    // Create modal container
-    const modal = document.createElement('div');
-    modal.className = 'modal-container';
-
-    // Modal Header
-    const header = document.createElement('div');
-    header.className = 'modal-header';
-    const headerTitle = document.createElement('h5');
-    headerTitle.textContent = title;
-    header.appendChild(headerTitle);
-    modal.appendChild(header);
-
-    // Modal Body
-    const body = document.createElement('div');
-    body.className = 'modal-body';
-    const messagePara = document.createElement('p');
-    messagePara.textContent = message;
-    body.appendChild(messagePara);
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.id = 'targetDirectoryInput';
-    input.className = 'form-control';
-    input.placeholder = 'e.g., /path/to/save/plan';
-    body.appendChild(input);
-    modal.appendChild(body);
-
-    // Modal Footer
-    const footer = document.createElement('div');
-    footer.className = 'modal-footer';
-    const submitButton = document.createElement('button');
-    submitButton.textContent = 'Save';
-    submitButton.className = 'btn btn-primary';
-    submitButton.id = 'modalSubmitButton';
-    submitButton.onclick = onSubmit;
-    footer.appendChild(submitButton);
-
-    const cancelButton = document.createElement('button');
-    cancelButton.textContent = 'Cancel';
-    cancelButton.className = 'btn btn-secondary';
-    cancelButton.id = 'modalCancelButton';
-    cancelButton.onclick = () => document.body.removeChild(overlay);
-    footer.appendChild(cancelButton);
-
-    modal.appendChild(footer);
-    overlay.appendChild(modal);
-
-    // Style the modal (Alternatively, you can move these styles to your CSS file)
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.zIndex = '10000';
-
-    modal.style.backgroundColor = '#fff';
-    modal.style.padding = '20px';
-    modal.style.borderRadius = '8px';
-    modal.style.width = '400px';
-    modal.style.boxShadow = '0 5px 15px rgba(0,0,0,.5)';
-
-    return overlay;
-}
-
-// Ensure the Save Plan button is hidden initially (in case the repository is already set)
-document.addEventListener('DOMContentLoaded', () => {
-    if (!currentRepo) {
-        document.getElementById('savePlanButton').style.display = 'none';
-    }
-});
-
-// Existing loadDirectories call and other initializations
-loadDirectories();
+// Existing loadTasks call and other initializations
+loadTasks();
 window.addEventListener('resize', () => { if (chart) chart.resize(); });
 
-function updateVMVariables(vmVariablesData, vmState) {
+function updateVMVariables(vmState) {
     const vmVariablesElement = document.getElementById('vmVariables');
-    if (vmVariablesData && vmVariablesData.variables) {
+    if (vmState && vmState.variables) {
         vmVariablesElement.innerHTML = `
             <h2>VM Variables</h2>
-            <pre><code class="json">${JSON.stringify(vmVariablesData.variables, null, 2)}</code></pre>
+            <pre><code class="json">${JSON.stringify(vmState.variables, null, 2)}</code></pre>
         `;
 
-        const finalAnswer = vmVariablesData.variables.final_answer;
+        const finalAnswer = vmState.variables.final_answer;
         console.log('Final Answer:', finalAnswer);
 
         const goal = vmState ? vmState.goal : undefined;

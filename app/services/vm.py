@@ -2,10 +2,10 @@ import json
 import logging
 import os
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from app.instructions import InstructionHandlers
-from app.services import load_state, save_state, StepType
-from app.services import GitManager, commit_message_wrapper, VariableManager
+from app.services import StepType
+from app.services import GitManager, VariableManager
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
@@ -15,6 +15,7 @@ class PlanExecutionVM:
     """
     Virtual Machine for executing plans.
     """
+
     def __init__(self, repo_path: str, llm_interface: Any = None):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
@@ -29,7 +30,8 @@ class PlanExecutionVM:
         self.logger = self._setup_logger()
         self.llm_interface = llm_interface
         self.repo_path = repo_path
-        self.git_manager = GitManager(self.repo_path)
+        self.branch_manager = GitManager(self.repo_path)
+        self.set_state(self.branch_manager.get_current_commit_hash())
 
         os.chdir(self.repo_path)
 
@@ -71,6 +73,12 @@ class PlanExecutionVM:
         self.logger.info("Goal set: %s", goal)
         self.save_state()
 
+    def set_plan(self, plan: List[Dict[str, Any]]) -> None:
+        """Set the plan for the VM and save the state."""
+        self.state["current_plan"] = plan
+        # self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
+        self.save_state()
+
     def resolve_parameter(self, param: Any) -> Any:
         """Resolve a parameter, interpolating variables if it's a string."""
         vars = self.variable_manager.find_referenced_variables(param)
@@ -107,19 +115,22 @@ class PlanExecutionVM:
         success, output = handler(params)
         if success:
             self.save_state()
-            self._log_step_execution(step_type, params, seq_no, output)
+            execution_result = self._log_step_execution(
+                step_type, params, seq_no, output
+            )
             return {
                 "success": True,
                 "step_type": step_type,
                 "parameters": params,
                 "output": output,
                 "seq_no": seq_no,
+                "execution_result": execution_result,
             }
         else:
             self.logger.error(
                 "Failed to execute step %d: %s",
-                self.state['program_counter'],
-                step['type']
+                self.state["program_counter"],
+                step["type"],
             )
             self.state["errors"].append(
                 f"Failed to execute step {self.state['program_counter']}: {step['type']}"
@@ -137,7 +148,7 @@ class PlanExecutionVM:
         params: Dict[str, Any],
         seq_no: str,
         output_parameters: Dict[str, Any],
-    ) -> None:
+    ):
         """Log the execution of a step and prepare commit message."""
         if step_type == "calling":
             input_vars = params.get("tool_params", {})
@@ -155,13 +166,11 @@ class PlanExecutionVM:
             }
             self.logger.info("Output variables: %s", json.dumps(output_parameters))
 
-        commit_message_wrapper.set_commit_message(
-            StepType.STEP_EXECUTION,
-            str(seq_no),
-            description,
-            input_parameters,
-            output_parameters,
-        )
+        return {
+            "description": description,
+            "input_parameters": input_parameters,
+            "output_variables": output_parameters,
+        }
 
     @staticmethod
     def _preview_value(value: Any) -> str:
@@ -178,24 +187,24 @@ class PlanExecutionVM:
         if self.state["program_counter"] >= len(self.state["current_plan"]):
             self.logger.error(
                 "Program counter (%d) out of range for current plan (length: %d)",
-                self.state['program_counter'],
-                len(self.state['current_plan'])
+                self.state["program_counter"],
+                len(self.state["current_plan"]),
             )
             self.state["errors"].append(
                 f"Program counter out of range: {self.state['program_counter']}"
             )
             return {
                 "success": False,
-                "error": f"Program counter out of range: {self.state['program_counter']}"
+                "error": f"Program counter out of range: {self.state['program_counter']}",
             }
 
         step = self.state["current_plan"][self.state["program_counter"]]
         self.logger.info(
             "Executing step %d: %s, seq_no: %s, plan length: %d",
-            self.state['program_counter'],
-            step['type'],
-            step.get('seq_no', 'Unknown'),
-            len(self.state['current_plan'])
+            self.state["program_counter"],
+            step["type"],
+            step.get("seq_no", "Unknown"),
+            len(self.state["current_plan"]),
         )
 
         try:
@@ -212,20 +221,27 @@ class PlanExecutionVM:
                 self.garbage_collect()
 
             self.save_state()
+            commit_hash = self.branch_manager.commit_changes(
+                commit_info={
+                    "type": StepType.STEP_EXECUTION.value,
+                    "seq_no": str(step.get("seq_no", "Unknown")),
+                    **step_result.get("execution_result", {}),
+                }
+            )
+
+            step_result["commit_hash"] = commit_hash
             return step_result
         except Exception as e:
             traceback.print_exc()
             self.logger.error(
-                "Error executing step %d: %s",
-                self.state['program_counter'],
-                str(e)
+                "Error executing step %d: %s", self.state["program_counter"], str(e)
             )
             self.state["errors"].append(
                 f"Error in step {self.state['program_counter']}: {str(e)}"
             )
             return {
                 "success": False,
-                "error": f"Error in step {self.state['program_counter']}: {str(e)}"
+                "error": f"Error in step {self.state['program_counter']}: {str(e)}",
             }
 
     def set_variable(self, var_name: str, value: Any) -> None:
@@ -287,7 +303,7 @@ class PlanExecutionVM:
 
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
-        loaded_state = load_state(commit_hash, self.repo_path)
+        loaded_state = self.branch_manager.load_state(commit_hash)
         if loaded_state:
             self.state = loaded_state
             self.variable_manager.set_all_variables(
@@ -304,7 +320,7 @@ class PlanExecutionVM:
         state_data["variables_refs"] = (
             self.variable_manager.get_all_variables_reference_count()
         )
-        save_state(state_data, self.repo_path)
+        self.branch_manager.update_state(state_data)
 
     def find_step_index(self, seq_no: int) -> Optional[int]:
         """Find the index of a step with the given sequence number."""
@@ -318,5 +334,5 @@ class PlanExecutionVM:
     def get_all_variables(self) -> Dict[str, Any]:
         return self.variable_manager.get_all_variables()
 
-    def get_current_step(self) -> dict :
-        return self.state['current_plan'][self.state['program_counter']]
+    def get_current_step(self) -> dict:
+        return self.state["current_plan"][self.state["program_counter"]]

@@ -55,17 +55,23 @@ To switch back to OpenAI:
 
 - `app/config/settings.py`: Configuration settings, including environment variable loading and default paths.
 - `app/controller/api_routes.py`: Defines API routes for the Flask application, handling VM data retrieval and rendering the main interface.
-- `app/controller/engine.py`: Manages the generation and execution of plans using the language model.
-- `app/controller/plan_repo.py`: Handles Git repository management and commit operations.
+- `app/controller/plan.py`: Handles plan generation and updating based on suggestions.
+- `app/controller/task.py`: Manages task-related operations within the VM.
 - `app/services/prompts.py`: Contains functions to generate prompts for updating VM execution steps.
 - `app/services/utils.py`: Utility functions for state management and commit message parsing.
-- `app/services/git_manager.py`: Manages Git repository initialization and operations.
+- `app/services/branch_manager.py`: Manages Git repository initialization and operations.
 - `app/services/llm_interface.py`: Interface for interacting with the OpenAI language model.
-- `app/services/variable_manager.py`: Manages variable interpolation and reference within the VM.
-- `app/services/plan_manager.py`: Manages plan saving functionality.
+- `app/services/variable_manager.py`: Manages variable interpolation and references within the VM.
+- `app/services/vm.py`: Implements the `PlanExecutionVM` class for executing plans.
 - `app/tools/instruction_handlers.py`: Handles instruction execution and API interactions for knowledge graph searches.
-- `main.py`: Entry point for running the VM with a specified goal or starting the visualization server.
+- `app/tools/retrieve.py`: Implements retrieval logic using the TiDB AI API.
 - `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.
+- `plan_example.md`: Example plan demonstrating the instruction execution and plan structure.
+- `models/task.py`: Defines the `Task` model for managing tasks within the database.
+- `templates/index.html`: HTML template for the main interface.
+- `static/scripts.js`: JavaScript for front-end functionalities, including chart management and UI interactions.
+- `static/styles.css`: CSS styles for the web interface, ensuring a responsive and user-friendly design.
+
 
 ## Features
 
