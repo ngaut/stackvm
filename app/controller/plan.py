@@ -38,8 +38,6 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
     )
     plan_response = llm_interface.generate(prompt)
 
-    logger.info("Generating plan using LLM: %s", plan_response)
-
     if not plan_response:
         logger.error("LLM failed to generate a response: %s", plan_response)
         return []

@@ -62,8 +62,12 @@ Analyze the current VM execution state and update the plan.
 **MUST follow VM Specification**:
 {vm_spec_content}
 
-**AvailableTools**:
+## 8. Available Tools for `calling` instruction
 {tools_instruction_content}
+
+-------------------------------
+
+Now, let's update the plan.
 
 **Output**:
 Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification. The updated plan should effectively address any identified issues and continue execution towards the goal without introducing redundancy.
@@ -134,11 +138,15 @@ Goal: {goal}
 **MUST follow the Specification**:
 {vm_spec_content}
 
-**Available Tools for calling**:
+## 8. Available Tools for `calling` instruction
 {tools_instruction_content}
 
-**Plan Example**:
+## 9. Example Plan
 {plan_example_content}
+
+-------------------------------
+
+Now, let's generate the plan.
 
 1. **Analyze the Request**:
    - Determine the primary intent behind the goal.
@@ -214,13 +222,15 @@ Current VM Variables:
 Suggestion for Improvement:
 {suggestion}
 
-The VM specification is as follows:
+**MUST follow the Specification**:
 {vm_spec_content}
 
-The tools instruction is as follows:
+## 8. Available Tools for `calling` instruction
 {tools_instruction_content}
 
-**Instructions**:
+-------------------------------
+
+Now, let's update the step.
 1. Analyze the current step, the provided suggestion, and the current VM variables.
 2. Modify the step to incorporate the suggestion while ensuring it aligns with the overall goal and plan structure.
 3. Ensure the updated step is consistent with the VM's current state and does not introduce redundancy.

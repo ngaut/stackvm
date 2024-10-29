@@ -2,7 +2,6 @@ import logging
 import json
 import os
 import uuid
-import shutil
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
@@ -16,7 +15,6 @@ from app.services import (
     get_step_update_prompt,
     parse_step,
     StepType,
-    parse_commit_message,
 )
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
@@ -120,9 +118,8 @@ class Task:
         except Exception as e:
             self.task_orm.status = "failed"
             self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
-            logger.error(self.task_orm.logs, exc_info=True)
             self.save()
-            raise e
+            raise ValueError(self.task_orm.logs)
 
     def update_plan(self, commit_hash: str, suggestion: str):
         should_update, explanation, key_factors = should_update_plan(

@@ -8,7 +8,8 @@
 5. Variables and Dependencies
 6. Plan Structure
 7. Best Practices
-8. Example Plan
+8. Available Tools for calling instruction
+9. Example Plan
 
 ## 1. Overview of the VM
 The VM executes plans consisting of a sequence of instructions. Each instruction performs a specific operation and may interact with variables stored in a variable store. The VM supports conditional execution and can handle dependencies between instructions through variable assignments and references.
@@ -95,7 +96,7 @@ Each instruction in the plan is represented as a JSON object with the following 
 ### 3.3 calling
 - **Purpose**: Invokes a specific tool or function with the provided parameters.
 - **Parameters**: Defines the specifications required to call a tool.
-  - `tool_name`: The name of the tool to be called (e.g., "llm_generate", "retrieve_knowledge_graph", "vector_search").
+  - `tool_name`: The name of the tool to be called for `calling` instruction.
   - `tool_params`: An object containing key-value pairs that represent the arguments required by the specified tool.
     - Keys: Must match the argument names expected by the tool.
     - Values: Can be either a direct value or a variable reference.
@@ -128,7 +129,7 @@ Below is an example where the calling type is configured to use the `llm_generat
   "parameters": {
     "tool_name": "llm_generate",
     "tool_params": {
-      "prompt": "Analyze the sales data and provide summary and insights, response in json format including 'summary' and 'insights' fields",
+      "prompt": "Analyze the sales data and provide summary and insights, response in json format including keys ['summary', 'insights']",
       "context": "${sales_data}",
     },
     "output_vars": ["summary", "insights"]
@@ -228,7 +229,7 @@ Parameters can be either direct values or variable references. To reference a va
   "parameters": {
     "tool_name": "vector_search",
     "tool_params": {
-      "query": "What are the key features and improvements in TiDB version ${latest_tidb_version}?",
+      "query": "What are the key features and improvements in TiDB version ${latest_stable_tidb_version}?",
       "top_k": 3
     },
     "output_vars": ["tidb_key_features_and_improvements"]

@@ -76,7 +76,7 @@ class PlanExecutionVM:
     def set_plan(self, plan: List[Dict[str, Any]]) -> None:
         """Set the plan for the VM and save the state."""
         self.state["current_plan"] = plan
-        self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
+        # self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
