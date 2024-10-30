@@ -331,7 +331,7 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
-                yield protocol.send_state(task_id, task.vm.state)
+                yield protocol.send_state(task_id, seq_no, task.vm.state)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
