@@ -36,6 +36,7 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
         global_tools_hub.get_tools_description(),
         PLAN_EXAMPLE_CONTENT,
     )
+
     plan_response = llm_interface.generate(prompt)
 
     if not plan_response:

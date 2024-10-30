@@ -51,6 +51,7 @@ def llm_generate(
         - **Language Confirmation**: Append a sentence to confirm the desired language of the generated text:
             - *For English goals*: "Please ensure that the generated text uses English."
             - *For Chinese goals*: "请确保生成的文本使用中文。"
+            - *For Japanese goals*: "Please ensure that the generated text uses Japanese."
     - `context` (optional): Additional context for the LLM. Can be a direct string or a variable reference.
 
     Output: The output format (text or JSON) depends on your instructions.

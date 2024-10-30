@@ -55,10 +55,10 @@ def retrieve_knowledge_graph(query):
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error("Request to search_graph failed: %s", str(e))
-        return {"error": "Failed to perform search_graph request."}
+        return {"error": f"Failed to perform search_graph request: {str(e)}"}
     except ValueError:
-        logger.error("Invalid JSON response received from search_graph.")
-        return {"error": "Invalid response format."}
+        logger.error("Invalid JSON response received from search_graph: %s", str(e))
+        return {"error": f"Invalid response format: {str(e)}"}
 
 
 @tool
@@ -105,7 +105,7 @@ def vector_search(query, top_k=5):
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error("Request to retrieve_embedding failed: %s", str(e))
-        return {"error": "Failed to perform retrieve_embedding request."}
+        return {"error": f"Failed to perform retrieve_embedding request: {str(e)}"}
     except ValueError:
-        logger.error("Invalid JSON response received from retrieve_embedding.")
-        return {"error": "Invalid response format."}
+        logger.error("Invalid JSON response received from retrieve_embedding: %s", str(e))
+        return {"error": f"Invalid response format: {str(e)}"}
