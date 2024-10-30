@@ -160,7 +160,18 @@ def optimize_step(task_id):
 def get_tasks():
     try:
         tasks = ts.list_tasks()
-        task_ids = [task.id for task in tasks]
+        task_ids = [{
+            "id": task.id,
+            "goal": task.goal,
+            "status": task.status,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at,
+            "logs": task.logs,
+            "repo_path": task.repo_path,
+            "tenant_id": task.tenant_id,
+            "project_id": task.project_id,
+            "best_plan": task.best_plan
+        } for task in tasks]
         return jsonify(task_ids)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
