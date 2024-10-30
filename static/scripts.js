@@ -33,31 +33,47 @@ async function fetchWithErrorHandling(url, options = {}) {
 
 // Task and Branch Management
 async function loadTasks() {
-    const data = await fetchWithErrorHandling('/api/tasks');
-    const select = document.getElementById('taskSelect');
-    select.innerHTML = data.map(taskId => `<option value="${taskId}">${taskId}</option>`).join('');
-    select.style.display = 'block';
+    try {
+        const data = await fetchWithErrorHandling('/api/tasks');
+        const select = document.getElementById('taskSelect');
 
-    // Automatically select task.
-    if (data.length > 0) {
-        const selectedTaskId = (new URLSearchParams(location.search)).get('task_id');
-        const selectedIndex = data.indexOf(String(selectedTaskId));
-        if (selectedIndex !== -1) {
-            // Select the task if specified in the query string.
-            select.value = data[selectedIndex];
-            await loadTaskData(data[selectedIndex]);
+        // Populate the dropdown with task goals and task IDs
+        // Format: "Goal Description (Task ID)"
+        select.innerHTML = data.map(task => `<option value="${task.id}">${task.goal} (${task.id})</option>`).join('');
+        select.style.display = 'block';
+
+        // Automatically select task based on URL parameter or default to the first task
+        if (data.length > 0) {
+            const urlParams = new URLSearchParams(location.search);
+            const selectedTaskId = urlParams.get('task_id');
+            const selectedTaskExists = data.some(task => task.id === selectedTaskId);
+
+            if (selectedTaskId && selectedTaskExists) {
+                // Select the task if specified in the query string and exists
+                select.value = selectedTaskId;
+                await loadTaskData(selectedTaskId);
+            } else {
+                // Select the first task by default
+                select.value = data[0].id;
+                await loadTaskData(data[0].id);
+            }
         } else {
-            // Select the first task by default.
-            select.value = data[0];
-            await loadTaskData(data[0]);
+            showNotification('No tasks available.', 'warning');
+            clearDetails();
         }
-    }
 
-    // Add event listener to load data when a new task is selected
-    select.addEventListener('change', async (event) => {
-        const selectedTaskId = event.target.value;
-        await loadTaskData(selectedTaskId);
-    });
+        // Prevent duplicate listeners by removing existing ones before adding a new listener
+        select.removeEventListener('change', handleTaskChange);
+        select.addEventListener('change', handleTaskChange);
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+        showNotification('Failed to load tasks.', 'danger');
+    }
+}
+
+async function handleTaskChange(event) {
+    const selectedTaskId = event.target.value;
+    await loadTaskData(selectedTaskId);
 }
 
 async function loadTaskData(taskId) {
