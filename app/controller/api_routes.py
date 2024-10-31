@@ -298,8 +298,8 @@ def stream_execute_vm():
                 if step["type"] == "calling":
                     params = step.get("parameters", {})
                     tool_call_id = step["seq_no"]
-                    tool_name = params.get("tool", "Unknown")
-                    tool_args = params.get("params", {})
+                    tool_name = params.get("tool_name", "Unknown")
+                    tool_args = params.get("tool_params", {})
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
                 step_result = task.vm.step()
