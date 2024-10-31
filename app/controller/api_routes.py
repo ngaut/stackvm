@@ -19,6 +19,7 @@ from flask import (
     stream_with_context,
 )
 from app.config.settings import GIT_REPO_PATH
+from app.database import SessionLocal
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -43,60 +44,69 @@ def log_and_return_error(message, error_type, status_code):
 
 # Define a new blueprint for non-API routes
 main_blueprint = Blueprint("main", __name__)
+
+
 @main_blueprint.route("/")
 def index():
     return render_template("index.html")
 
 
-
 @api_blueprint.route("/tasks/<task_id>/branches/<branch>/details")
 def get_execution_details(task_id, branch):
-    task = ts.get_task(task_id)
-    if not task:
-        return jsonify([]), 200
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return jsonify([]), 200
 
-    vm_states = task.get_execution_details(branch)
+        vm_states = task.get_execution_details(branch)
 
-    return jsonify(vm_states)
+        return jsonify(vm_states)
 
 
 @api_blueprint.route("/tasks/<task_id>/commits/<commit_hash>/detail")
 def get_execution_detail(task_id, commit_hash):
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
-
-    try:
-        vm_states = task.get_execution_details(commit_hash=commit_hash)
-        if vm_states is None or len(vm_states) != 1:
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
             return log_and_return_error(
-                f"VM state not found for commit {commit_hash} for task {task_id}: {vm_states}",
-                "warning",
-                404,
+                f"Task with ID {task_id} not found.", "error", 404
             )
-        return jsonify(vm_states[0])
-    except Exception as e:
-        return log_and_return_error(
-            f"Unexpected error fetching VM state for commit {commit_hash} for task {task_id}: {str(e)}",
-            "error",
-            500,
-        )
+
+        try:
+            vm_states = task.get_execution_details(commit_hash=commit_hash)
+            if vm_states is None or len(vm_states) != 1:
+                return log_and_return_error(
+                    f"VM state not found for commit {commit_hash} for task {task_id}: {vm_states}",
+                    "warning",
+                    404,
+                )
+            return jsonify(vm_states[0])
+        except Exception as e:
+            return log_and_return_error(
+                f"Unexpected error fetching VM state for commit {commit_hash} for task {task_id}: {str(e)}",
+                "error",
+                500,
+            )
+
 
 @api_blueprint.route("/tasks/<task_id>/commits/<commit_hash>/diff")
 def code_diff(task_id, commit_hash):
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
 
-    try:
-        diff = task.get_state_diff(commit_hash)
-        return jsonify({"diff": diff})
-    except Exception as e:
-        return log_and_return_error(
-            f"Error generating diff for commit {commit_hash} in repository '{task.repo_path}': {str(e)}",
-            "error",
-            404,
-        )
+        try:
+            diff = task.get_state_diff(commit_hash)
+            return jsonify({"diff": diff})
+        except Exception as e:
+            return log_and_return_error(
+                f"Error generating diff for commit {commit_hash} in repository '{task.repo_path}': {str(e)}",
+                "error",
+                404,
+            )
 
 
 @api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
@@ -114,9 +124,12 @@ def auto_update(task_id):
     if not all([commit_hash, steps]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
 
     try:
         result = task.auto_update(commit_hash, suggestion=suggestion, steps=steps)
@@ -140,10 +153,13 @@ def optimize_step(task_id):
     if not all([commit_hash, suggestion, seq_no_str]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
-    seq_no = int(seq_no_str)
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+    with SessionLocal() as session:
+        seq_no = int(seq_no_str)
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
 
     try:
         result = task.optimize_step(commit_hash, seq_no, suggestion)
@@ -159,20 +175,24 @@ def optimize_step(task_id):
 @api_blueprint.route("/tasks")
 def get_tasks():
     try:
-        tasks = ts.list_tasks()
-        task_ids = [{
-            "id": task.id,
-            "goal": task.goal,
-            "status": task.status,
-            "created_at": task.created_at,
-            "updated_at": task.updated_at,
-            "logs": task.logs,
-            "repo_path": task.repo_path,
-            "tenant_id": task.tenant_id,
-            "project_id": task.project_id,
-            "best_plan": task.best_plan
-        } for task in tasks]
-        return jsonify(task_ids)
+        with SessionLocal() as session:
+            tasks = ts.list_tasks(session)
+            task_ids = [
+                {
+                    "id": task.id,
+                    "goal": task.goal,
+                    "status": task.status,
+                    "created_at": task.created_at,
+                    "updated_at": task.updated_at,
+                    "logs": task.logs,
+                    "repo_path": task.repo_path,
+                    "tenant_id": task.tenant_id,
+                    "project_id": task.project_id,
+                    "best_plan": task.best_plan,
+                }
+                for task in tasks
+            ]
+            return jsonify(task_ids)
     except Exception as e:
         current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -180,21 +200,22 @@ def get_tasks():
 
 @api_blueprint.route("/tasks/<task_id>/branches")
 def get_branches(task_id):
-    try:
-        task = ts.get_task(task_id)
-        if not task:
-            return log_and_return_error(
-                f"Task with ID {task_id} not found.", "error", 404
-            )
+    with SessionLocal() as session:
+        try:
+            task = ts.get_task(session, task_id)
+            if not task:
+                return log_and_return_error(
+                    f"Task with ID {task_id} not found.", "error", 404
+                )
 
-        branch_data = task.get_branches()
-        return jsonify(branch_data)
-    except GitCommandError as e:
-        return log_and_return_error(
-            f"Error fetching branches for repository '{task.repo_path}': {str(e)}",
-            "error",
-            500,
-        )
+            branch_data = task.get_branches()
+            return jsonify(branch_data)
+        except GitCommandError as e:
+            return log_and_return_error(
+                f"Error fetching branches for repository '{task.repo_path}': {str(e)}",
+                "error",
+                500,
+            )
 
 
 @api_blueprint.route("/tasks/<task_id>/set_branch", methods=["POST"])
@@ -214,22 +235,25 @@ def set_branch_route(task_id):
     if not branch_name:
         return log_and_return_error("Missing 'branch_name' parameter", "error", 400)
 
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
 
-    try:
-        task.set_branch(branch_name)
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
-            }
-        )
-    except GitCommandError as e:
-        return log_and_return_error(
-            f"Error switching to branch {branch_name}: {str(e)}", "error", 400
-        )
+        try:
+            task.set_branch(branch_name)
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
+                }
+            )
+        except GitCommandError as e:
+            return log_and_return_error(
+                f"Error switching to branch {branch_name}: {str(e)}", "error", 400
+            )
 
 
 @api_blueprint.route("/tasks/<task_id>/branches/<branch_name>", methods=["DELETE"])
@@ -244,23 +268,28 @@ def delete_branch_route(task_id, branch_name):
     Returns:
         JSON response indicating success or failure.
     """
-    task = ts.get_task(task_id)
-    if not task:
-        return log_and_return_error(f"Task with ID {task_id} not found.", "error", 404)
 
-    try:
-        task.delete_branch(branch_name)
-        return jsonify(
-            {
-                "success": True,
-                "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
-                "new_active_branch": task.get_current_branch(),
-            }
-        )
-    except GitCommandError as e:
-        return log_and_return_error(
-            f"Error deleting branch {branch_name}: {str(e)}", "error", 400
-        )
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+        try:
+            task.delete_branch(branch_name)
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
+                    "new_active_branch": task.get_current_branch(),
+                }
+            )
+        except GitCommandError as e:
+            return log_and_return_error(
+                f"Error deleting branch {branch_name}: {str(e)}", "error", 400
+            )
+
 
 @api_blueprint.route("/stream_execute_vm", methods=["POST"])
 def stream_execute_vm():
@@ -277,8 +306,11 @@ def stream_execute_vm():
 
     def event_stream():
         protocol = StreamingProtocol()
-        task = ts.create_task(goal, repo_path)
-        task_id = task.id
+
+        with SessionLocal() as session:
+            task = ts.create_task(session, goal, repo_path)
+            task_id = task.id
+            task_branch = task.get_current_branch()
 
         try:
             current_app.logger.info(f"Starting VM execution with goal: {goal}")
@@ -296,6 +328,7 @@ def stream_execute_vm():
             # Start executing steps
             while True:
                 step = task.vm.get_current_step()
+                step_seq_no = step.get("seq_no", -1)
                 if step["type"] == "calling":
                     params = step.get("parameters", {})
                     tool_call_id = step["seq_no"]
@@ -307,7 +340,9 @@ def stream_execute_vm():
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
-                    yield protocol.send_state(task_id, task.vm.state)
+                    yield protocol.send_state(
+                        task_id, task_branch, step_seq_no, task.vm.state
+                    )
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message("error")
                     return
@@ -317,7 +352,9 @@ def stream_execute_vm():
                         "error", "Unknown error during step execution."
                     )
                     current_app.logger.error(f"Error executing step: {error}")
-                    yield protocol.send_state(task_id, task.vm.state)
+                    yield protocol.send_state(
+                        task_id, task_branch, step_seq_no, task.vm.state
+                    )
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message("error")
                     return
@@ -332,7 +369,9 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step Finish (Part e)
-                yield protocol.send_state(task_id, seq_no, task.vm.state)
+                yield protocol.send_state(
+                    task_id, task_branch, step_seq_no, task.vm.state
+                )
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed

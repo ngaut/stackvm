@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
 from app.models import Task as TaskORM
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
@@ -16,6 +15,8 @@ from app.services import (
     parse_step,
     StepType,
 )
+
+from app.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
 
@@ -176,11 +177,14 @@ class Task:
                 f"Starting VM execution for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
             )
 
+            branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            self.vm.branch_manager.checkout_branch_from_commit(branch_name, commit_hash)
+            self.vm.branch_manager.checkout_branch(branch_name)
+
             for _ in range(steps):
                 new_commit_hash = self.update_plan(last_commit_hash, suggestion)
-                if not new_commit_hash:
-                    raise ValueError("Failed to update plan")
-                last_commit_hash = new_commit_hash
+                if new_commit_hash:
+                    last_commit_hash = new_commit_hash
 
                 try:
                     execution_result = self.vm.step()
@@ -247,7 +251,9 @@ class Task:
                 f"Updating step: {updated_step}, program_counter: {self.vm.state['program_counter']}"
             )
 
-            previous_commit_hash = self.branch_manager.get_parent_commit_hash(commit_hash)
+            previous_commit_hash = self.branch_manager.get_parent_commit_hash(
+                commit_hash
+            )
 
             self.vm.set_state(previous_commit_hash)
             branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -292,7 +298,6 @@ class Task:
             self.save()
             raise e
 
-
     def save(self):
         try:
             session: Session = SessionLocal()
@@ -307,29 +312,27 @@ class Task:
             )
             raise e
 
+
 class TaskService:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
-    def create_task(self, goal: str, repo_path: str) -> Task:
+    def create_task(self, session: Session, goal: str, repo_path: str) -> Task:
         try:
-            session: Session = SessionLocal()
             task_orm = TaskORM(
                 id=uuid.uuid4(), goal=goal, repo_path=repo_path, status="pending"
             )
             session.add(task_orm)
             session.commit()
             session.refresh(task_orm)
-            session.close()
             logger.info(f"Created new task with ID {task_orm.id}")
             return Task(task_orm, self.llm_interface)
         except Exception as e:
             logger.error(f"Failed to create task: {str(e)}", exc_info=True)
             raise e
 
-    def get_task(self, task_id: uuid.UUID) -> Optional[Task]:
+    def get_task(self, session: Session, task_id: uuid.UUID) -> Optional[Task]:
         try:
-            session: Session = SessionLocal()
             task_orm = session.query(TaskORM).filter(TaskORM.id == task_id).first()
             if task_orm:
                 logger.info(f"Retrieved task with ID {task_id}")
@@ -339,44 +342,30 @@ class TaskService:
                     task_orm.status = "deleted"
                     session.add(task_orm)
                     session.commit()
-                session.close()
+                    logger.warning(f"Task with ID {task_id} not found.")
+                    return None
+
                 return Task(task_orm, self.llm_interface)
             else:
                 logger.warning(f"Task with ID {task_id} not found.")
-                session.close()
                 return None
         except Exception as e:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def update_task(self, task_id: uuid.UUID, **kwargs) -> Optional[Task]:
+    def list_tasks(self, session: Session) -> List[Task]:
         try:
-            task = self.get_task(task_id)
-            if task:
-                for key, value in kwargs.items():
-                    setattr(task.task_orm, key, value)
-                task.save()
-                logger.info(f"Updated task {task_id} with {kwargs}")
-                return task
-            return None
-        except Exception as e:
-            logger.error(f"Failed to update task {task_id}: {str(e)}", exc_info=True)
-            raise e
-
-    def list_tasks(self) -> List[Task]:
-        try:
-            session: Session = SessionLocal()
             tasks = session.query(TaskORM).all()
             # filter out tasks that are not found
             vaild_tasks = []
             for task in tasks:
+                session.refresh(task)
                 if os.path.exists(task.repo_path):
                     vaild_tasks.append(task)
                 else:
                     task.status = "deleted"
                     session.add(task)
                     session.commit()
-            session.close()
 
             return vaild_tasks
         except Exception as e:

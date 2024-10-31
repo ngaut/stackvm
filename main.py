@@ -10,6 +10,7 @@ from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL
 from app.services import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub, tool
+from app.database import SessionLocal
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -103,7 +104,8 @@ if __name__ == "__main__":
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         ts = TaskService()
-        task = ts.create_task(args.goal, repo_path)
+        with SessionLocal() as session: 
+            task = ts.create_task(session, args.goal, repo_path)
         task.execute()
         logger.info("VM execution completed")
     elif args.server:

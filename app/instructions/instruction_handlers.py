@@ -89,7 +89,9 @@ class InstructionHandlers:
                 else:
                     # Fallback to treating instruction_output as a single value
                     if len(output_vars) == 1:
-                        var_value = parsed_output if parsed_output else instruction_output
+                        var_value = (
+                            parsed_output if parsed_output else instruction_output
+                        )
                     else:
                         raise ValueError(
                             f"Not found variable {var_name} in parsed_output {parsed_output}."
