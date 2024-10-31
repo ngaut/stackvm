@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 class Task:
     def __init__(self, task_orm: TaskORM, llm_interface: LLMInterface):
         self.task_orm = task_orm
+        if task_orm.status == "deleted":
+            raise ValueError(f"Task {task_orm.id} is deleted.")
         self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
         self.vm.set_goal(task_orm.goal)
 
@@ -326,12 +328,19 @@ class TaskService:
         try:
             session: Session = SessionLocal()
             task_orm = session.query(TaskORM).filter(TaskORM.id == task_id).first()
-            session.close()
             if task_orm:
                 logger.info(f"Retrieved task with ID {task_id}")
+                _ = task_orm.status
+                _ = task_orm.repo_path
+                if not os.path.exists(task_orm.repo_path):
+                    task_orm.status = "deleted"
+                    session.add(task_orm)
+                    session.commit()
+                session.close()
                 return Task(task_orm, self.llm_interface)
             else:
                 logger.warning(f"Task with ID {task_id} not found.")
+                session.close()
                 return None
         except Exception as e:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
@@ -351,31 +360,20 @@ class TaskService:
             logger.error(f"Failed to update task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def delete_task(self, task_id: uuid.UUID) -> bool:
-        try:
-            task = self.get_task(task_id)
-            if task:
-                task.status = "deleted"
-                task.save()
-                logger.info("Deleted task %s", task_id)
-                return True
-            return False
-        except Exception as e:
-            logger.error(f"Failed to delete task {task_id}: {str(e)}", exc_info=True)
-            raise e
-
     def list_tasks(self) -> List[Task]:
         try:
             session: Session = SessionLocal()
             tasks = session.query(TaskORM).all()
             # filter out tasks that are not found
-            session.close()
             vaild_tasks = []
             for task in tasks:
                 if os.path.exists(task.repo_path):
                     vaild_tasks.append(task)
                 else:
-                    self.delete_task(task.id)
+                    task.status = "deleted"
+                    session.add(task)
+                    session.commit()
+            session.close()
 
             return vaild_tasks
         except Exception as e:

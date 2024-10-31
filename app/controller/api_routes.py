@@ -174,6 +174,7 @@ def get_tasks():
         } for task in tasks]
         return jsonify(task_ids)
     except Exception as e:
+        current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
