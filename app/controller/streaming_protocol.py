@@ -63,10 +63,12 @@ class StreamingProtocol:
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_state(self, task_id: str, seq_no: int, state: dict):
+    def send_state(self, task_id: str, branch: str, seq_no: int, state: dict):
         event = ExecutionEvent(
             event_type=EventType.MESSAGE_ANNOTATION_PART,
-            payload=[{"task_id": task_id, "seq_no": seq_no, "state": state}],
+            payload=[
+                {"task_id": task_id, "branch": branch, "seq_no": seq_no, "state": state}
+            ],
         )
         event_bytes = event.encode()
         self.events.append(event_bytes)
