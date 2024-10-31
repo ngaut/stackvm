@@ -347,8 +347,9 @@ def stream_execute_vm():
                             if chunk:
                                 # Add a period back if it was split
                                 if not chunk.endswith("."):
-                                    chunk += "."
+                                    chunk += ". "
                                 yield protocol.send_text_part(chunk)
+                    task.mark_as_completed()
                     break
 
             # Finish Message (Part d)

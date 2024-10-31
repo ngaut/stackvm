@@ -81,6 +81,11 @@ class Task:
             self.vm.set_plan(plan)
         return plan
 
+    def mark_as_completed(self):
+        self.task_orm.status = "completed"
+        self.task_orm.logs = "Plan execution completed."
+        self.save()
+
     def _run(self):
         """Execute the plan for the task."""
         while True:
@@ -95,9 +100,7 @@ class Task:
                 break
 
         if self.vm.state.get("goal_completed"):
-            self.task_orm.status = "completed"
-            self.task_orm.logs = "Plan execution completed."
-            self.save()
+            self.mark_as_completed()
             final_answer = self.vm.get_variable("final_answer")
             if final_answer:
                 logger.info("final_answer: %s", final_answer)
