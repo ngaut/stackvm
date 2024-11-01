@@ -356,18 +356,23 @@ class TaskService:
     def list_tasks(self, session: Session) -> List[Task]:
         try:
             tasks = session.query(TaskORM).all()
-            # filter out tasks that are not found
-            vaild_tasks = []
+            deleted_tasks = []
+            valid_tasks = []
+
+            # Batch check file paths to reduce filesystem operations
             for task in tasks:
-                session.refresh(task)
                 if os.path.exists(task.repo_path):
-                    vaild_tasks.append(task)
+                    valid_tasks.append(task)
                 else:
                     task.status = "deleted"
-                    session.add(task)
-                    session.commit()
+                    deleted_tasks.append(task)
 
-            return vaild_tasks
+            # Bulk update deleted tasks in a single transaction
+            if deleted_tasks:
+                session.bulk_save_objects(deleted_tasks)
+                session.commit()
+
+            return valid_tasks
         except Exception as e:
             logger.error(f"Failed to list tasks: {str(e)}", exc_info=True)
             raise e
