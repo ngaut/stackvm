@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Poetry for dependency management
 - Access to TiDB Serverless or local TiDB instance
 - OpenAI API key (if using OpenAI as LLM provider)
