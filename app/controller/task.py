@@ -32,8 +32,6 @@ class Task:
         self.task_orm = task_orm
         if task_orm.status == "deleted":
             raise ValueError(f"Task {task_orm.id} is deleted.")
-        if not os.path.exists(task_orm.repo_path):
-            raise ValueError(f"Task {task_orm.id} repository path does not exist.")
         self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
         self.vm.set_goal(task_orm.goal)
         self._lock = threading.RLock()
