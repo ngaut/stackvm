@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from app.controller.api_routes import api_blueprint, main_blueprint
-from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL
+from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub, tool
@@ -102,10 +102,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.goal:
-        repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         ts = TaskService()
         with SessionLocal() as session: 
-            task = ts.create_task(session, args.goal, repo_path)
+            task = ts.create_task(session, args.goal, datetime.now().strftime("%Y%m%d%H%M%S"))
         task.execute()
         logger.info("VM execution completed")
     elif args.server:
