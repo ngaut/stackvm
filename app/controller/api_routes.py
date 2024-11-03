@@ -311,13 +311,12 @@ def stream_execute_vm():
     goal = data.get("goal")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
-    repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
 
     def event_stream():
         protocol = StreamingProtocol()
 
         with SessionLocal() as session:
-            task = ts.create_task(session, goal, repo_path)
+            task = ts.create_task(session, goal, datetime.now().strftime("%Y%m%d%H%M%S"))
             task_id = task.id
             task_branch = task.get_current_branch()
 
