@@ -17,8 +17,9 @@ from flask import (
     current_app,
     Response,
     stream_with_context,
+    send_from_directory,
 )
-from app.config.settings import GIT_REPO_PATH
+from app.config.settings import GIT_REPO_PATH, GENERATED_FILES_DIR
 from app.database import SessionLocal
 
 from .streaming_protocol import StreamingProtocol
@@ -170,6 +171,14 @@ def optimize_step(task_id):
             exc_info=True,
         )
         return log_and_return_error("Failed to optimize step.", "error", 500)
+
+
+@api_blueprint.route("/download/<filename>", methods=["GET"])
+def download_file(filename):
+    try:
+        return send_from_directory(GENERATED_FILES_DIR, filename, as_attachment=True)
+    except FileNotFoundError:
+        return log_and_return_error("File not found.", "error", 404)
 
 
 @api_blueprint.route("/tasks")

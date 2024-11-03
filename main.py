@@ -1,12 +1,17 @@
 import os
 import logging
-from flask import Flask
+from flask import Flask, url_for
 import argparse
 from datetime import datetime
 from typing import Optional
 
 from app.controller.api_routes import api_blueprint, main_blueprint
-from app.config.settings import GIT_REPO_PATH, LLM_PROVIDER, LLM_MODEL
+from app.config.settings import (
+    GIT_REPO_PATH,
+    GENERATED_FILES_DIR,
+    LLM_PROVIDER,
+    LLM_MODEL,
+)
 from app.services import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub, tool
@@ -16,6 +21,7 @@ from app.database import SessionLocal
 app = Flask(__name__)
 app.register_blueprint(api_blueprint)
 app.register_blueprint(main_blueprint)
+
 
 # Setup logging
 def setup_logging(app):
@@ -32,15 +38,15 @@ def setup_logging(app):
             )
         )
 
+
 setup_logging(app)
 logger = logging.getLogger(__name__)
 
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
+
 @tool
-def llm_generate(
-    prompt: str, context: Optional[str] = None
-):
+def llm_generate(prompt: str, context: Optional[str] = None):
     """
     Generates a response using the Language Model (LLM).
 
@@ -83,8 +89,37 @@ def llm_generate(
     response = llm_client.generate(prompt, context)
     return response
 
+
+@tool
+def generate_file_download_link(content: str):
+    """
+    Generates a download link for the given content. It usually used to generate a report for download.
+
+    Arguments:
+    - `content`: The content to be downloaded.
+
+    Output: The download link for the content (report or other format).
+    """
+    try:
+        # Generate a unique filename
+        filename = f"generated_{datetime.now().strftime('%Y%m%d%H%M%S')}.md"
+        file_path = os.path.join(GENERATED_FILES_DIR, filename)
+
+        # Write the markdown content to a file
+        with open(file_path, "w") as file:
+            file.write(content)
+
+        # Generate the full download link
+        download_link = url_for("api.download_file", filename=filename, _external=True)
+        return download_link
+    except Exception as e:
+        logger.error(f"Error generating file for download: {str(e)}", exc_info=True)
+        return ValueError(f"Error generating file for download: {str(e)}")
+
+
 # Register the tool after its definition
 global_tools_hub.register_tool(llm_generate)
+global_tools_hub.register_tool(generate_file_download_link)
 global_tools_hub.load_tools("tools")
 
 if __name__ == "__main__":
@@ -104,7 +139,7 @@ if __name__ == "__main__":
     if args.goal:
         repo_path = os.path.join(GIT_REPO_PATH, datetime.now().strftime("%Y%m%d%H%M%S"))
         ts = TaskService()
-        with SessionLocal() as session: 
+        with SessionLocal() as session:
             task = ts.create_task(session, args.goal, repo_path)
         task.execute()
         logger.info("VM execution completed")
