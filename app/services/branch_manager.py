@@ -227,7 +227,7 @@ class GitManager(BranchManager):
                 str(e),
                 exc_info=True,
             )
-            return []
+            raise e
 
     def get_commit(self, commit_hash: str) -> Any:
         try:
@@ -253,7 +253,7 @@ class GitManager(BranchManager):
                 str(e),
                 exc_info=True,
             )
-            return None
+            raise e
 
     def commit_changes(self, commit_info: Dict[str, Any]) -> Optional[str]:
         try:
@@ -271,7 +271,7 @@ class GitManager(BranchManager):
                 return self.repo.head.commit.hexsha
         except Exception as e:
             logger.error("Error committing changes: %s", str(e))
-            return None
+            raise e
 
     def load_state(self, commit_hash: str) -> Optional[Dict[str, Any]]:
         """Load the state from a specific commit."""
@@ -294,6 +294,7 @@ class GitManager(BranchManager):
                 json.dump(state, f, indent=2, default=str, sort_keys=True)
         except Exception as e:
             logger.error(f"Error saving state: {str(e)}")
+            raise e
 
     def get_state_diff(self, commit_hash: str) -> str:
         commit = self.repo.commit(commit_hash)
