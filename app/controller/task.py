@@ -176,7 +176,7 @@ class Task:
                 last_commit_hash = commit_hash
 
                 logger.info(
-                    f"Update plan for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
+                    f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
                 new_commit_hash = self.update_plan(last_commit_hash, suggestion)
@@ -207,7 +207,7 @@ class Task:
                 last_commit_hash = commit_hash
 
                 logger.info(
-                    f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
+                    f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
                 branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
