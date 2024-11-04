@@ -83,7 +83,7 @@ def parse_commit_message(message: str) -> tuple:
         commit_type = commit_info.get("type", "General")
         seq_no = commit_info.get("seq_no", "Unknown")
     except json.JSONDecodeError:
-        title = "Invalid commit message"
+        title = message
         details = {}
         commit_type = "General"
 

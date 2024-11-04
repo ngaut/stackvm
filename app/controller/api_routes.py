@@ -57,7 +57,14 @@ def get_execution_details(task_id, branch):
         if not task:
             return jsonify([]), 200
 
-        vm_states = task.get_execution_details(branch)
+        try:
+            vm_states = task.get_execution_details(branch)
+        except Exception as e:
+            return log_and_return_error(
+                f"Unexpected error fetching VM state for branch {branch} for task {task_id}: {str(e)}",
+                "error",
+                500,
+            )
 
         return jsonify(vm_states)
 
@@ -174,9 +181,9 @@ def optimize_step(task_id):
 @api_blueprint.route("/tasks")
 def get_tasks():
     try:
-        limit = request.args.get('limit', default=10, type=int)
-        offset = request.args.get('offset', default=0, type=int)
-        
+        limit = request.args.get("limit", default=10, type=int)
+        offset = request.args.get("offset", default=0, type=int)
+
         with SessionLocal() as session:
             tasks = ts.list_tasks(session, limit=limit, offset=offset)
             task_ids = [
@@ -194,13 +201,9 @@ def get_tasks():
                 }
                 for task in tasks
             ]
-            return jsonify({
-                "tasks": task_ids,
-                "pagination": {
-                    "limit": limit,
-                    "offset": offset
-                }
-            })
+            return jsonify(
+                {"tasks": task_ids, "pagination": {"limit": limit, "offset": offset}}
+            )
     except Exception as e:
         current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -315,7 +318,9 @@ def stream_execute_vm():
         protocol = StreamingProtocol()
 
         with SessionLocal() as session:
-            task = ts.create_task(session, goal, datetime.now().strftime("%Y%m%d%H%M%S"))
+            task = ts.create_task(
+                session, goal, datetime.now().strftime("%Y%m%d%H%M%S")
+            )
             task_id = task.id
             task_branch = task.get_current_branch()
 
