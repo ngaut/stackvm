@@ -11,17 +11,20 @@ def get_plan_update_prompt(
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
 
-    Goal: {vm.state['goal']}
-    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
+    Goal:
+    {vm.state['goal']}
+
+    Current Plan:
+    {json.dumps(vm.state['current_plan'], indent=2)}
+
     Current Program Counter: {vm.state['program_counter']}
-    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
     Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
     """
 
     if explanation:
         prompt += f"\n    Reason for plan update: {explanation}\n"
 
-    if key_factors:
+    if key_factors and len(key_factors) > 0:
         prompt += f"\n    Key factors influencing the update:\n    {json.dumps(key_factors, indent=2)}\n"
 
     prompt += f"""
