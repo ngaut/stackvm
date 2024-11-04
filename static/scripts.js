@@ -34,19 +34,22 @@ async function fetchWithErrorHandling(url, options = {}) {
 // Task and Branch Management
 async function loadTasks() {
     try {
-        const data = await fetchWithErrorHandling('/api/tasks');
+        const limit = 10; // Set the limit for tasks per page
+        const offset = 0; // Start with the first page
+        const data = await fetchWithErrorHandling(`/api/tasks?limit=${limit}&offset=${offset}`);
+
         const select = document.getElementById('taskSelect');
 
         // Populate the dropdown with task goals and task IDs
         // Format: "Goal Description (Task ID)"
-        select.innerHTML = data.map(task => `<option value="${task.id}">${task.goal} (${task.id})</option>`).join('');
+        select.innerHTML = data.tasks.map(task => `<option value="${task.id}">${task.goal} (${task.id})</option>`).join('');
         select.style.display = 'block';
 
         // Automatically select task based on URL parameter or default to the first task
-        if (data.length > 0) {
+        if (data.tasks.length > 0) {
             const urlParams = new URLSearchParams(location.search);
             const selectedTaskId = urlParams.get('task_id');
-            const selectedTaskExists = data.some(task => task.id === selectedTaskId);
+            const selectedTaskExists = data.tasks.some(task => task.id === selectedTaskId);
 
             if (selectedTaskId && selectedTaskExists) {
                 // Select the task if specified in the query string and exists
@@ -54,8 +57,8 @@ async function loadTasks() {
                 await loadTaskData(selectedTaskId);
             } else {
                 // Select the first task by default
-                select.value = data[0].id;
-                await loadTaskData(data[0].id);
+                select.value = data.tasks[0].id;
+                await loadTaskData(data.tasks[0].id);
             }
         } else {
             showNotification('No tasks available.', 'warning');
