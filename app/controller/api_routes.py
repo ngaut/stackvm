@@ -174,8 +174,11 @@ def optimize_step(task_id):
 @api_blueprint.route("/tasks")
 def get_tasks():
     try:
+        limit = request.args.get('limit', default=10, type=int)
+        offset = request.args.get('offset', default=0, type=int)
+        
         with SessionLocal() as session:
-            tasks = ts.list_tasks(session)
+            tasks = ts.list_tasks(session, limit=limit, offset=offset)
             task_ids = [
                 {
                     "id": task.id,
@@ -191,7 +194,13 @@ def get_tasks():
                 }
                 for task in tasks
             ]
-            return jsonify(task_ids)
+            return jsonify({
+                "tasks": task_ids,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset
+                }
+            })
     except Exception as e:
         current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500

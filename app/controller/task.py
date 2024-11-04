@@ -359,27 +359,16 @@ class TaskService:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def list_tasks(self, session: Session) -> List[Task]:
-        try:
-            # Filter out deleted tasks in the query itself
-            tasks = session.query(TaskORM).filter(TaskORM.status != "deleted").all()
-            deleted_tasks = []
-            valid_tasks = []
-
-            # Check file paths and update status if needed
-            for task in tasks:
-                if os.path.exists(task.repo_path):
-                    valid_tasks.append(task)
-                else:
-                    task.status = "deleted"
-                    deleted_tasks.append(task)
-
-            # Bulk update deleted tasks in a single transaction
-            if deleted_tasks:
-                session.bulk_save_objects(deleted_tasks)
-                session.commit()
-
-            return valid_tasks
-        except Exception as e:
-            logger.error(f"Failed to list tasks: {str(e)}", exc_info=True)
-            raise e
+    def list_tasks(self, session, limit=10, offset=0):
+        """
+        List tasks with pagination support.
+        
+        Args:
+            session: Database session
+            limit (int): Maximum number of tasks to return
+            offset (int): Number of tasks to skip
+        
+        Returns:
+            List of Task objects
+        """
+        return session.query(TaskORM).order_by(TaskORM.created_at.desc()).offset(offset).limit(limit).all()
