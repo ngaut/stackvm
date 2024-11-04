@@ -179,12 +179,6 @@ class Task:
                     f"Update plan for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
                 )
 
-                branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                self.vm.branch_manager.checkout_branch_from_commit(
-                    branch_name, commit_hash
-                )
-                self.vm.branch_manager.checkout_branch(branch_name)
-
                 new_commit_hash = self.update_plan(last_commit_hash, suggestion)
                 if new_commit_hash:
                     last_commit_hash = new_commit_hash
