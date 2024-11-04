@@ -9,7 +9,9 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "aya-expanse")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
-DATABASE_URI = os.environ.get("DATABASE_URI") or os.environ.get("SQLALCHEMY_DATABASE_URI")
+DATABASE_URI = os.environ.get("DATABASE_URI") or os.environ.get(
+    "SQLALCHEMY_DATABASE_URI"
+)
 
 # Existing settings
 # must use tmp path, DO NOT EDIT
