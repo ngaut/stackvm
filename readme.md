@@ -32,7 +32,7 @@ OPENAI_API_KEY=your_openai_api_key
 TIDB_AI_API_KEY=your_tidb_ai_api_key
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o
-SQLALCHEMY_DATABASE_URI=mysql+pymysql://your_username:password@host:port/stackvm?ssl_ca=/etc/ssl/cert.pem&ssl_verify_cert=true&ssl_verify_identity=true
+DATABASE_URI=mysql+pymysql://your_username:password@host:port/stackvm?ssl_ca=/etc/ssl/cert.pem&ssl_verify_cert=true&ssl_verify_identity=true
 
 # Optional: Ollama Configuration
 OLLAMA_DEBUG=1
