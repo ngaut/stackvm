@@ -184,7 +184,9 @@ class Task:
                 )
 
                 branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                self.vm.branch_manager.checkout_branch_from_commit(branch_name, commit_hash)
+                self.vm.branch_manager.checkout_branch_from_commit(
+                    branch_name, commit_hash
+                )
                 self.vm.branch_manager.checkout_branch(branch_name)
 
                 for _ in range(steps):
@@ -290,7 +292,9 @@ class Task:
                     else:
                         raise ValueError("Failed to commit step optimization")
                 else:
-                    raise ValueError(f"Failed to create or checkout branch '{branch_name}'")
+                    raise ValueError(
+                        f"Failed to create or checkout branch '{branch_name}'"
+                    )
 
                 self._run()
                 return {
@@ -341,10 +345,14 @@ class TaskService:
 
     def get_task(self, session: Session, task_id: uuid.UUID) -> Optional[Task]:
         try:
-            task_orm = session.query(TaskORM).filter(TaskORM.id == task_id).first()
+            task_orm = (
+                session.query(TaskORM)
+                .filter(TaskORM.id == task_id, TaskORM.status != "deleted")
+                .first()
+            )
             if task_orm:
                 logger.info(f"Retrieved task with ID {task_id}")
-                if not os.path.exists(task_orm.repo_path) and task_orm.status != "deleted":
+                if not os.path.exists(task_orm.repo_path):
                     task_orm.status = "deleted"
                     session.add(task_orm)
                     session.commit()
@@ -362,13 +370,20 @@ class TaskService:
     def list_tasks(self, session, limit=10, offset=0):
         """
         List tasks with pagination support.
-        
+
         Args:
             session: Database session
             limit (int): Maximum number of tasks to return
             offset (int): Number of tasks to skip
-        
+
         Returns:
             List of Task objects
         """
-        return session.query(TaskORM).order_by(TaskORM.created_at.desc()).offset(offset).limit(limit).all()
+        return (
+            session.query(TaskORM)
+            .filter(TaskORM.status != "deleted")
+            .order_by(TaskORM.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
