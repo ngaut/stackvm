@@ -29,7 +29,7 @@ from .task import TaskService
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 
-if BACKEND_CORS_ORIGINS:
+if BACKEND_CORS_ORIGINS and len(BACKEND_CORS_ORIGINS) > 0:
     CORS(
         api_blueprint,
         resources={r"/*": {"origins": [str(origin).strip("/") for origin in BACKEND_CORS_ORIGINS]}},

@@ -1,20 +1,26 @@
 import os
 from dotenv import load_dotenv
-from typing import Annotated, Any
-from pydantic import BeforeValidator, AnyUrl
+from typing import Any
+import json
 
 load_dotenv()
 
-def parse_cors(v: Any) -> list[str] | str:
-    if isinstance(v, str) and not v.startswith("["):
-        return [i.strip() for i in v.split(",")]
-    elif isinstance(v, list | str):
+def parse_cors(v: Any) -> list[str]:
+    if isinstance(v, str):
+        # If the string is not a JSON list, split by commas
+        if not v.startswith("["):
+            return [i.strip() for i in v.split(",") if i.strip()]
+        # If it's a JSON list, parse it
+        try:
+            return json.loads(v)
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid format for CORS origins: {v}")
+    elif isinstance(v, list):
         return v
-    raise ValueError(v)
+    raise ValueError(f"Invalid type for CORS origins: {type(v)}")
 
-BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = (
-    []
-)
+# Get the environment variable and parse it
+BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGINS", ""))
 
 # LLM settings
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
