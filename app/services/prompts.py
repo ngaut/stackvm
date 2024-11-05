@@ -3,7 +3,7 @@ import datetime
 
 
 def get_plan_update_prompt(
-    vm, vm_spec_content, tools_instruction_content, suggestion=None, key_factors=None
+    vm, vm_spec_content, tools_instruction_content, suggestion, key_factors=None
 ):
     """
     Get the prompt for updating the plan.
@@ -18,11 +18,11 @@ Current Plan:
 {json.dumps(vm.state['current_plan'], indent=2)}
 
 Current Program Counter: {vm.state['program_counter']}
-Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
-"""
 
-    if suggestion:
-        prompt += f"\nSuggestion for plan update: {suggestion}\n"
+Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+
+**Suggestion for plan update**: {suggestion}
+"""
 
     if key_factors and len(key_factors) > 0:
         prompt += f"\nKey factors influencing the update:\n{json.dumps(key_factors, indent=2)}\n"
