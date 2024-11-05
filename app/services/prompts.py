@@ -11,17 +11,20 @@ def get_plan_update_prompt(
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan.
 
-    Goal: {vm.state['goal']}
-    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
+    Goal:
+    {vm.state['goal']}
+
+    Current Plan:
+    {json.dumps(vm.state['current_plan'], indent=2)}
+
     Current Program Counter: {vm.state['program_counter']}
-    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
     Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
     """
 
     if explanation:
         prompt += f"\n    Reason for plan update: {explanation}\n"
 
-    if key_factors:
+    if key_factors and len(key_factors) > 0:
         prompt += f"\n    Key factors influencing the update:\n    {json.dumps(key_factors, indent=2)}\n"
 
     prompt += f"""
@@ -98,31 +101,42 @@ def get_should_update_plan_prompt(vm, suggestion):
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and determine if the plan needs to be updated.
 
-    User Suggestion for plan update: {suggestion}
-    Goal: {vm.state['goal']}
-    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
-    Current Program Counter: {vm.state['program_counter']}
-    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
-    Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+Goal:
+{vm.state['goal']}
 
-    Evaluate the following aspects:
-    1. Goal Alignment: Is the current plan still effectively working towards the goal?
-    2. New Information: Have any variables changed in a way that affects the plan's validity?
-    3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
-    4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
-    5. Completeness: Does the plan address all necessary aspects of the goal?
-    6. Adaptability: Can the current plan handle any new circumstances that have arisen?
+User Suggestion for plan update:
+{suggestion}
 
-    MUST Provide your analysis in JSON format:
-    {json_format}
+Current Plan:
+{json.dumps(vm.state['current_plan'], indent=2)}
 
-    Set "should_update" to true if the plan requires modification, false otherwise.
-    In the "explanation", provide a concise rationale for your decision.
-    List the most significant factors influencing your decision in "key_factors", 
-    including how each factor impacts the need for a plan update.
+Current Program Counter:
+{vm.state['program_counter']}
 
-    Ensure your response is thorough yet concise, focusing on the most critical aspects of the decision.
-    """
+Last Executed Step:
+{json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+
+Current Variables:
+{json.dumps(vm.get_all_variables(), indent=2)}
+
+Evaluate the following aspects:
+1. Goal Alignment: Is the current plan still effectively working towards the goal?
+2. New Information: Have any variables changed in a way that affects the plan's validity?
+3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
+4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
+5. Completeness: Does the plan address all necessary aspects of the goal?
+6. Adaptability: Can the current plan handle any new circumstances that have arisen?
+
+MUST Provide your analysis in JSON format:
+{json_format}
+
+Set "should_update" to true if the plan requires modification, false otherwise.
+In the "explanation", provide a concise rationale for your decision.
+List the most significant factors influencing your decision in "key_factors",
+including how each factor impacts the need for a plan update.
+
+Ensure your response is thorough yet concise, focusing on the most critical aspects of the decision.
+"""
 
 
 def get_generate_plan_prompt(

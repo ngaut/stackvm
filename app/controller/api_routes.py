@@ -19,14 +19,22 @@ from flask import (
     stream_with_context,
     send_from_directory,
 )
-from app.config.settings import GIT_REPO_PATH, GENERATED_FILES_DIR
+from flask_cors import CORS
+
 from app.database import SessionLocal
+from app.config.settings import BACKEND_CORS_ORIGINS,GIT_REPO_PATH, GENERATED_FILES_DIR
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
 
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
+
+if BACKEND_CORS_ORIGINS and len(BACKEND_CORS_ORIGINS) > 0:
+    CORS(
+        api_blueprint,
+        resources={r"/*": {"origins": [str(origin).strip("/") for origin in BACKEND_CORS_ORIGINS]}},
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +67,14 @@ def get_execution_details(task_id, branch):
         if not task:
             return jsonify([]), 200
 
-        vm_states = task.get_execution_details(branch)
+        try:
+            vm_states = task.get_execution_details(branch)
+        except Exception as e:
+            return log_and_return_error(
+                f"Unexpected error fetching VM state for branch {branch} for task {task_id}: {str(e)}",
+                "error",
+                500,
+            )
 
         return jsonify(vm_states)
 
@@ -109,20 +124,49 @@ def code_diff(task_id, commit_hash):
                 404,
             )
 
-
-@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
-def auto_update(task_id):
+@api_blueprint.route("/tasks/<task_id>/update", methods=["POST"])
+def update_task(task_id):
     """
     API endpoint to auto update the plan and execute the VM.
     """
     data = request.json
-    current_app.logger.info(f"Received auto_update request with data: {data}")
+    current_app.logger.info(f"Received update_task request with data: {data}")
+
+    commit_hash = data.get("commit_hash")
+    suggestion = data.get("suggestion")
+
+    if not all([commit_hash, suggestion]):
+        return log_and_return_error("Missing required parameters", "error", 400)
+
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+    try:
+        result = task.update(commit_hash, suggestion=suggestion)
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error(
+            f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
+        )
+        return log_and_return_error("Failed to update plan.", "error", 500)
+
+@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
+def dynamic_update(task_id):
+    """
+    API endpoint to auto update the plan and execute the VM.
+    """
+    data = request.json
+    current_app.logger.info(f"Received dynamic_update request with data: {data}")
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     steps = int(data.get("steps", 20))
 
-    if not all([commit_hash, steps]):
+    if not all([commit_hash, suggestion]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
     with SessionLocal() as session:
@@ -137,9 +181,9 @@ def auto_update(task_id):
         return jsonify(result), 200
     except Exception as e:
         current_app.logger.error(
-            f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True
+            f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
         )
-        return log_and_return_error("Failed to execute VM.", "error", 500)
+        return log_and_return_error("Failed to update plan.", "error", 500)
 
 
 @api_blueprint.route("/tasks/<task_id>/optimize_step", methods=["POST"])
@@ -184,8 +228,11 @@ def download_file(filename):
 @api_blueprint.route("/tasks")
 def get_tasks():
     try:
+        limit = request.args.get("limit", default=10, type=int)
+        offset = request.args.get("offset", default=0, type=int)
+
         with SessionLocal() as session:
-            tasks = ts.list_tasks(session)
+            tasks = ts.list_tasks(session, limit=limit, offset=offset)
             task_ids = [
                 {
                     "id": task.id,
@@ -201,7 +248,9 @@ def get_tasks():
                 }
                 for task in tasks
             ]
-            return jsonify(task_ids)
+            return jsonify(
+                {"tasks": task_ids, "pagination": {"limit": limit, "offset": offset}}
+            )
     except Exception as e:
         current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -316,7 +365,9 @@ def stream_execute_vm():
         protocol = StreamingProtocol()
 
         with SessionLocal() as session:
-            task = ts.create_task(session, goal, datetime.now().strftime("%Y%m%d%H%M%S"))
+            task = ts.create_task(
+                session, goal, datetime.now().strftime("%Y%m%d%H%M%S")
+            )
             task_id = task.id
             task_branch = task.get_current_branch()
 

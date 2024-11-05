@@ -64,14 +64,14 @@ def retrieve_knowledge_graph(query):
 @tool
 def vector_search(query, top_k=5):
     """
-    Retrieves embedded knowledge chunks based on an embedding query.
+    Retrieves the most relevant data chunks based on embedding similarity to the query.
 
     Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
+    - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
     - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
 
     Output:
-    - Returns a single value containing the concatenated top k document chunks.
+    - Returns a single value containing the concatenated top `k` document chunks, stored in a unique variable. It does not return a JSON or dictionary object.
 
     Example to call this tool:
 
@@ -92,8 +92,8 @@ def vector_search(query, top_k=5):
     ```
 
     Best practices:
-    - Utilize the Vector Search tool when you need to retrieve detailed and comprehensive information from large volumes of unstructured or semi-structured data. This tool is adept at returning relevant document snippets that provide rich context and in-depth insights, rather than just simple descriptions of knowledge points.
-    - To optimize its use, combine multiple Vector Search calls (different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
+    - Use the Vector Search tool to retrieve data that is most similar to your query based on embedding distance. This tool excels at finding relevant document snippets that provide rich context and detailed information.
+    - **Ensure your query is clear and focused on a single objective or aspect.** Avoid queries with multiple purposes to achieve the most accurate and relevant results.
     """
 
     url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
