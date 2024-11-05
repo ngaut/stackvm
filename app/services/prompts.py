@@ -3,64 +3,64 @@ import datetime
 
 
 def get_plan_update_prompt(
-    vm, vm_spec_content, tools_instruction_content, explanation=None, key_factors=None
+    vm, vm_spec_content, tools_instruction_content, suggestion, key_factors=None
 ):
     """
     Get the prompt for updating the plan.
     """
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze the current VM execution state and update the plan.
+Analyze the current VM execution state and update the plan based on suggestions and the current execution results.
 
-    Goal:
-    {vm.state['goal']}
+Goal:
+{vm.state['goal']}
 
-    Current Plan:
-    {json.dumps(vm.state['current_plan'], indent=2)}
+Current Plan:
+{json.dumps(vm.state['current_plan'], indent=2)}
 
-    Current Program Counter: {vm.state['program_counter']}
-    Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
-    """
+Current Program Counter: {vm.state['program_counter']}
 
-    if explanation:
-        prompt += f"\n    Reason for plan update: {explanation}\n"
+Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+
+**Suggestion for plan update**: {suggestion}
+"""
 
     if key_factors and len(key_factors) > 0:
-        prompt += f"\n    Key factors influencing the update:\n    {json.dumps(key_factors, indent=2)}\n"
+        prompt += f"\nKey factors influencing the update:\n{json.dumps(key_factors, indent=2)}\n"
 
     prompt += f"""
-    Evaluate the following aspects:
-    1. Goal Alignment: Is the current plan still effectively working towards the goal?
-    2. New Information: Have any variables changed in a way that affects the plan's validity?
-    3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
-    4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
-    5. Completeness: Does the plan address all necessary aspects of the goal?
-    6. Adaptability: Can the current plan handle any new circumstances that have arisen?
 
 **Instructions**:
-1. **Analyze and Identify Issues**:
-   - Review the current state and the last executed step.
-   - Identify any errors, obstacles, or inefficiencies that are hindering progress towards the goal.
+1. **Analyze Suggestions and Current Execution**:
+    - Review the suggestions in detail.
+    - Assess how the suggestions align with the current execution results and overall goal.
 
-2. **Propose Solutions**:
-   - Suggest modifications to existing steps to resolve identified issues.
-   - Introduce new steps or action types if necessary to overcome obstacles.
-   - Ensure that each modification or addition directly contributes to achieving the goal.
+2. **Identify and Prioritize Changes**:
+    - Determine which suggestions directly contribute to achieving the goal.
+    - Prioritize changes based on their potential impact and feasibility.
 
-3. **Merge with Original Plan**:
-   - Integrate proposed changes seamlessly into the original plan starting from the current program counter.
-   - Preserve all steps prior to the current program counter without alteration.
+3. **Propose Solutions**:
+    - Suggest modifications to existing steps to incorporate suggestions.
+    - Introduce new steps or action types if necessary to align with suggestions.
+    - Ensure that each modification or addition directly contributes to achieving the goal.
 
-4. **Adhere to VM Specification**:
-   - Ensure that the revised plan complies with the provided VM specification in format and structure.
+4. **Evaluate Critical Aspects**:
+    - **Goal Alignment**: Ensure the updated plan remains focused on the primary objective.
+    - **Efficiency**: Optimize the plan for better performance and resource utilization.
+    - **Potential Obstacles**: Identify and mitigate foreseeable challenges.
+    - **Adaptability**: Ensure the plan can handle unexpected changes.
 
-5. **Avoid Redundancy**:
-   - Do not generate an identical plan. Ensure that the updated plan includes at least some meaningful changes to improve upon the original.
+5. **Maintain Referential Integrity**:
+    - Do not reference output variables from already executed steps if those variables are not present in Current Variables, as they have been garbage collected.
 
-**Guidelines for the Updated Plan**:
-- **Consistency**: The format and structure of the plan should remain consistent with the original, as specified in the VM specification.
-- **Completeness**: Provide a complete merged plan that includes all necessary steps from the beginning to the end.
-- **Clarity**: Ensure that each step is clearly defined and actionable.
-- **Referential Integrity**: Do not reference output variables from already executed steps if those variables are not present in Current Variables, as the variables have been garbage collected.
+6. **Merge with Original Plan**:
+    - Integrate proposed changes seamlessly into the original plan starting from the current program counter.
+    - Preserve all steps prior to the current program counter without alteration.
+
+7. **Adhere to VM Specification**:
+    - Ensure that the revised plan complies with the provided VM specification in format and structure.
+
+8. **Avoid Redundancy**:
+    - Do not generate an identical plan. Ensure that the updated plan includes at least some meaningful changes to improve upon the original.
 
 **MUST follow VM Specification**:
 {vm_spec_content}
@@ -73,8 +73,8 @@ Analyze the current VM execution state and update the plan.
 Now, let's update the plan.
 
 **Output**:
-Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification. The updated plan should effectively address any identified issues and continue execution towards the goal without introducing redundancy.
-After the updated plan, provide a summary of the changes made to the plan and the diff with the previous plan.
+1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
+2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
     """
 
     return prompt
