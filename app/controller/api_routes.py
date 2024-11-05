@@ -123,7 +123,7 @@ def code_diff(task_id, commit_hash):
                 404,
             )
 
-@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
+@api_blueprint.route("/tasks/<task_id>/update", methods=["POST"])
 def update_task(task_id):
     """
     API endpoint to auto update the plan and execute the VM.
@@ -153,7 +153,7 @@ def update_task(task_id):
         )
         return log_and_return_error("Failed to update plan.", "error", 500)
 
-@api_blueprint.route("/tasks/<task_id>/dynamic_update", methods=["POST"])
+@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
 def dynamic_update(task_id):
     """
     API endpoint to auto update the plan and execute the VM.
