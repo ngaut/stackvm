@@ -211,7 +211,7 @@ class InstructionHandlers:
 
             condition_prompt_with_response_format = (
                 condition_prompt
-                + '\nRespond with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
+                + '\nRespond only with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
             )
             response = self.vm.llm_interface.generate(
                 condition_prompt_with_response_format, context
@@ -249,7 +249,7 @@ class InstructionHandlers:
             except json.JSONDecodeError:
                 return (
                     self._handle_error(
-                        "Failed to parse JSON response from LLM.",
+                        f"Failed to parse JSON response from LLM: {response}.",
                         instruction="jmp",
                         params=params,
                     ),

@@ -123,20 +123,49 @@ def code_diff(task_id, commit_hash):
                 404,
             )
 
-
-@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
-def auto_update(task_id):
+@api_blueprint.route("/tasks/<task_id>/update", methods=["POST"])
+def update_task(task_id):
     """
     API endpoint to auto update the plan and execute the VM.
     """
     data = request.json
-    current_app.logger.info(f"Received auto_update request with data: {data}")
+    current_app.logger.info(f"Received update_task request with data: {data}")
+
+    commit_hash = data.get("commit_hash")
+    suggestion = data.get("suggestion")
+
+    if not all([commit_hash, suggestion]):
+        return log_and_return_error("Missing required parameters", "error", 400)
+
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+    try:
+        result = task.update(commit_hash, suggestion=suggestion)
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error(
+            f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
+        )
+        return log_and_return_error("Failed to update plan.", "error", 500)
+
+@api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
+def dynamic_update(task_id):
+    """
+    API endpoint to auto update the plan and execute the VM.
+    """
+    data = request.json
+    current_app.logger.info(f"Received dynamic_update request with data: {data}")
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     steps = int(data.get("steps", 20))
 
-    if not all([commit_hash, steps]):
+    if not all([commit_hash, suggestion]):
         return log_and_return_error("Missing required parameters", "error", 400)
 
     with SessionLocal() as session:
@@ -151,9 +180,9 @@ def auto_update(task_id):
         return jsonify(result), 200
     except Exception as e:
         current_app.logger.error(
-            f"Failed to execute VM for task {task_id}: {str(e)}", exc_info=True
+            f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
         )
-        return log_and_return_error("Failed to execute VM.", "error", 500)
+        return log_and_return_error("Failed to update plan.", "error", 500)
 
 
 @api_blueprint.route("/tasks/<task_id>/optimize_step", methods=["POST"])

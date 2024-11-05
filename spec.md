@@ -262,3 +262,6 @@ Parameters can be either direct values or variable references. To reference a va
 - **Best Practices for Utilizing Knowledge Graph Search**:
   1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
   2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.
+- **Best Practices for Utilizing Vector Search**:
+  - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
+  - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.

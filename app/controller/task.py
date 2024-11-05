@@ -132,45 +132,72 @@ class Task:
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
-    def update_plan(self, commit_hash: str, suggestion: str):
-        should_update, explanation, key_factors = should_update_plan(
-            self.vm, suggestion
+    def update_plan(self, commit_hash: str, suggestion: str, key_factors: list=[]):
+        updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
+        logger.info(
+            "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
         )
-        if should_update:
-            updated_plan = generate_updated_plan(self.vm, explanation, key_factors)
-            logger.info(
-                "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
-            )
-            branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            if self.vm.branch_manager.checkout_branch_from_commit(
-                branch_name, commit_hash
-            ) and self.vm.branch_manager.checkout_branch(branch_name):
-                self.vm.set_plan(updated_plan)
-                self.vm.recalculate_variable_refs()
-                self.vm.save_state()
-                new_commit_hash = self.vm.branch_manager.commit_changes(
-                    commit_info={
-                        "type": StepType.PLAN_UPDATE.value,
-                        "seq_no": str(self.vm.state["program_counter"]),
-                        "description": explanation,
-                        "input_parameters": {"updated_plan": updated_plan},
-                        "output_variables": {},
-                    }
+        if self.vm.branch_manager.checkout_branch_from_commit(
+            branch_name, commit_hash
+        ) and self.vm.branch_manager.checkout_branch(branch_name):
+            self.vm.set_plan(updated_plan)
+            self.vm.recalculate_variable_refs()
+            self.vm.save_state()
+            new_commit_hash = self.vm.branch_manager.commit_changes(
+                commit_info={
+                    "type": StepType.PLAN_UPDATE.value,
+                    "seq_no": str(self.vm.state["program_counter"]),
+                    "description": suggestion,
+                    "input_parameters": {"updated_plan": updated_plan},
+                    "output_variables": {},
+                }
+            )
+            if new_commit_hash:
+                logger.info(
+                    f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
                 )
-                if new_commit_hash:
-                    logger.info(
-                        f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
-                    )
-                    return new_commit_hash
-                else:
-                    logger.error("Failed to commit updated plan")
+                return new_commit_hash
             else:
-                logger.error(f"Failed to create or checkout branch '{branch_name}'")
+                logger.error("Failed to commit updated plan")
+        else:
+            logger.error(f"Failed to create or checkout branch '{branch_name}'")
 
         return None
 
-    def auto_update(
+    def update(
+        self, commit_hash: str, suggestion: Optional[str] = None
+    ) -> Dict[str, Any]:
+        with self._lock:
+            try:
+                self.vm.set_state(commit_hash)
+                steps_executed = 0
+                last_commit_hash = commit_hash
+
+                logger.info(
+                    f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
+                )
+
+                new_commit_hash = self.update_plan(last_commit_hash, suggestion)
+                if new_commit_hash:
+                    last_commit_hash = new_commit_hash
+                else:
+                    raise ValueError("Failed to commit updated plan")
+
+                self._run()
+                return {
+                    "success": True,
+                    "current_branch": self.vm.branch_manager.get_current_branch(),
+                }
+            except Exception as e:
+                self.task_orm.status = "failed"
+                self.task_orm.logs = f"Failed to update task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
+                logger.error(self.task_orm.logs, exc_info=True)
+                self.save()
+                raise e
+
+    def dynamic_update(
         self, commit_hash: str, suggestion: Optional[str] = None, steps: int = 20
     ) -> Dict[str, Any]:
         with self._lock:
@@ -180,19 +207,23 @@ class Task:
                 last_commit_hash = commit_hash
 
                 logger.info(
-                    f"Starting VM execution for Task ID {self.task_orm.id} from commit hash {commit_hash} to address the suggestion {suggestion}"
+                    f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
-                branch_name = f"plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 self.vm.branch_manager.checkout_branch_from_commit(
                     branch_name, commit_hash
                 )
                 self.vm.branch_manager.checkout_branch(branch_name)
 
                 for _ in range(steps):
-                    new_commit_hash = self.update_plan(last_commit_hash, suggestion)
-                    if new_commit_hash:
-                        last_commit_hash = new_commit_hash
+                    should_update, explanation, key_factors = should_update_plan(
+                        self.vm, suggestion
+                    )
+                    if should_update:
+                        new_commit_hash = self.update_plan(last_commit_hash, explanation, key_factors)
+                        if new_commit_hash:
+                            last_commit_hash = new_commit_hash
 
                     try:
                         execution_result = self.vm.step()
