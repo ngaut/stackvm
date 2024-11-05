@@ -35,6 +35,7 @@ DATABASE_URI = os.environ.get("DATABASE_URI") or os.environ.get(
 # Existing settings
 # must use tmp path, DO NOT EDIT
 GIT_REPO_PATH = os.environ.get("GIT_REPO_PATH", "/tmp/stack_vm/runtime/")
+GENERATED_FILES_DIR = os.environ.get("GENERATED_FILES_DIR", "/tmp/stack_vm/generated/")
 VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")
 PLAN_EXAMPLE_PATH = os.path.join(os.getcwd(), "plan_example.md")
 
@@ -44,6 +45,12 @@ if not os.path.exists(GIT_REPO_PATH):
         os.makedirs(GIT_REPO_PATH)
     except Exception as e:
         print(f"Error creating GIT_REPO_PATH: {e}")
+
+if not os.path.exists(GENERATED_FILES_DIR):
+    try:
+        os.makedirs(GENERATED_FILES_DIR)
+    except Exception as e:
+        print(f"Error creating GENERATED_FILES_DIR: {e}")
 
 # Load VM_SPEC_CONTENT
 try:
