@@ -16,4 +16,4 @@ ENV PYTHONPATH=/app
 
 COPY . /app/
 
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:80", "-t", "300", "main:app"]
+CMD ["gunicorn", "-w", "16", "-b", "0.0.0.0:80", "-t", "300", "main:app"]

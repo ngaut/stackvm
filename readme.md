@@ -37,6 +37,9 @@ DATABASE_URI=mysql+pymysql://your_username:password@host:port/stackvm?ssl_ca=/et
 # Optional: Ollama Configuration
 OLLAMA_DEBUG=1
 OLLAMA_BASE_URL=http://localhost:11434
+
+# Optional: Backend CORS
+BACKEND_CORS_ORIGINS=["http://localhost:5173"]
 ```
 
 ### Initialize Database

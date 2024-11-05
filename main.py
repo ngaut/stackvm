@@ -123,7 +123,7 @@ def generate_file_download_link(content: str):
 
 # Register the tool after its definition
 global_tools_hub.register_tool(llm_generate)
-global_tools_hub.register_tool(generate_file_download_link)
+# global_tools_hub.register_tool(generate_file_download_link)
 global_tools_hub.load_tools("tools")
 
 if __name__ == "__main__":
