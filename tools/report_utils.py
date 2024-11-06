@@ -17,6 +17,13 @@ def generate_file_download_link(content: str):
     - `content`: The content to be downloaded.
 
     Output: The download link for the content (report or other format).
+
+    Best practice:
+    - Append download link to the final answer, the final answer format should be like:
+    ```
+    <originalfinal answer>
+    [Download](<download link>)
+    ```
     """
     try:
         # Generate a unique filename
