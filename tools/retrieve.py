@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 
-from . import tool
+from app.instructions.tools import tool
 
 logger = logging.getLogger(__name__)
 
