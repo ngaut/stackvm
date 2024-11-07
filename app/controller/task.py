@@ -132,11 +132,9 @@ class Task:
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
-    def update_plan(self, commit_hash: str, suggestion: str, key_factors: list=[]):
+    def update_plan(self, commit_hash: str, suggestion: str, key_factors: list = []):
         updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
-        logger.info(
-            "Generated updated plan: %s", json.dumps(updated_plan, indent=2)
-        )
+        logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
         branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         if self.vm.branch_manager.checkout_branch_from_commit(
@@ -221,7 +219,9 @@ class Task:
                         self.vm, suggestion
                     )
                     if should_update:
-                        new_commit_hash = self.update_plan(last_commit_hash, explanation, key_factors)
+                        new_commit_hash = self.update_plan(
+                            last_commit_hash, explanation, key_factors
+                        )
                         if new_commit_hash:
                             last_commit_hash = new_commit_hash
 
@@ -339,6 +339,26 @@ class Task:
                 logger.error(self.task_orm.logs, exc_info=True)
                 self.save()
                 raise e
+
+    def save_best_plan(self, commit_hash: str):
+        # get the plan from the highest seq_no in this selected branch
+        detail = self.get_execution_details(commit_hash=commit_hash)
+        if (
+            detail
+            and "vm_state" in detail[0]
+            and "current_plan" in detail[0]["vm_state"]
+        ):
+            current_plan = detail[0]["vm_state"]["current_plan"]
+            self.task_orm.best_plan = json.dumps(current_plan)
+            self.save()
+            return True
+
+        logger.error(
+            "Failed to find plan for task %s from commit hash %s",
+            self.task_orm.id,
+            commit_hash,
+        )
+        return False
 
     def save(self):
         try:
