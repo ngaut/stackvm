@@ -5,6 +5,7 @@ import json
 
 load_dotenv()
 
+
 def parse_cors(v: Any) -> list[str]:
     if isinstance(v, str):
         # If the string is not a JSON list, split by commas
@@ -18,6 +19,7 @@ def parse_cors(v: Any) -> list[str]:
     elif isinstance(v, list):
         return v
     raise ValueError(f"Invalid type for CORS origins: {type(v)}")
+
 
 # Get the environment variable and parse it
 BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGINS", ""))

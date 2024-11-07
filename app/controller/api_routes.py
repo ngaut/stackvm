@@ -22,7 +22,7 @@ from flask import (
 from flask_cors import CORS
 
 from app.database import SessionLocal
-from app.config.settings import BACKEND_CORS_ORIGINS,GIT_REPO_PATH, GENERATED_FILES_DIR
+from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -33,7 +33,11 @@ api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 if BACKEND_CORS_ORIGINS and len(BACKEND_CORS_ORIGINS) > 0:
     CORS(
         api_blueprint,
-        resources={r"/*": {"origins": [str(origin).strip("/") for origin in BACKEND_CORS_ORIGINS]}},
+        resources={
+            r"/*": {
+                "origins": [str(origin).strip("/") for origin in BACKEND_CORS_ORIGINS]
+            }
+        },
     )
 
 logger = logging.getLogger(__name__)
@@ -124,6 +128,7 @@ def code_diff(task_id, commit_hash):
                 404,
             )
 
+
 @api_blueprint.route("/tasks/<task_id>/update", methods=["POST"])
 def update_task(task_id):
     """
@@ -153,6 +158,7 @@ def update_task(task_id):
             f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
         )
         return log_and_return_error("Failed to update plan.", "error", 500)
+
 
 @api_blueprint.route("/tasks/<task_id>/auto_update", methods=["POST"])
 def dynamic_update(task_id):
@@ -223,6 +229,28 @@ def download_file(filename):
         return send_from_directory(GENERATED_FILES_DIR, filename, as_attachment=True)
     except FileNotFoundError:
         return log_and_return_error("File not found.", "error", 404)
+
+
+@api_blueprint.route(
+    "/tasks/<task_id>/commits/<commit_hash>/save_best_plan", methods=["POST"]
+)
+def save_best_plan(task_id: str, commit_hash: str):
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+    success = task.save_best_plan(commit_hash)
+    if success:
+        return jsonify({"success": True}), 200
+    else:
+        return log_and_return_error(
+            f"Failed to save best plan for task {task_id} from commit hash {commit_hash}",
+            "error",
+            500,
+        )
 
 
 @api_blueprint.route("/tasks")
