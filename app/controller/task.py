@@ -438,3 +438,26 @@ class TaskService:
             .limit(limit)
             .all()
         )
+
+    def list_best_plans(self, session, limit=50, offset=0):
+        """
+        List best plans with pagination support.
+        """
+        return (
+            session.query(TaskORM)
+            .filter(TaskORM.best_plan != None)
+            .order_by(TaskORM.updated_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+    def count_best_plans(self, session):
+        """
+        Count best plans.
+        """
+        return (
+            session.query(TaskORM)
+            .filter(TaskORM.best_plan != None)
+            .count()
+        )
