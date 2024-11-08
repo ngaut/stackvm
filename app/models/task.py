@@ -27,5 +27,6 @@ class Task(Base):
     tenant_id = Column(String(36), nullable=True)
     project_id = Column(String(36), nullable=True)
     best_plan = Column(JSON, nullable=True)
+    meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

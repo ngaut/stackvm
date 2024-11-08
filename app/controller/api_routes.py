@@ -390,6 +390,7 @@ def get_best_plans():
                 "id": task.id,
                 "goal": task.goal,
                 "best_plan": task.best_plan,
+                "meta": task.meta,
             }
             for task in tasks
         ]
