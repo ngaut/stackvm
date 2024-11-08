@@ -106,3 +106,69 @@ body {
 .final-answer p {
     font-size: 1rem;
 }
+
+/* ----- Updated Styles for Best Plans Table ----- */
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    table-layout: fixed; /* Enables fixed table layout */
+}
+
+th, td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+    vertical-align: top;
+    word-wrap: break-word; /* Allows long words to break and wrap */
+}
+
+th {
+    background-color: #f2f2f2;
+}
+
+pre {
+    margin: 0;
+    font-family: monospace;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    overflow: auto;
+}
+
+code {
+    font-family: monospace;
+}
+
+/* Specific Column Widths */
+th.id-column, td.id-column {
+    width: 10%; /* Adjust as needed */
+}
+
+th.goal-column, td.goal-column {
+    width: 20%; /* Adjust as needed */
+}
+
+th.best-plan-column, td.best-plan-column {
+    width: 50%; /* Reduced width */
+}
+
+th.meta-column, td.meta-column {
+    width: 20%; /* Adjust as needed */
+}
+
+table tbody tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Optional: Hover Effects for Preformatted Text */
+.best-plan-column pre,
+.meta-column pre {
+    /* No height restrictions */
+    max-height: none;
+}

@@ -16,9 +16,10 @@
             <table class="table table-striped" id="bestPlansTable">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Goal</th>
-                        <th>Best Plan</th>
+                        <th class="id-column">ID</th>
+                        <th class="goal-column">Goal</th>
+                        <th class="best-plan-column">Best Plan</th>
+                        <th class="meta-column">Meta</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,16 +65,18 @@
             const tbody = $('#bestPlansTable tbody');
             tbody.empty();
             if (bestPlans.length === 0) {
-                tbody.append('<tr><td colspan="3" class="text-center">No best plans available.</td></tr>');
+                tbody.append('<tr><td colspan="4" class="text-center">No best plans available.</td></tr>');
                 return;
             }
             bestPlans.forEach(plan => {
                 const formattedBestPlan = JSON.stringify(plan.best_plan, null, 2); // Format JSON with indentation
+                const formattedMeta = typeof plan.meta === 'object' ? JSON.stringify(plan.meta, null, 2) : plan.meta;
                 const row = `
                     <tr>
-                        <td>${escapeHtml(plan.id)}</td>
-                        <td>${escapeHtml(plan.goal)}</td>
-                        <td><pre><code class="language-json">${escapeHtml(formattedBestPlan)}</code></pre></td>
+                        <td class="id-column">${escapeHtml(plan.id)}</td>
+                        <td class="goal-column">${escapeHtml(plan.goal)}</td>
+                        <td class="best-plan-column"><pre><code class="language-json">${escapeHtml(formattedBestPlan)}</code></pre></td>
+                        <td class="meta-column"><pre><code class="language-json">${escapeHtml(formattedMeta)}</code></pre></td>
                     </tr>
                 `;
                 tbody.append(row);
