@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Text, Enum, DateTime
+from sqlalchemy import Column, String, Text, Enum, DateTime, JSON
 from datetime import datetime
 from app.database import Base
 
@@ -26,6 +26,6 @@ class Task(Base):
     logs = Column(Text, nullable=True)
     tenant_id = Column(String(36), nullable=True)
     project_id = Column(String(36), nullable=True)
-    best_plan = Column(Text, nullable=True)
+    best_plan = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

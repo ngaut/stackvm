@@ -377,6 +377,34 @@ def delete_branch_route(task_id, branch_name):
             )
 
 
+@api_blueprint.route("/best_plans")
+def get_best_plans():
+    limit = request.args.get("limit", default=10, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+
+    with SessionLocal() as session:
+        tasks = ts.list_best_plans(session, limit=limit, offset=offset)
+        total = ts.count_best_plans(session)
+        best_plans = [
+            {
+                "id": task.id,
+                "goal": task.goal,
+                "best_plan": task.best_plan,
+            }
+            for task in tasks
+        ]
+        return jsonify(
+            {
+                "best_plans": best_plans,
+                "pagination": {
+                    "limit": limit,
+                    "offset": offset,
+                    "total": total
+                },
+            }
+        )
+
+
 @api_blueprint.route("/stream_execute_vm", methods=["POST"])
 def stream_execute_vm():
     """
@@ -493,3 +521,11 @@ def stream_execute_vm():
             "X-Content-Type-Options": "nosniff",
         },
     )
+
+
+@main_blueprint.route("/best_plans")
+def best_plans_page():
+    """
+    Route to render the Best Plans page.
+    """
+    return render_template("best_plans.html")
