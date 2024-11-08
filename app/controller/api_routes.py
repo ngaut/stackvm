@@ -183,7 +183,7 @@ def dynamic_update(task_id):
             )
 
     try:
-        result = task.auto_update(commit_hash, suggestion=suggestion, steps=steps)
+        result = task.dynamic_update(commit_hash, suggestion=suggestion, steps=steps)
         return jsonify(result), 200
     except Exception as e:
         current_app.logger.error(

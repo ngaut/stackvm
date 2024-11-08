@@ -512,7 +512,7 @@ async function executeFromStep(commitHash, seqNo) {
         modal.appendChild(spinner);
 
         try {
-            const executeData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/auto_update`, {
+            const executeData = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/dynamic_update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
