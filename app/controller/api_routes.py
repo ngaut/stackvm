@@ -177,7 +177,7 @@ def update_task(task_id):
             jsonify(
                 {
                     "success": True,
-                    "branch_name": branch_name,
+                    "current_branch": branch_name,
                 }
             ),
             200,
@@ -235,7 +235,7 @@ def dynamic_update(task_id):
             jsonify(
                 {
                     "success": True,
-                    "branch_name": branch_name,
+                    "current_branch": branch_name,
                 }
             ),
             200,
