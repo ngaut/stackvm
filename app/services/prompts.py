@@ -8,21 +8,24 @@ def get_plan_update_prompt(
     """
     Get the prompt for updating the plan.
     """
+    # Get the last executed step if any exist
+    last_executed_step = None
+    if vm.state["executed_steps"]:
+        max_seq = max(vm.state["executed_steps"])
+        last_executed_step = next(
+            (step for step in vm.state["current_plan"] if step.get("seq_no") == max_seq),
+            None
+        )
+
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan based on suggestions and the current execution results.
 
-Goal:
-{vm.state['goal']}
-
-Current Plan:
-{json.dumps(vm.state['current_plan'], indent=2)}
-
-Current Program Counter: {vm.state['program_counter']}
-
-Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
-
-**Suggestion for plan update**: {suggestion}
-"""
+    Goal: {vm.state['goal']}
+    Current Variables: {json.dumps(vm.get_all_variables(), indent=2)}
+    Executed Steps: {sorted(list(vm.state['executed_steps']))}
+    Current Plan: {json.dumps(vm.state['current_plan'], indent=2)}
+    Last Executed Step: {json.dumps(last_executed_step, indent=2) if last_executed_step else "No steps executed yet"}
+    """
 
     if key_factors and len(key_factors) > 0:
         prompt += f"\nKey factors influencing the update:\n{json.dumps(key_factors, indent=2)}\n"
@@ -53,8 +56,8 @@ Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_count
     - Do not reference output variables from already executed steps if those variables are not present in Current Variables, as they have been garbage collected.
 
 6. **Merge with Original Plan**:
-    - Integrate proposed changes seamlessly into the original plan starting from the current program counter.
-    - Preserve all steps prior to the current program counter without alteration.
+    - Integrate proposed changes seamlessly into the original plan starting from the last executed step.
+    - Preserve all previously executed steps without alteration.
 
 7. **Adhere to VM Specification**:
     - Ensure that the revised plan complies with the provided VM specification in format and structure.
@@ -84,6 +87,14 @@ def get_should_update_plan_prompt(vm, suggestion):
     """
     Get the prompt for determining if the plan should be updated.
     """
+    # Get the last executed step if any exist
+    last_executed_step = None
+    if vm.state["executed_steps"]:
+        max_seq = max(vm.state["executed_steps"])
+        last_executed_step = next(
+            (step for step in vm.state["current_plan"] if step.get("seq_no") == max_seq),
+            None
+        )
 
     json_format = """
     {{
@@ -110,11 +121,8 @@ User Suggestion for plan update:
 Current Plan:
 {json.dumps(vm.state['current_plan'], indent=2)}
 
-Current Program Counter:
-{vm.state['program_counter']}
-
 Last Executed Step:
-{json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+{json.dumps(last_executed_step, indent=2) if last_executed_step else "No steps executed yet"}
 
 Current Variables:
 {json.dumps(vm.get_all_variables(), indent=2)}

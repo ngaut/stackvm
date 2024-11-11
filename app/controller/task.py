@@ -98,30 +98,24 @@ class Task:
         return plan
 
     def _run(self):
-        """Execute the plan for the task."""
-        while True:
-            execution_result = self.vm.step()
-            if execution_result.get("success") is not True:
-                raise ValueError(
-                    f"Failed to execute step:{execution_result.get('error')}"
-                )
-
-            if self.vm.state.get("goal_completed"):
-                logger.info("Goal completed during plan execution.")
-                break
-
-        if self.vm.state.get("goal_completed"):
-            self.mark_as_completed()
-            final_answer = self.vm.get_variable("final_answer")
-            if final_answer:
-                logger.info("final_answer: %s", final_answer)
-            else:
-                logger.info("No result was generated.")
+        """Execute the plan for the task using parallel execution."""
+        result = self.vm.run()
+        
+        if not result["success"]:
+            self.task_orm.status = "failed"
+            self.task_orm.logs = f"Failed to execute plan: {result['errors']}"
+            self.save()
+            raise ValueError(self.task_orm.logs)
+        
+        if result["goal_completed"]:
+            self.task_orm.status = "completed"
+            self.task_orm.logs = "Plan execution completed successfully."
         else:
-            raise ValueError(
-                "Plan execution failed or did not complete: %s",
-                self.vm.state.get("errors"),
-            )
+            self.task_orm.status = "failed"
+            self.task_orm.logs = "Plan execution completed but goal not achieved."
+        
+        self.save()
+        return result
 
     def execute(self):
         with self._lock:
@@ -142,25 +136,33 @@ class Task:
         updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
-        self.vm.set_plan(updated_plan)
-        self.vm.recalculate_variable_refs()
-        self.vm.save_state()
-        new_commit_hash = self.vm.branch_manager.commit_changes(
-            commit_info={
-                "type": StepType.PLAN_UPDATE.value,
-                "seq_no": str(self.vm.state["program_counter"]),
-                "description": suggestion,
-                "input_parameters": {"updated_plan": updated_plan},
-                "output_variables": {},
-            }
-        )
-        if new_commit_hash:
-            logger.info(
-                f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
+        if self.vm.branch_manager.checkout_branch(branch_name):
+            self.vm.set_plan(updated_plan)
+            self.vm.recalculate_variable_refs()
+            self.vm.save_state()
+            
+            # Get the last executed step's seq_no for the commit info
+            last_seq_no = max(self.vm.state["executed_steps"]) if self.vm.state["executed_steps"] else 0
+            
+            new_commit_hash = self.vm.branch_manager.commit_changes(
+                commit_info={
+                    "type": StepType.PLAN_UPDATE.value,
+                    "seq_no": str(last_seq_no),  # Use last executed step instead of program_counter
+                    "description": suggestion,
+                    "input_parameters": {"updated_plan": updated_plan},
+                    "output_variables": {},
+                }
             )
-            return new_commit_hash
+            if new_commit_hash:
+                logger.info(
+                    f"Resumed execution with updated plan on branch '{branch_name}'. New commit: {new_commit_hash}"
+                )
+                return new_commit_hash
+            else:
+                logger.error("Failed to commit updated plan")
+        else:
+            logger.error(f"Failed to checkout branch '{branch_name}'")
 
-        logger.error("Failed to commit updated plan for branch '%s'", branch_name)
         return None
 
     def update(
@@ -217,50 +219,25 @@ class Task:
 
                 if not self.branch_manager.checkout_branch(new_branch_name):
                     raise ValueError(
-                        f"Failed to create or checkout branch '{branch_name}'"
+                        f"Failed to create or checkout branch '{new_branch_name}'"
                     )
 
-                for _ in range(steps):
-                    should_update, explanation, key_factors = should_update_plan(
-                        self.vm, suggestion
-                    )
-                    if should_update:
-                        new_commit_hash = self.update_plan(
-                            new_branch_name, explanation, key_factors
-                        )
-                        if new_commit_hash:
-                            last_commit_hash = new_commit_hash
-
-                    try:
-                        execution_result = self.vm.step()
-                    except Exception as e:
-                        error_msg = f"Error during VM step execution: {str(e)}"
-                        logger.error(error_msg, exc_info=True)
-                        raise e
-
-                    if execution_result.get(
-                        "success"
-                    ) is not True or not execution_result.get("commit_hash"):
-                        raise ValueError(
-                            f"Execution result is not successful:{execution_result.get('error')}"
-                        )
-
-                    last_commit_hash = execution_result.get("commit_hash")
-                    steps_executed += 1
-
-                    if self.vm.state.get("goal_completed"):
-                        logger.info("Goal completed. Stopping execution.")
-                        break
+                # Execute steps in parallel until max steps reached or goal completed
+                result = self.vm.run()
+                
+                if not result["success"]:
+                    raise ValueError(f"Execution failed: {result['errors']}")
 
                 self.task_orm.status = (
-                    "completed" if self.vm.state.get("goal_completed") else "failed"
+                    "completed" if result["goal_completed"] else "failed"
                 )
                 self.save()
 
                 return {
                     "success": True,
-                    "steps_executed": steps_executed,
+                    "steps_executed": result["executed_steps"],
                     "current_branch": self.vm.branch_manager.get_current_branch(),
+                    "last_commit_hash": self.vm.branch_manager.get_current_commit_hash(),
                 }
             except Exception as e:
                 self.task_orm.status = "failed"
@@ -293,9 +270,7 @@ class Task:
                         f"Failed to parse updated step {updated_step_response}"
                     )
 
-                logger.info(
-                    f"Updating step: {updated_step}, program_counter: {self.vm.state['program_counter']}"
-                )
+                logger.info(f"Updating step: {updated_step}")
 
                 previous_commit_hash = self.branch_manager.get_parent_commit_hash(
                     commit_hash
@@ -307,15 +282,19 @@ class Task:
                 if self.branch_manager.checkout_branch_from_commit(
                     branch_name, previous_commit_hash
                 ) and self.branch_manager.checkout_branch(branch_name):
-                    self.vm.state["current_plan"][seq_no] = updated_step
-                    self.vm.state["program_counter"] = seq_no
+                    # Update the step in the plan
+                    for i, step in enumerate(self.vm.state["current_plan"]):
+                        if step.get("seq_no") == seq_no:
+                            self.vm.state["current_plan"][i] = updated_step
+                            break
+                            
                     self.vm.recalculate_variable_refs()
                     self.vm.save_state()
 
                     new_commit_hash = self.vm.branch_manager.commit_changes(
                         commit_info={
                             "type": StepType.STEP_OPTIMIZATION.value,
-                            "seq_no": str(self.vm.state["program_counter"]),
+                            "seq_no": str(seq_no),
                             "description": suggestion,
                             "input_parameters": {"updated_step": updated_step},
                             "output_variables": {},
