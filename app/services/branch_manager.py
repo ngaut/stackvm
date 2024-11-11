@@ -114,6 +114,7 @@ class GitManager(BranchManager):
             {
                 "name": branch.name,
                 "last_commit_date": branch.commit.committed_datetime.isoformat(),
+                "last_commit_hash": branch.commit.hexsha,
                 "last_commit_message": branch.commit.message.split("\n")[0],
                 "is_active": branch.name == self.get_current_branch(),
             }
