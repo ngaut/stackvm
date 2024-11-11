@@ -305,3 +305,7 @@ class GitManager(BranchManager):
             return self.repo.git.show(
                 commit, "--pretty=format:", "--no-commit-id", "-p"
             )
+
+    def __del__(self):
+        if self.repo:
+            self.repo.close()

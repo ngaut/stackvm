@@ -21,6 +21,10 @@ def parse_cors(v: Any) -> list[str]:
     raise ValueError(f"Invalid type for CORS origins: {type(v)}")
 
 
+TASK_QUEUE_WORKERS: int = 20
+# in seconds
+TASK_QUEUE_TIMEOUT: int = 600
+
 # Get the environment variable and parse it
 BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGINS", ""))
 

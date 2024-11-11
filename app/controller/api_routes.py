@@ -22,11 +22,11 @@ from flask import (
 from flask_cors import CORS
 
 from app.database import SessionLocal
-from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR
+from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR, TASK_QUEUE_WORKERS
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
-
+from .task_queue import TaskQueue
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 
@@ -43,6 +43,10 @@ if BACKEND_CORS_ORIGINS and len(BACKEND_CORS_ORIGINS) > 0:
 logger = logging.getLogger(__name__)
 
 ts = TaskService()
+
+# create global task queue instance
+task_queue = TaskQueue(max_concurrent_tasks=TASK_QUEUE_WORKERS)
+task_queue.start_workers()
 
 
 def log_and_return_error(message, error_type, status_code):
@@ -151,8 +155,33 @@ def update_task(task_id):
             )
 
     try:
-        result = task.update(commit_hash, suggestion=suggestion)
-        return jsonify(result), 200
+        branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if not task.create_branch(branch_name, commit_hash):
+            return log_and_return_error(
+                f"[Update Task] Failed to create branch {branch_name} for task {task_id}.",
+                "error",
+                500,
+            )
+
+        task_queue.add_task(
+            task_id,
+            {
+                "new_branch_name": branch_name,
+                "commit_hash": commit_hash,
+                "suggestion": suggestion,
+            },
+            task.update,
+            datetime.utcnow(),
+        )
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "current_branch": branch_name,
+                }
+            ),
+            200,
+        )
     except Exception as e:
         current_app.logger.error(
             f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
@@ -183,8 +212,34 @@ def dynamic_update(task_id):
             )
 
     try:
-        result = task.dynamic_update(commit_hash, suggestion=suggestion, steps=steps)
-        return jsonify(result), 200
+        branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if not task.create_branch(branch_name, commit_hash):
+            return log_and_return_error(
+                f"[Dynamic Update Task] Failed to create branch {branch_name} for task {task_id}.",
+                "error",
+                500,
+            )
+
+        task_queue.add_task(
+            task_id,
+            {
+                "new_branch_name": branch_name,
+                "commit_hash": commit_hash,
+                "suggestion": suggestion,
+                "steps": steps,
+            },
+            task.dynamic_update,
+            datetime.utcnow(),
+        )
+        return (
+            jsonify(
+                {
+                    "success": True,
+                    "current_branch": branch_name,
+                }
+            ),
+            200,
+        )
     except Exception as e:
         current_app.logger.error(
             f"Failed to update plan for task {task_id}: {str(e)}", exc_info=True
@@ -397,11 +452,7 @@ def get_best_plans():
         return jsonify(
             {
                 "best_plans": best_plans,
-                "pagination": {
-                    "limit": limit,
-                    "offset": offset,
-                    "total": total
-                },
+                "pagination": {"limit": limit, "offset": offset, "total": total},
             }
         )
 
