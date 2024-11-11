@@ -201,43 +201,9 @@ class InstructionHandlers:
             jump_if_false = params.get("jump_if_false")
             target_seq = params.get("target_seq")
 
-<<<<<<< HEAD
-        if condition_prompt:
-            # Conditional jump
-            if jump_if_true is None or jump_if_false is None:
-                return (
-                    self._handle_error(
-                        "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
-                        instruction="jmp",
-                        params=params,
-                    ),
-                    None,
-                )
-
-            condition_prompt_with_response_format = (
-                condition_prompt
-                + '\nRespond only with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
-            )
-            response = self.vm.llm_interface.generate(
-                condition_prompt_with_response_format, context
-            )
-
-            try:
-                json_object = find_first_json_object(response)
-                if json_object is None:
-                    raise ValueError(
-                        f"No JSON object found in the response: {response}."
-                    )
-                parsed_response = json.loads(json_object)
-                condition_result = parsed_response.get("result")
-                explanation = parsed_response.get("explanation", "")
-
-                if not isinstance(condition_result, bool):
-=======
             if condition_prompt:
                 # Conditional jump
                 if jump_if_true is None or jump_if_false is None:
->>>>>>> 87b9814 (refactor: remove program_counter and implement parallel execution)
                     return (
                         self._handle_error(
                             "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
@@ -305,13 +271,9 @@ class InstructionHandlers:
             elif target_seq is None:
                 return (
                     self._handle_error(
-<<<<<<< HEAD
-                        f"Failed to parse JSON response from LLM: {response}.",
-                        instruction="jmp",
-                        params=params,
-=======
-                        "Missing 'target_seq' for unconditional jump.", "jmp", params
->>>>>>> 87b9814 (refactor: remove program_counter and implement parallel execution)
+                        "Missing 'target_seq' for unconditional jump.", 
+                        "jmp", 
+                        params
                     ),
                     None,
                 )
