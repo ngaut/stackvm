@@ -22,7 +22,7 @@ from flask import (
 from flask_cors import CORS
 
 from app.database import SessionLocal
-from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR
+from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR, TASK_QUEUE_WORKERS
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -156,6 +156,13 @@ def update_task(task_id):
 
     try:
         branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if not task.create_branch(branch_name, commit_hash):
+            return log_and_return_error(
+                f"[Update Task] Failed to create branch {branch_name} for task {task_id}.",
+                "error",
+                500,
+            )
+
         task_queue.add_task(
             task_id,
             {
@@ -164,14 +171,13 @@ def update_task(task_id):
                 "suggestion": suggestion,
             },
             task.update,
-            datetime.utcnow()(),
+            datetime.utcnow(),
         )
         return (
             jsonify(
                 {
                     "success": True,
                     "branch_name": branch_name,
-                    "commit_hash": result.commit_hash,
                 }
             ),
             200,
@@ -207,6 +213,13 @@ def dynamic_update(task_id):
 
     try:
         branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if not task.create_branch(branch_name, commit_hash):
+            return log_and_return_error(
+                f"[Dynamic Update Task] Failed to create branch {branch_name} for task {task_id}.",
+                "error",
+                500,
+            )
+
         task_queue.add_task(
             task_id,
             {
@@ -223,7 +236,6 @@ def dynamic_update(task_id):
                 {
                     "success": True,
                     "branch_name": branch_name,
-                    "commit_hash": result.commit_hash,
                 }
             ),
             200,

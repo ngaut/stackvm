@@ -1,5 +1,6 @@
 import asyncio
-from datetime import datetime
+import inspect
+from datetime import datetime, timedelta
 from queue import Queue
 from threading import Thread
 import uuid
@@ -7,7 +8,7 @@ from typing import Callable, Any
 import logging
 import traceback
 
-from app.config.settings import TASK_QUEUE_WORKERS, TASK_QUEUE_TIMEOUT
+from app.config.settings import TASK_QUEUE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +30,11 @@ class TaskQueue:
         while True:
             task_id, task_request, worker_func, start_time = self.task_queue.get()
             try:
-                if datetime.utcnow() - start_time <= datetime.timedelta(
-                    seconds=settings.TASK_QUEUE_TIMEOUT
-                ):
-                    asyncio.run(self._run_task(worker_func, task_id, task_request))
+                if datetime.utcnow() - start_time <= timedelta(seconds=TASK_QUEUE_TIMEOUT):
+                    loop.run_until_complete(self._run_task(worker_func, task_id, task_request))
                 else:
                     logger.warning(
-                        f"Task {task_id} has exceeded the timeout of {settings.TASK_QUEUE_TIMEOUT} seconds."
+                        f"Task {task_id} has exceeded the timeout of {TASK_QUEUE_TIMEOUT} seconds."
                     )
             except Exception as e:
                 error_stack = traceback.format_exc()
@@ -47,7 +46,13 @@ class TaskQueue:
         self, worker_func: Callable, task_id: uuid.UUID, task_request: dict
     ):
         async with self.semaphore:
-            await worker_func(**task_request)
+            if inspect.iscoroutinefunction(worker_func):
+                result = await worker_func(**task_request)
+            else:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, lambda: worker_func(**task_request))
+            logger.info(f"Task {task_id} completed with result: {result}")
+            return result
 
     def add_task(
         self,

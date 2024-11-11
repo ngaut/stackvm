@@ -54,6 +54,12 @@ class Task:
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
 
+    def create_branch(self, branch_name: str, commit_hash: str):
+        with self._lock:
+            return self.vm.branch_manager.checkout_branch_from_commit(
+                branch_name, commit_hash
+            )
+
     def get_branches(self):
         return self.branch_manager.list_branches()
 
@@ -132,11 +138,6 @@ class Task:
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
-    def checkout_branch(self, branch_name: str, commit_hash: str):
-        return self.vm.branch_manager.checkout_branch_from_commit(
-            branch_name, commit_hash
-        ) and self.vm.branch_manager.checkout_branch(branch_name)
-
     def update_plan(self, branch_name: str, suggestion: str, key_factors: list = []):
         updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
@@ -174,7 +175,7 @@ class Task:
                     f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
-                if not self.checkout_branch(new_branch_name, commit_hash):
+                if not self.branch_manager.checkout_branch(new_branch_name):
                     raise ValueError(
                         f"Failed to create or checkout branch '{new_branch_name}'"
                     )
@@ -214,7 +215,7 @@ class Task:
                     f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
-                if not self.checkout_branch(new_branch_name, commit_hash):
+                if not self.branch_manager.checkout_branch(new_branch_name):
                     raise ValueError(
                         f"Failed to create or checkout branch '{branch_name}'"
                     )

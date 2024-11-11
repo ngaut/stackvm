@@ -385,7 +385,7 @@ async function showCommitDetailsAndHighlight(commitHash) {
 
         updateCommitDetails(vmState);
         updateVMState(vmState.vm_state);
-        updateCodeDiff(codeDiff);
+        updateCodeDiff(codeDiff.diff);
         updateVMVariables(vmState.vm_state);
 
         hljs.highlightAll();
@@ -417,7 +417,7 @@ function updateVMState(vmState) {
 function updateCodeDiff(codeDiff) {
     document.getElementById('codeDiff').innerHTML = `
         <h2>Code Diff</h2>
-        <pre><code class="diff">${codeDiff.diff}</code></pre>
+        <pre><code class="diff">${codeDiff}</code></pre>
     `;
 }
 
@@ -517,13 +517,12 @@ async function executeFromStep(commitHash, seqNo) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     commit_hash: commitHash,
-                    seq_no: seqNo,
                     suggestion: suggestion
                 })
             });
 
             if (executeData.success) {
-                await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                await updateUIAfterExecution(executeData.branch_name);
                 showNotification('Execution completed successfully', 'success');
             } else {
                 showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
@@ -550,7 +549,7 @@ async function executeFromStep(commitHash, seqNo) {
     document.body.appendChild(modal);
 }
 
-async function updateUIAfterExecution(newBranch, lastCommitHash) {
+async function updateUIAfterExecution(newBranch) {
     currentBranch = newBranch;
     await loadBranches();
     highlightCurrentBranch();
@@ -564,9 +563,9 @@ async function updateUIAfterExecution(newBranch, lastCommitHash) {
         } else {
             updateStepList(branchData);
             
-            if (lastCommitHash) {
-                showCommitDetailsAndHighlight(lastCommitHash);
-            }
+            // Automatically highlight the latest commit
+            const latestCommit = branchData[branchData.length - 1].commit_hash;
+            showCommitDetailsAndHighlight(latestCommit);
         }
     } catch (error) {
         console.error('Error fetching branch data:', error);
@@ -619,7 +618,7 @@ async function deleteBranch() {
 }
 
 async function updateBranchesAndChart() {
-    const branches = await fetchWithErrorHandling(`/get_branches/${encodeURIComponent(currentTaskId)}`);
+    const branches = await fetchWithErrorHandling(`/api/tasks/${encodeURIComponent(currentTaskId)}/branches`);
     updateBranchSelector(branches);
     await updateChart(branches.map(branch => branch.name));
 }
@@ -696,7 +695,7 @@ async function optimizeStep(commitHash, seqNo) {
             });
 
             if (executeData.success) {
-                await updateUIAfterExecution(executeData.current_branch, executeData.last_commit_hash);
+                await updateUIAfterExecution(executeData.branch_name);
                 showNotification('Execution completed successfully', 'success');
             } else {
                 showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');
