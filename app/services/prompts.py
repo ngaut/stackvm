@@ -252,3 +252,51 @@ Now, let's update the step.
 **Output**:
 Provide only the updated step in JSON format.
 """
+
+
+def get_label_classification_prompt(task_goal: str, labels_tree: dict) -> str:
+    """
+    Generates an enhanced prompt for the LLM to classify the task goal into a label path.
+
+    Args:
+        task_goal (str): The goal of the task.
+        labels_tree (dict): The current labels tree.
+
+    Returns:
+        str: The generated prompt.
+    """
+
+    # Convert the labels tree to a JSON string with indentation for readability
+    labels_tree_json = json.dumps(labels_tree, indent=4, ensure_ascii=False)
+
+    # Construct the prompt
+    prompt = f"""
+Your task is to create a tree-structured tagging system for classifying user tasks or questions. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. 
+This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
+
+## Current Labels Tree
+
+```json
+{labels_tree_json}
+```
+
+## Task Goal
+
+"{task_goal}"
+
+## Instructions
+
+1. **Intent Recognition**: Perform semantic analysis on new goals, extracting keywords and intents.
+2. **Matching Classification**: Based on the analysis results, match the goal to the most suitable category and subcategory. 
+3. **Dynamic Expansion**: When new goals that cannot be classified appear, consider adding new subcategories or categories at appropriate positions in the tree.
+4. if a suitable category is found, return the label path as a JSON array of label names, for example:
+```json
+[
+"Basic Knowledge",
+"Feature Support",
+"Foreign Key"
+]
+```
+"""
+
+    return prompt

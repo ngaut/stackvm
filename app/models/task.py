@@ -2,6 +2,8 @@ import uuid
 from sqlalchemy import Column, String, Text, Enum, DateTime, JSON
 from datetime import datetime
 from app.database import Base
+from sqlalchemy.orm import relationship
+from .task_label import task_labels
 
 
 class Task(Base):
@@ -30,3 +32,12 @@ class Task(Base):
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    labels = relationship("Label", secondary=task_labels, back_populates="tasks")
+
+    def __repr__(self):
+        return f"<Task(goal={self.goal}, status={self.status})>"
+
+    @property
+    def has_best_plan(self):
+        """Check if the task has a best_plan."""
+        return self.best_plan is not None
