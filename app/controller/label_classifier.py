@@ -68,7 +68,7 @@ class LabelClassifier:
             List[str]: A list of label names from root to leaf.
         """
         # Generate enhanced classification prompt
-        labels_tree = get_labels_tree()
+        labels_tree = self.get_labels_tree_with_task_goals()
         prompt = get_label_classification_prompt(task_goal, labels_tree)
 
         # Call LLM to get classification
@@ -116,7 +116,7 @@ class LabelClassifier:
                 else:
                     parent_id = label.id
 
-    def assign_task_goals_to_leaf_labels(self) -> List[Dict]:
+    def get_labels_tree_with_task_goals(self) -> List[Dict]:
         """
         Queries tasks with corresponding labels and assigns task goals to the respective leaf labels.
 
@@ -150,12 +150,12 @@ class LabelClassifier:
                 .all()
             )
 
-            label_to_goals = defaultdict(list)
+            label_to_tasks = defaultdict(list)
             for goal, label_id in limited_tasks:
-                label_to_goals[label_id].append(goal)
+                label_to_tasks[label_id].append(goal)
 
             for label in leaf_labels:
-                label["task_goals"] = label_to_goals.get(label["id"], [])
+                label["tasks"] = label_to_tasks.get(label["id"], [])
 
         return remove_label_id_from_tree(labels_tree)
 

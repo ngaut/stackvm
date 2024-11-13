@@ -301,7 +301,7 @@ This design allows the system to be highly flexible and scalable, capable of con
 
 Response Format:
 
-Respond with the label path as a JSON array of label names, for example:
+Respond only with the label path as a JSON array of label names, for example:
 
 ```json
 [
