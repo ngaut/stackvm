@@ -27,6 +27,7 @@ from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_F
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
 from .task_queue import TaskQueue
+from .label_classifier import get_label_path
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 
@@ -445,7 +446,7 @@ def get_best_plans():
                 "id": task.id,
                 "goal": task.goal,
                 "best_plan": task.best_plan,
-                "meta": task.meta,
+                "label_path": get_label_path(session, task.label) if task.label else [],
             }
             for task in tasks
         ]

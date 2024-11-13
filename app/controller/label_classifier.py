@@ -49,6 +49,24 @@ def remove_label_id_from_tree(tree: List[Dict]):
             remove_label_id_from_tree(label["children"])
     return tree
 
+def get_label_path(session: Session, label: Label) -> List[str]:
+    """
+    Retrieves the label path from the given label up to the root label.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        label (Label): The label for which to retrieve the path.
+
+    Returns:
+        List[str]: A list of label names from root to the given label.
+    """
+    path = []
+    current_label = label
+    while current_label:
+        path.insert(0, current_label.name)
+        current_label = current_label.parent
+    return path
+
 
 class LabelClassifier:
     """
