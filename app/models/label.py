@@ -23,6 +23,7 @@ INSERT INTO `labels` (`id`, `name`, `parent_id`) VALUES
 (UUID(), 'Other Topics', @root_id);
 """
 
+
 class Label(Base):
     __tablename__ = "labels"
 

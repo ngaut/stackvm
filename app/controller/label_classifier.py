@@ -1,10 +1,17 @@
 import json
 from typing import List, Dict
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+from collections import defaultdict
+
 from app.services.prompts import get_label_classification_prompt
 from app.services.llm_interface import LLMInterface
 from app.models.label import Label
 from app.database import SessionLocal
-from sqlalchemy.exc import IntegrityError
+from app.config.settings import LLM_PROVIDER, LLM_MODEL
+from app.utils import extract_json
+from app.models.task import Task
 
 
 def get_labels_tree() -> List[Dict]:
@@ -16,7 +23,10 @@ def get_labels_tree() -> List[Dict]:
     """
     with SessionLocal() as session:
         labels = session.query(Label).all()
-        label_map = {label.id: {"name": label.name, "children": []} for label in labels}
+        label_map = {
+            label.id: {"id": label.id, "name": label.name, "children": []}
+            for label in labels
+        }
 
         root_labels = []
 
@@ -31,13 +41,21 @@ def get_labels_tree() -> List[Dict]:
     return root_labels
 
 
+def remove_label_id_from_tree(tree: List[Dict]):
+    for label in tree:
+        label.pop("id", None)
+        if len(label["children"]) > 0:
+            remove_label_id_from_tree(label["children"])
+    return tree
+
+
 class LabelClassifier:
     """
     Service responsible for generating and validating label paths based on task goals.
     """
 
     def __init__(self):
-        self.llm_interface = LLMInterface()
+        self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
     def generate_label_path(self, task_goal: str) -> List[str]:
         """
@@ -57,7 +75,12 @@ class LabelClassifier:
         response = self.llm_interface.generate(prompt)
 
         # Parse the LLM response to extract label path
-        label_path = self.parse_llm_response(response)
+        label_path = extract_json(response)
+
+        print("prompt:\n", prompt)
+        print("response:\n", response)
+
+        return label_path
 
         # Validate and create the label path
         self.validate_and_create_label_path(label_path)
@@ -93,25 +116,63 @@ class LabelClassifier:
                 else:
                     parent_id = label.id
 
-    def parse_llm_response(self, response: str) -> List[str]:
+    def assign_task_goals_to_leaf_labels(self) -> List[Dict]:
         """
-        Parses the LLM response to extract the label path.
-
-        Args:
-            response (str): The response string from the LLM.
+        Queries tasks with corresponding labels and assigns task goals to the respective leaf labels.
 
         Returns:
-            List[str]: A list of label names.
+            List[Dict]: A list representing the hierarchical labels tree with task goals assigned to leaf labels.
         """
-        try:
-            # Attempt to parse the response as JSON
-            label_path = json.loads(response)
-            if isinstance(label_path, list):
-                return label_path
+        labels_tree = get_labels_tree()
+        leaf_labels = self._get_leaf_labels(labels_tree)
+        label_ids = [label["id"] for label in leaf_labels]
+
+        with SessionLocal() as session:
+            task_subquery = (
+                session.query(
+                    Task.goal,
+                    Task.label_id,
+                    func.row_number()
+                    .over(
+                        partition_by=Task.label_id,
+                        order_by=Task.id,
+                    )
+                    .label("rn"),
+                )
+                .filter(Task.label_id.in_(label_ids))
+                .subquery()
+            )
+
+            limited_tasks = (
+                session.query(task_subquery.c.goal, task_subquery.c.label_id)
+                .filter(task_subquery.c.rn <= 3)
+                .limit(50)
+                .all()
+            )
+
+            label_to_goals = defaultdict(list)
+            for goal, label_id in limited_tasks:
+                label_to_goals[label_id].append(goal)
+
+            for label in leaf_labels:
+                label["task_goals"] = label_to_goals.get(label["id"], [])
+
+        return remove_label_id_from_tree(labels_tree)
+
+    def _get_leaf_labels(self, labels: List[Dict]) -> List[Dict]:
+        """
+        Recursively retrieves all leaf labels from the labels tree.
+
+        Args:
+            labels (List[Dict]): The hierarchical labels tree.
+
+        Returns:
+            List[Dict]: A list of leaf labels.
+        """
+        leaf_labels = []
+        for label in labels:
+            if not label["children"]:
+                leaf_labels.append(label)
             else:
-                raise ValueError("LLM response is not a list.")
-        except json.JSONDecodeError:
-            # Fallback: Parse each line as a label
-            lines = response.strip().split("\n")
-            label_path = [line.strip() for line in lines if line.strip()]
-            return label_path
+                leaf_labels.extend(self._get_leaf_labels(label["children"]))
+        return leaf_labels
