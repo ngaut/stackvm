@@ -30,6 +30,7 @@ def get_labels_tree() -> List[Dict]:
 
     return root_labels
 
+
 class LabelClassifier:
     """
     Service responsible for generating and validating label paths based on task goals.
@@ -72,7 +73,11 @@ class LabelClassifier:
         with SessionLocal() as session:
             parent_id = None
             for label_name in label_path:
-                label = session.query(Label).filter_by(name=label_name, parent_id=parent_id).first()
+                label = (
+                    session.query(Label)
+                    .filter_by(name=label_name, parent_id=parent_id)
+                    .first()
+                )
                 if not label:
                     # Create new label
                     new_label = Label(name=label_name, parent_id=parent_id)
@@ -82,7 +87,9 @@ class LabelClassifier:
                         parent_id = new_label.id
                     except IntegrityError:
                         session.rollback()
-                        raise ValueError(f"Failed to create or retrieve label '{label_name}'.")
+                        raise ValueError(
+                            f"Failed to create or retrieve label '{label_name}'."
+                        )
                 else:
                     parent_id = label.id
 

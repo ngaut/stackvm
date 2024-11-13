@@ -456,8 +456,4 @@ class TaskService:
         """
         Count best plans.
         """
-        return (
-            session.query(TaskORM)
-            .filter(TaskORM.best_plan != None)
-            .count()
-        )
+        return session.query(TaskORM).filter(TaskORM.best_plan != None).count()

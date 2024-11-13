@@ -397,11 +397,7 @@ def get_best_plans():
         return jsonify(
             {
                 "best_plans": best_plans,
-                "pagination": {
-                    "limit": limit,
-                    "offset": offset,
-                    "total": total
-                },
+                "pagination": {"limit": limit, "offset": offset, "total": total},
             }
         )
 

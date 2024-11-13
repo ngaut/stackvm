@@ -1,9 +1,9 @@
 import uuid
-from sqlalchemy import Column, String, Text, Enum, DateTime, JSON
+from sqlalchemy import Column, String, Text, Enum, DateTime, JSON, ForeignKey
 from datetime import datetime
 from app.database import Base
 from sqlalchemy.orm import relationship
-from .task_label import task_labels
+from .label import Label
 
 
 class Task(Base):
@@ -32,7 +32,9 @@ class Task(Base):
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    labels = relationship("Label", secondary=task_labels, back_populates="tasks")
+
+    label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
+    label = relationship("Label")
 
     def __repr__(self):
         return f"<Task(goal={self.goal}, status={self.status})>"
