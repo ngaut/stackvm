@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, ForeignKey, DateTime
+from datetime import datetime
 from sqlalchemy.orm import relationship
 from app.database import Base
 import uuid
@@ -30,8 +31,10 @@ class Label(Base):
     id = Column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
     )
-    name = Column(String(255), nullable=False, unique=True)
+    name = Column(String(255), nullable=False)
     parent_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     parent = relationship("Label", remote_side=[id], backref="children")
 

@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from collections import defaultdict
+import uuid
 
 from app.services.prompts import get_label_classification_prompt
 from app.services.llm_interface import LLMInterface
@@ -57,7 +58,7 @@ class LabelClassifier:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
-    def generate_label_path(self, task_goal: str) -> List[str]:
+    def generate_label_path(self, task_id: str, task_goal: str) -> List[str]:
         """
         Generates a label path for the given task goal.
 
@@ -75,46 +76,63 @@ class LabelClassifier:
         response = self.llm_interface.generate(prompt)
 
         # Parse the LLM response to extract label path
-        label_path = extract_json(response)
+        label_path_str = extract_json(response)
 
-        print("prompt:\n", prompt)
-        print("response:\n", response)
+        try:
+            label_path = json.loads(label_path_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse label path JSON: {e}")
 
         return label_path
 
-        # Validate and create the label path
-        self.validate_and_create_label_path(label_path)
-        return label_path
-
-    def validate_and_create_label_path(self, label_path: List[str]) -> None:
+    def insert_label_path(self, task_id: str, label_path: List[str]) -> None:
         """
-        Validates the label path and creates any missing labels.
+        Validates the label path and creates any missing labels using SQLAlchemy ORM.
+        Finally, updates the task's label_id.
 
         Args:
+            task_id (str): The ID of the task to update.
             label_path (List[str]): The label path to validate and create.
         """
+        parent = None
+        final_label = None
+
         with SessionLocal() as session:
-            parent_id = None
-            for label_name in label_path:
-                label = (
-                    session.query(Label)
-                    .filter_by(name=label_name, parent_id=parent_id)
-                    .first()
-                )
-                if not label:
-                    # Create new label
-                    new_label = Label(name=label_name, parent_id=parent_id)
-                    session.add(new_label)
-                    try:
-                        session.commit()
-                        parent_id = new_label.id
-                    except IntegrityError:
-                        session.rollback()
-                        raise ValueError(
-                            f"Failed to create or retrieve label '{label_name}'."
+            try:
+                for label_name in label_path:
+                    # Query if the label exists with the current parent_id
+                    label = (
+                        session.query(Label)
+                        .filter_by(name=label_name, parent=parent)
+                        .first()
+                    )
+
+                    if not label:
+                        # Create a new Label instance
+                        label = Label(
+                            id=str(uuid.uuid4()), name=label_name, parent=parent
                         )
-                else:
-                    parent_id = label.id
+                        session.add(label)
+                        session.flush()  # Flush to assign an ID if needed
+
+                    # Update the parent for the next label in the path
+                    parent = label
+                    final_label = label  # Keep track of the final label
+
+                # Retrieve the task and update its label_id
+                task = session.query(Task).filter_by(id=task_id).first()
+                if not task:
+                    raise ValueError(f"Task with id {task_id} does not exist.")
+
+                task.label = final_label  # Assuming relationship is set up
+                session.commit()
+
+            except IntegrityError as e:
+                session.rollback()
+                raise ValueError(f"Failed to create or retrieve labels: {e}")
+            except Exception as e:
+                session.rollback()
+                raise e
 
     def get_labels_tree_with_task_goals(self) -> List[Dict]:
         """
@@ -124,8 +142,6 @@ class LabelClassifier:
             List[Dict]: A list representing the hierarchical labels tree with task goals assigned to leaf labels.
         """
         labels_tree = get_labels_tree()
-        leaf_labels = self._get_leaf_labels(labels_tree)
-        label_ids = [label["id"] for label in leaf_labels]
 
         with SessionLocal() as session:
             task_subquery = (
@@ -139,7 +155,7 @@ class LabelClassifier:
                     )
                     .label("rn"),
                 )
-                .filter(Task.label_id.in_(label_ids))
+                .filter(Task.label_id != None)
                 .subquery()
             )
 
@@ -154,25 +170,17 @@ class LabelClassifier:
             for goal, label_id in limited_tasks:
                 label_to_tasks[label_id].append(goal)
 
-            for label in leaf_labels:
-                label["tasks"] = label_to_tasks.get(label["id"], [])
+        def insert_goals(tree: List[Dict]):
+            for label in tree:
+                label_id = label.get("id")
+                if label_id and label_id in label_to_tasks:
+                    if "tasks" not in label:
+                        label["tasks"] = [label_to_tasks[label_id]]
+                    else:
+                        label["tasks"].append(label_to_tasks[label_id])
+                if label.get("children"):
+                    insert_goals(label["children"])
+
+        insert_goals(labels_tree)
 
         return remove_label_id_from_tree(labels_tree)
-
-    def _get_leaf_labels(self, labels: List[Dict]) -> List[Dict]:
-        """
-        Recursively retrieves all leaf labels from the labels tree.
-
-        Args:
-            labels (List[Dict]): The hierarchical labels tree.
-
-        Returns:
-            List[Dict]: A list of leaf labels.
-        """
-        leaf_labels = []
-        for label in labels:
-            if not label["children"]:
-                leaf_labels.append(label)
-            else:
-                leaf_labels.extend(self._get_leaf_labels(label["children"]))
-        return leaf_labels
