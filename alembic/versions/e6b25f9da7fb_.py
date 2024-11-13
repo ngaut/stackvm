@@ -1,8 +1,8 @@
 """empty message
 
-Revision ID: 338c33e23e19
+Revision ID: e6b25f9da7fb
 Revises: b86178b447d0
-Create Date: 2024-11-13 09:43:39.404221
+Create Date: 2024-11-13 20:47:53.281984
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '338c33e23e19'
+revision: str = 'e6b25f9da7fb'
 down_revision: Union[str, None] = 'b86178b447d0'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,9 +24,10 @@ def upgrade() -> None:
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('parent_id', sa.String(length=36), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['parent_id'], ['labels.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('name')
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_labels_id'), 'labels', ['id'], unique=False)
     op.add_column('tasks', sa.Column('label_id', sa.String(length=36), nullable=True))

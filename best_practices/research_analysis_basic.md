@@ -1,15 +1,16 @@
-# Research & Analysis Tasks Requiring Multi-Aspect Analysis
+# Research & Analysis Tasks Requiring Multi-Aspect Analysis and Synthesis
 
-These tasks require in-depth analysis of multiple aspects of a topic to provide comprehensive answers.
+These tasks require in-depth analysis of multiple aspects of a topic to provide comprehensive answers. 
+This task aligns well with categories such as Technical Design and Product Overview, as it emphasizes essential design principles and an overview of product features.
 
-Goal Examples:
+Task Examples:
 - What makes TiDB a good choice for SaaS, especially for multi-tenancy architecture? (English)
-- Can you provide an overview of TiDB, including its technical aspects, a gaming company use case, and pricing information? (English)
 - Can you provide an overview of TiDB, including its technical aspects, a use case from a gaming company found in our blogs, and information on pricing? (English)
 - What is the scalability of TiDB? (English)
 - What is TiDB, and what are its main features and use cases? (English)
-- Can you provide an overview of TiDB, including its technical aspects, a use case in a Web3 company using TiDB (specifically Chainbase and KNN3), and a comparison with MySQL? (English)
 - What is TiCDC? (English)
+- How is vector search used?
+- How is vector search implemented in TiDB?
 
 ---
 
@@ -29,7 +30,7 @@ To effectively address complex questions that require in-depth analysis of multi
 
 ## 2. Identify Key Aspects
 
-- **Purpose**: Break down the main question into individual components or aspects that need to be addressed.
+- **Purpose**: Break down the main question into individual components, sub-questions or aspects that need to be addressed.
 - **Action**: Use an `assign` instruction to list these aspects.
 - **Details**:
   - Create a variable (e.g., `aspects_to_analyze`) that contains a list of the key aspects.

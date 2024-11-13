@@ -174,10 +174,7 @@ class LabelClassifier:
             for label in tree:
                 label_id = label.get("id")
                 if label_id and label_id in label_to_tasks:
-                    if "tasks" not in label:
-                        label["tasks"] = [label_to_tasks[label_id]]
-                    else:
-                        label["tasks"].append(label_to_tasks[label_id])
+                    label["tasks"] = label_to_tasks[label_id]
                 if label.get("children"):
                     insert_goals(label["children"])
 
