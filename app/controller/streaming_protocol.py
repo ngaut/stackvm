@@ -85,11 +85,13 @@ class StreamingProtocol:
         self.events.append(event_bytes)
         return event_bytes
 
-    def send_finish_message(self, reason: str = "stop"):
+    def send_finish_message(self, reason: str = "stop", response: Optional[str] = None):
         payload = {
             "finishReason": reason,
             "usage": {"promptTokens": 0, "completionTokens": 0},
         }
+        if response:
+            payload["response"] = response
         event = ExecutionEvent(
             event_type=EventType.FINISH_MESSAGE_PART, payload=payload
         )

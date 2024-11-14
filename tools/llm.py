@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from queue import Queue
 
 from app.instructions.tools import tool
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -13,7 +14,10 @@ llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 @tool
 def llm_generate(
-    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+    prompt: str,
+    context: Optional[str] = None,
+    response_format: Optional[str] = None,
+    stream_queue: Optional[Queue] = None,
 ):
     """
     Generates a response using the Language Model (LLM).
@@ -56,55 +60,13 @@ def llm_generate(
     if response_format:
         prompt += f"\n\n{response_format}"
 
+    if stream_queue:
+        final_answer = ""
+        response = llm_client.generate_stream(prompt, context)
+        for chunk in response:
+            final_answer += chunk
+            stream_queue.put(chunk)
+        return final_answer
+
     response = llm_client.generate(prompt, context)
-    return response
-
-
-@tool
-def llm_stream_generate(
-    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
-):
-    """
-    Generates a stream response using the Language Model (LLM). This function behaves identically to the `llm_generate` tool,
-    with the exception that intermediate generated content is also returned.
-
-    **Example Usage**: Final Answer Generation (With Streaming):
-    ```json
-    [
-        ...,
-        {
-            "seq_no": 5,
-            "type": "calling",
-            "parameters": {
-                "tool_name": "llm_stream_generate",
-                "tool_params": {
-                    "prompt": "Based on all the analysis above, provide a comprehensive final report.",
-                    "context": "${all_insights}",
-                    "stream": true
-                },
-                "output_vars": ["report_content"]
-            }
-        },
-        {
-            "seq_no": 6,
-            "type": "assign",
-            "parameters": {
-                "final_answer": "${report_content}"
-            }
-        }
-    ]
-
-    Best Practices:
-    - **Invocation**:
-        - Always use `llm_generate` within a "calling" instruction in your execution plan.
-    - **Dynamic Content**:
-        - Utilize variable references (e.g., `${variable_name}`) to include dynamic data from previous steps.
-    - **Streaming Usage**:
-        - Use `llm_stream_generate` when generating the final answer. It is typically used in the last or penultimate step's instruction within a plan.
-        - For intermediate steps, prefer using `llm_generate` instead.
-    """
-    if response_format:
-        prompt += f"\n\n{response_format}"
-
-    response = llm_client.generate_stream(prompt, context)
     return response

@@ -106,7 +106,9 @@ class InstructionHandlers:
             )
             return False, output_vars_record
 
-    def calling_handler(self, params: Dict[str, Any], **kwargs) -> Tuple[bool, Dict[str, Any]]:
+    def calling_handler(
+        self, params: Dict[str, Any], **kwargs
+    ) -> Tuple[bool, Dict[str, Any]]:
         tool_name = params.get("tool_name")
         if tool_name is None:
             return (
@@ -153,7 +155,6 @@ class InstructionHandlers:
                 + self._construct_response_format_example(output_vars)
             )
 
-
         # Get the parameters required by the tool_handler
         handler_signature = signature(tool_handler)
         required_params = handler_signature.parameters.keys()
@@ -162,9 +163,7 @@ class InstructionHandlers:
         filtered_tool_parameters = {
             k: v for k, v in tool_parameters.items() if k in required_params
         }
-        supported_kwargs = {
-            k: v for k, v in kwargs.items() if k in required_params
-        }
+        supported_kwargs = {k: v for k, v in kwargs.items() if k in required_params}
 
         final_parameters = {**supported_kwargs, **filtered_tool_parameters}
 
@@ -195,7 +194,9 @@ class InstructionHandlers:
 
         return json.dumps(example_structure, indent=2)
 
-    def jmp_handler(self, params: Dict[str, Any], **kwargs) -> Tuple[bool, Dict[str, Any]]:
+    def jmp_handler(
+        self, params: Dict[str, Any], **kwargs
+    ) -> Tuple[bool, Dict[str, Any]]:
         """Handle both conditional and unconditional jumps."""
         condition_prompt = self.vm.resolve_parameter(params.get("condition_prompt"))
         context = self.vm.resolve_parameter(params.get("context"))
@@ -301,14 +302,18 @@ class InstructionHandlers:
                 None,
             )
 
-    def assign_handler(self, params: Dict[str, Any], **kwargs) -> Tuple[bool, Dict[str, Any]]:
+    def assign_handler(
+        self, params: Dict[str, Any], **kwargs
+    ) -> Tuple[bool, Dict[str, Any]]:
         """Handle variable assignment."""
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
         return True, {var_name: value_resolved}
 
-    def reasoning_handler(self, params: Dict[str, Any], **kwargs) -> Tuple[bool, Dict[str, Any]]:
+    def reasoning_handler(
+        self, params: Dict[str, Any], **kwargs
+    ) -> Tuple[bool, Dict[str, Any]]:
         """Handle reasoning steps."""
         chain_of_thoughts = params.get("chain_of_thoughts")
         dependency_analysis = params.get("dependency_analysis")

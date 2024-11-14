@@ -6,6 +6,8 @@ import os
 import json
 import logging
 from datetime import datetime
+from queue import Queue, Empty
+from threading import Thread
 
 import git
 from git.exc import GitCommandError
@@ -22,7 +24,12 @@ from flask import (
 from flask_cors import CORS
 
 from app.database import SessionLocal
-from app.config.settings import BACKEND_CORS_ORIGINS, GIT_REPO_PATH, GENERATED_FILES_DIR, TASK_QUEUE_WORKERS
+from app.config.settings import (
+    BACKEND_CORS_ORIGINS,
+    GIT_REPO_PATH,
+    GENERATED_FILES_DIR,
+    TASK_QUEUE_WORKERS,
+)
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -493,10 +500,20 @@ def stream_execute_vm():
 
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
+            # Determine the last or second last calling step
+            last_calling_step_index = -1
+            plan_length = len(task.vm.state["current_plan"])
+            for i in range(plan_length - 1, max(plan_length - 3, -1), -1):
+                step = task.vm.state["current_plan"][i]
+                if step.get("type") == "calling":
+                    last_calling_step_index = step.get("seq_no", -1)
+                    break
+
             # Start executing steps
             while True:
                 step = task.vm.get_current_step()
                 step_seq_no = step.get("seq_no", -1)
+
                 if step["type"] == "calling":
                     params = step.get("parameters", {})
                     tool_call_id = step["seq_no"]
@@ -504,7 +521,37 @@ def stream_execute_vm():
                     tool_args = params.get("tool_params", {})
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
-                step_result = task.vm.step()
+                # Pass the queue only to the last calling step
+                already_streamed = False
+                if step_seq_no == last_calling_step_index:
+                    # Execute step in a separate thread when stream_queue is needed
+                    step_result = None
+                    queue = Queue()
+
+                    def execute_step():
+                        nonlocal step_result
+                        step_result = task.vm.step(stream_queue=queue)
+
+                    step_thread = Thread(target=execute_step)
+                    step_thread.start()
+
+                    # Consume the queue and yield messages until it's empty
+                    while True:
+                        try:
+                            chunk = queue.get(timeout=1)  # 1-second timeout
+                            yield protocol.send_text_part(chunk)
+                            already_streamed = True
+                        except Empty:
+                            if not step_thread.is_alive():
+                                break
+                            continue
+
+                    # Wait for the thread to finish and get step_result
+                    step_thread.join()
+                else:
+                    # Normal execution without stream_queue
+                    step_result = task.vm.step()
+
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
@@ -543,24 +590,25 @@ def stream_execute_vm():
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
+                final_answer = None
                 if task.vm.state.get("goal_completed"):
                     current_app.logger.info("Goal completed during plan execution.")
                     # Fetch the final_answer
                     final_answer = task.vm.get_variable("final_answer")
                     if final_answer:
-                        # Stream the final_answer using Part 0
-                        # You can customize the chunking strategy as needed
-                        for chunk in final_answer.split(". "):
-                            if chunk:
-                                # Add a period back if it was split
-                                if not chunk.endswith("."):
-                                    chunk += ". "
-                                yield protocol.send_text_part(chunk)
+                        if not already_streamed:
+                            # Stream the final_answer using Part 0
+                            for chunk in final_answer.split(". "):
+                                if chunk:
+                                    if not chunk.endswith("."):
+                                        chunk += ". "
+                                    yield protocol.send_text_part(chunk)
+
                     task.mark_as_completed()
                     break
 
             # Finish Message (Part d)
-            yield protocol.send_finish_message()
+            yield protocol.send_finish_message(response=final_answer)
 
         except Exception as e:
             error_message = f"Error during VM execution: {str(e)}"

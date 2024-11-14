@@ -133,47 +133,41 @@ class OllamaProvider(BaseLLMProvider):
     ) -> Generator[str, None, None]:
         """
         Generate streaming response from Ollama API.
-        
+
         Args:
             prompt (str): The prompt to send to Ollama
             context (Optional[str]): Optional context to prepend to the prompt
             **kwargs: Additional arguments to pass to Ollama API
-            
+
         Yields:
             str: Chunks of the generated text
         """
         full_prompt = f"{context}\n{prompt}" if context else prompt
         try:
-            data = {
-                "model": self.model,
-                "prompt": full_prompt,
-                **kwargs
-            }
-            
+            data = {"model": self.model, "prompt": full_prompt, **kwargs}
+
             response = requests.post(
-                f"{self.ollama_base_url}/api/generate",
-                json=data,
-                stream=True
+                f"{self.ollama_base_url}/api/generate", json=data, stream=True
             )
-            
+
             response.raise_for_status()
-            
+
             for line in response.iter_lines():
                 if not line:
                     continue
-                    
+
                 try:
-                    chunk = json.loads(line.decode('utf-8'))
+                    chunk = json.loads(line.decode("utf-8"))
                     if chunk.get("done", False):
                         break
-                        
+
                     if "response" in chunk:
                         yield chunk["response"]
-                        
+
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to decode JSON from Ollama response: {e}")
                     continue
-                    
+
         except Exception as e:
             logger.error(f"Error during Ollama streaming: {e}")
             yield f"Error: {str(e)}"

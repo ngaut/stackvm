@@ -30,8 +30,12 @@ class TaskQueue:
         while True:
             task_id, task_request, worker_func, start_time = self.task_queue.get()
             try:
-                if datetime.utcnow() - start_time <= timedelta(seconds=TASK_QUEUE_TIMEOUT):
-                    loop.run_until_complete(self._run_task(worker_func, task_id, task_request))
+                if datetime.utcnow() - start_time <= timedelta(
+                    seconds=TASK_QUEUE_TIMEOUT
+                ):
+                    loop.run_until_complete(
+                        self._run_task(worker_func, task_id, task_request)
+                    )
                 else:
                     logger.warning(
                         f"Task {task_id} has exceeded the timeout of {TASK_QUEUE_TIMEOUT} seconds."
@@ -50,7 +54,9 @@ class TaskQueue:
                 result = await worker_func(**task_request)
             else:
                 loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, lambda: worker_func(**task_request))
+                result = await loop.run_in_executor(
+                    None, lambda: worker_func(**task_request)
+                )
             logger.info(f"Task {task_id} completed with result: {result}")
             return result
 
