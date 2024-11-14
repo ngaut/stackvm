@@ -501,6 +501,7 @@ def stream_execute_vm():
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
             # Determine the last or second last calling step
+            already_streamed = False
             last_calling_step_index = -1
             plan_length = len(task.vm.state["current_plan"])
             for i in range(plan_length - 1, max(plan_length - 3, -1), -1):
@@ -522,7 +523,6 @@ def stream_execute_vm():
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
                 # Pass the queue only to the last calling step
-                already_streamed = False
                 if step_seq_no == last_calling_step_index:
                     # Execute step in a separate thread when stream_queue is needed
                     step_result = None
@@ -579,14 +579,15 @@ def stream_execute_vm():
                 output = step_result.get("output", {})
                 seq_no = step_result.get("seq_no", -1)  # -1 means unknown.
 
-                # Tool Call (Part 9) if the step is a tool call
+                # Tool Call (Part a) if the step is a tool call
                 if step_type == "calling":
                     yield protocol.send_tool_result(seq_no, output)
 
-                # Step Finish (Part e)
+                # Step State (Part 8)
                 yield protocol.send_state(
                     task_id, task_branch, step_seq_no, task.vm.state
                 )
+                # Step Finish (Part e)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
@@ -596,7 +597,7 @@ def stream_execute_vm():
                     # Fetch the final_answer
                     final_answer = task.vm.get_variable("final_answer")
                     if final_answer:
-                        if not already_streamed:
+                        if already_streamed is False:
                             # Stream the final_answer using Part 0
                             for chunk in final_answer.split(". "):
                                 if chunk:
