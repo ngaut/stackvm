@@ -1,9 +1,10 @@
 import os
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Generator
 import openai
 import requests
 from abc import ABC, abstractmethod
+import json
 
 
 class BaseLLMProvider(ABC):
@@ -31,6 +32,23 @@ class BaseLLMProvider(ABC):
     def generate(
         self, prompt: str, context: Optional[str] = None, **kwargs
     ) -> Optional[str]:
+        pass
+
+    @abstractmethod
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Generate streaming response from the LLM.
+
+        Args:
+            prompt (str): The prompt to send to the LLM
+            context (Optional[str]): Optional context to prepend to the prompt
+            **kwargs: Additional arguments to pass to the LLM
+
+        Yields:
+            str: Chunks of the generated text
+        """
         pass
 
 
@@ -64,6 +82,31 @@ class OpenAIProvider(BaseLLMProvider):
         )
         return response.choices[0].message.content.strip()
 
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        full_prompt = f"{context}\n{prompt}" if context else prompt
+        try:
+            response = self._retry_with_exponential_backoff(
+                self.client.chat.completions.create,
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": full_prompt},
+                ],
+                stream=True,  # Enable streaming
+                temperature=0,
+                **kwargs,
+            )
+
+            for chunk in response:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+
+        except Exception as e:
+            logger.error(f"Error during OpenAI streaming: {e}")
+            yield f"Error: {str(e)}"
+
 
 class OllamaProvider(BaseLLMProvider):
     """
@@ -84,6 +127,56 @@ class OllamaProvider(BaseLLMProvider):
         )
         response.raise_for_status()
         return response.json()["response"].strip()
+
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Generate streaming response from Ollama API.
+        
+        Args:
+            prompt (str): The prompt to send to Ollama
+            context (Optional[str]): Optional context to prepend to the prompt
+            **kwargs: Additional arguments to pass to Ollama API
+            
+        Yields:
+            str: Chunks of the generated text
+        """
+        full_prompt = f"{context}\n{prompt}" if context else prompt
+        try:
+            data = {
+                "model": self.model,
+                "prompt": full_prompt,
+                **kwargs
+            }
+            
+            response = requests.post(
+                f"{self.ollama_base_url}/api/generate",
+                json=data,
+                stream=True
+            )
+            
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                    
+                try:
+                    chunk = json.loads(line.decode('utf-8'))
+                    if chunk.get("done", False):
+                        break
+                        
+                    if "response" in chunk:
+                        yield chunk["response"]
+                        
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to decode JSON from Ollama response: {e}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error during Ollama streaming: {e}")
+            yield f"Error: {str(e)}"
 
 
 class LLMInterface:
@@ -111,3 +204,24 @@ class LLMInterface:
         self, prompt: str, context: Optional[str] = None
     ) -> Optional[str]:
         return self.generate(prompt, context)
+
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Generate streaming response from the LLM.
+
+        Args:
+            prompt (str): The prompt to send to the LLM
+            context (Optional[str]): Optional context to prepend to the prompt
+            **kwargs: Additional arguments to pass to the LLM
+
+        Yields:
+            str: Chunks of the generated text
+        """
+        try:
+            for chunk in self.provider.generate_stream(prompt, context, **kwargs):
+                yield chunk
+        except Exception as e:
+            logger.error(f"LLM streaming generation failed: {e}")
+            yield f"Error: {str(e)}"
