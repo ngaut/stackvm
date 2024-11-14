@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
+
 @tool
 def llm_generate(
     prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
@@ -56,4 +57,54 @@ def llm_generate(
         prompt += f"\n\n{response_format}"
 
     response = llm_client.generate(prompt, context)
+    return response
+
+
+@tool
+def llm_stream_generate(
+    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+):
+    """
+    Generates a stream response using the Language Model (LLM). This function behaves identically to the `llm_generate` tool,
+    with the exception that intermediate generated content is also returned.
+
+    **Example Usage**: Final Answer Generation (With Streaming):
+    ```json
+    [
+        ...,
+        {
+            "seq_no": 5,
+            "type": "calling",
+            "parameters": {
+                "tool_name": "llm_stream_generate",
+                "tool_params": {
+                    "prompt": "Based on all the analysis above, provide a comprehensive final report.",
+                    "context": "${all_insights}",
+                    "stream": true
+                },
+                "output_vars": ["report_content"]
+            }
+        },
+        {
+            "seq_no": 6,
+            "type": "assign",
+            "parameters": {
+                "final_answer": "${report_content}"
+            }
+        }
+    ]
+
+    Best Practices:
+    - **Invocation**:
+        - Always use `llm_generate` within a "calling" instruction in your execution plan.
+    - **Dynamic Content**:
+        - Utilize variable references (e.g., `${variable_name}`) to include dynamic data from previous steps.
+    - **Streaming Usage**:
+        - Use `llm_stream_generate` when generating the final answer. It is typically used in the last or penultimate step's instruction within a plan.
+        - For intermediate steps, prefer using `llm_generate` instead.
+    """
+    if response_format:
+        prompt += f"\n\n{response_format}"
+
+    response = llm_client.generate_stream(prompt, context)
     return response
