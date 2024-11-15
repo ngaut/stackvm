@@ -99,7 +99,7 @@ class PlanExecutionVM:
             self.variable_manager.decrease_ref_count(var)
         return self.variable_manager.interpolate_variables(param)
 
-    def execute_step_handler(self, step: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_step_handler(self, step: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Execute a single step in the plan and return step execution details."""
         step_type = step.get("type")
         params = step.get("parameters", {})
@@ -127,7 +127,7 @@ class PlanExecutionVM:
             }
 
         try:
-            success, execution_result = handler(params)
+            success, execution_result = handler(params, **kwargs)
             if not success:
                 return {
                     "success": False,
@@ -199,7 +199,7 @@ class PlanExecutionVM:
             else value_str
         )
 
-    def step(self) -> Dict[str, Any]:
+    def step(self, **kwargs) -> Dict[str, Any]:
         """Execute a single step and return step details."""
         with self.lock:
             ready_steps = [

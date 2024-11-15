@@ -19,7 +19,7 @@
                         <th class="id-column">ID</th>
                         <th class="goal-column">Goal</th>
                         <th class="best-plan-column">Best Plan</th>
-                        <th class="meta-column">Meta</th>
+                        <th class="label-path-column">Label Path</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -70,13 +70,16 @@
             }
             bestPlans.forEach(plan => {
                 const formattedBestPlan = JSON.stringify(plan.best_plan, null, 2); // Format JSON with indentation
-                const formattedMeta = typeof plan.meta === 'object' ? JSON.stringify(plan.meta, null, 2) : plan.meta;
+                // Safely handle label_path
+                const labelPath = Array.isArray(plan.label_path) && plan.label_path.length > 0
+                    ? escapeHtml(plan.label_path.join(' > '))
+                    : 'N/A'; // Fallback if label_path is undefined or empty
                 const row = `
                     <tr>
                         <td class="id-column">${escapeHtml(plan.id)}</td>
                         <td class="goal-column">${escapeHtml(plan.goal)}</td>
                         <td class="best-plan-column"><pre><code class="language-json">${escapeHtml(formattedBestPlan)}</code></pre></td>
-                        <td class="meta-column"><pre><code class="language-json">${escapeHtml(formattedMeta)}</code></pre></td>
+                        <td class="label-path-column">${labelPath}</td> <!-- Display Label Path -->
                     </tr>
                 `;
                 tbody.append(row);

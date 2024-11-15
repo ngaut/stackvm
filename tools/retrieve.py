@@ -38,8 +38,13 @@ def retrieve_knowledge_graph(query):
     }
 
     Best practices:
-    - Leverage the Knowledge Graph Search tool for tasks that require retrieving fine-grained knowledge points and understanding the relationships or connections between these entities. This tool excels in exploring structured and relational data, making it ideal for identifying specific concepts and their interdependencies.
-    - To maximize its effectiveness, integrate the Knowledge Graph Search with an LLM (Large Language Model) generation tool. First, use the Knowledge Graph Search to pinpoint relevant knowledge and their intricate relationships. Then, pass this structured data to the LLM generation tool to extract and organize the precise information needed by the user.
+    - Focus on Structured Knowledge: Use the retrieve_knowledge_graph tool to retrieve structured and relational knowledge that is relevant to the query. This tool excels in identifying fine-grained knowledge points and understanding their connections.
+    - Combine with LLM for Refinement:
+        - Knowledge Graph Search may return extensive data, including numerous nodes and complex relationships.
+        - Always follow up with an LLM generation tool to refine and summarize the results. This ensures the output is concise, precise, and tailored to the user's question.
+
+    Strict Restriction:
+    - Avoid User-Specific Queries: Do not use this tool to retrieve data that is specific to a user's environment, such as configurations, current versions, or private data. This tool is designed to handle general, shared knowledge within the graph.
     """
 
     url = "https://tidb.ai/api/v1/admin/graph/search"
@@ -107,5 +112,7 @@ def vector_search(query, top_k=5):
         logger.error("Request to retrieve_embedding failed: %s", str(e))
         return {"error": f"Failed to perform retrieve_embedding request: {str(e)}"}
     except ValueError:
-        logger.error("Invalid JSON response received from retrieve_embedding: %s", str(e))
+        logger.error(
+            "Invalid JSON response received from retrieve_embedding: %s", str(e)
+        )
         return {"error": f"Invalid response format: {str(e)}"}

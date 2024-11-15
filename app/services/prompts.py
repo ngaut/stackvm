@@ -260,3 +260,64 @@ Now, let's update the step.
 **Output**:
 Provide only the updated step in JSON format.
 """
+
+
+def get_label_classification_prompt(task_goal: str, labels_tree: dict) -> str:
+    """
+    Generates an enhanced prompt for the LLM to classify the task goal into a label path.
+
+    Args:
+        task_goal (str): The goal of the task.
+        labels_tree (dict): The current labels tree.
+
+    Returns:
+        str: The generated prompt.
+    """
+
+    # Convert the labels tree to a JSON string with indentation for readability
+    labels_tree_json = json.dumps(labels_tree, indent=4, ensure_ascii=False)
+
+    # Construct the prompt
+    prompt = f"""
+Your task is to create a tree-structured tagging system for classifying user task. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. 
+This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
+
+## Current Labels Tree
+
+```json
+{labels_tree_json}
+```
+
+## Task Goal
+
+"{task_goal}"
+
+## Instructions
+
+1.	Task Plan Estimation:
+    - Outline Steps: Break down the task or question into sequential steps required to accomplish it.
+    - Assess Complexity: Determine if the task involves simple information retrieval or requires complex analysis and planning.
+2.	Intent Recognition:
+    - Extract Keywords: Identify significant keywords in the task goal.
+    - Determine Intent: Understand the underlying intent behind the task based on the keywords.
+3.	Matching Classification:
+    - Select Category: Based on the task complexity and intent, choose the most appropriate top-level category.
+    - Select Subcategories: Refine the classification by selecting relevant subcategories layer by layer until the most specific applicable label is identified.
+4.	Dynamic Expansion:
+    - Identify Gaps: If the task does not fit into existing categories or subcategories, determine where to add new nodes.
+    - Expand Tree: Add new categories or subcategories at appropriate positions in the tree to accommodate the new task type.
+
+Response Format:
+
+Respond only with the label path as a JSON array of label names, for example:
+
+```json
+[
+"Basic Knowledge",
+"Feature Support",
+"Foreign Key"
+]
+```
+"""
+
+    return prompt

@@ -1,5 +1,6 @@
 import logging
 from typing import Optional
+from queue import Queue
 
 from app.instructions.tools import tool
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -10,9 +11,13 @@ logger = logging.getLogger(__name__)
 
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
+
 @tool
 def llm_generate(
-    prompt: str, context: Optional[str] = None, response_format: Optional[str] = None
+    prompt: str,
+    context: Optional[str] = None,
+    response_format: Optional[str] = None,
+    stream_queue: Optional[Queue] = None,
 ):
     """
     Generates a response using the Language Model (LLM).
@@ -54,6 +59,14 @@ def llm_generate(
     """
     if response_format:
         prompt += f"\n\n{response_format}"
+
+    if stream_queue:
+        final_answer = ""
+        response = llm_client.generate_stream(prompt, context)
+        for chunk in response:
+            final_answer += chunk
+            stream_queue.put(chunk)
+        return final_answer
 
     response = llm_client.generate(prompt, context)
     return response

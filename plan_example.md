@@ -1,3 +1,63 @@
+
+### Bad Examples:
+
+**Goal**: How can I perform a smooth upgrade of a TiDB cluster?
+
+**The Wrong Plan:**
+```json
+[
+  ...,
+  {
+    "seq_no": 1,
+    "type": "calling",
+    "parameters": {
+      "tool_name": "retrieve_knowledge_graph",
+      "tool_params": {
+        "query": "Current version of TiDB cluster"
+      },
+      "output_vars": ["current_tidb_version"]
+    }
+  },
+  {
+    "seq_no": 2,
+    "type": "assign",
+    "parameters": {
+      "target_tidb_version": "v6.5.0"
+    }
+  }
+  ...
+]
+```
+
+**Error Explanation**:
+
+According to the Specification:
+
+  - **Do Not Assume Specific Information**: Do not make assumptions about (or generate) specific details of the user’s environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed user-specific information.
+  - **Avoid Obtain User-Specific Data with General Tools**: Do not attempt to obtain user-specific information using general tools that are not designed to access such information.
+
+Specifically, the query "Current version of TiDB cluster" assumes and retrieves user-specific data, which should be strictly prohibited.
+
+**Correct Approach**:
+
+A correct approach would involve querying for general upgrade steps or best practices for a TiDB upgrade rather than querying for the specific version of the user’s TiDB cluster. For instance, the query could be updated to:
+
+```json
+[
+  ...,
+  {
+    "tool_name": "retrieve_knowledge_graph",
+    "tool_params": {
+      "query": "TiDB smooth upgrade"
+    },
+    "output_vars": ["tidb_smooth_upgrade"]
+  },
+  ...
+]
+```
+
+### Great Examples:
+
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
 
 **The plan:**
