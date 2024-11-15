@@ -261,9 +261,8 @@ Parameters can be either direct values or variable references. To reference a va
 - **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 
 - **Avoid Assuming User-Specific Data**:
-  - **Do Not Assume Specific Information**: Do not make assumptions about specific details of the user’s environment, such as their current system configuration, current versions, or private data. Plans should be designed to be adaptable and not rely on presumed user-specific information.
-  - **Avoid Retrieving User-Specific Data with General Tools**: Do not attempt to retrieve user-specific information using tools like retrieve_knowledge_graph or vector_search. These tools are intended for accessing general knowledge and shared information, not data specific to a particular user’s environment.
-  - **Recommendation**: Attempting to assume or retrieve user-specific data can lead to incorrect or invalid plans. Proceed with general guidance that does not rely on such specifics.
+  - **Do Not Assume Specific Information**: Do not make assumptions about (or generate) specific details of the user’s environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed user-specific information.
+  - **Avoid Obtain User-Specific Data with General Tools**: Do not attempt to obtain user-specific information using general tools that are not designed to access such information.
 
 - **Best Practices for Utilizing Knowledge Graph Search**:
   - When a knowledge graph is available, use the Knowledge Graph Search tool to retrieve relevant knowledge points and their relationships. Since the search may return extensive data, focus on identifying the most relevant information.
