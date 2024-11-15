@@ -143,6 +143,7 @@ Below is an example where the calling type is configured to use the `llm_generat
   - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
     - The overall strategy for approaching the problem
     - Key decision points and rationale for choices made
+    - compliance_check: A structured analysis of how the plan adheres to best practices and avoids common errors.
     - Assumptions and their justifications
     - Potential alternative approaches considered
     - Expected outcomes of each major step
@@ -156,44 +157,28 @@ Below is an example where the calling type is configured to use the `llm_generat
   "seq_no": 0,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
+    "chain_of_thoughts": "To provide recommendations for the query, we'll follow this approach:
 
     1. Overall Strategy:
-       We'll follow these steps:
-         1. Determine the latest stable version of TiDB
-         2. Gather version-specific information
-         3. Collect general TiDB information (if needed)
-         4. Gather performance optimization techniques
-         5. Collect e-commerce-specific optimizations
-         6. Synthesize gathered information into actionable recommendations
+       - Step 1: Gather initial information
+       - Step 2: Process and analyze data
+       - Step 3: Generate final recommendations
 
-    2. Key Decision Points and Rationale:
-       a. Using both knowledge graph and vector search: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
-       b. Conditional logic for version determination: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
+    2. Key Decision Points:
+       - Using multiple data sources for comprehensive coverage
+       - Implementing error handling for edge cases
 
-    3. Assumptions:
-       - The latest stable version of TiDB is the most relevant for current optimization practices.
-       - E-commerce applications have specific performance requirements that may differ from general use cases.
+    3. Limitations:
+       - Dependent on data freshness
+       - May require refinement based on specific use cases
 
-    4. Alternative Approaches Considered:
-       - We could have used only vector search, but this might miss important structured relationships in the data.
-       - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
-
-    5. Expected Outcomes:
-       - Step 1-2: Identification of the latest TiDB version
-       - Step 3-6: Gathering of version-specific and general TiDB information
-       - Step 7-8: Collection of performance techniques and e-commerce-specific optimizations
-       - Step 9-10: Synthesis of gathered information into actionable recommendations
-
-    6. Information Combination:
-       The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
-
-    7. Limitations:
-       - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
-       - If no specific version is found, our recommendations may be more general and less tailored.
-
-    This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
-    "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
+    4. Compliance Checks:
+       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)
+       - ✓ All responses will maintain consistent language (English)
+       - ✓ Final recommendations will be stored in final_answer
+       - ✓ All variable references use correct ${var} syntax
+    ...",
+    "dependency_analysis": "Step 2 depends on Step 1\nStep 3 depends on Step 2",
   }
 }
 ```
@@ -260,10 +245,6 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 
-- **Avoid Assuming User-Specific Data**:
-  - **Do Not Assume Specific Information**: Do not make assumptions about (or generate) specific details of the user’s environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed user-specific information.
-  - **Avoid Obtain User-Specific Data with General Tools**: Do not attempt to obtain user-specific information using general tools that are not designed to access such information.
-
 - **Best Practices for Utilizing Knowledge Graph Search**:
   - When a knowledge graph is available, use the Knowledge Graph Search tool to retrieve relevant knowledge points and their relationships. Since the search may return extensive data, focus on identifying the most relevant information.
   - After retrieving the data, use an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s question.
@@ -271,3 +252,33 @@ Parameters can be either direct values or variable references. To reference a va
 - **Best Practices for Utilizing Vector Search**:
   - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
   - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
+
+
+## 8. Common Errors
+
+**Case 1: Querying Specific Runtime/Environment Information**
+
+**Error Example:**
+```json
+{
+  "seq_no": 1,
+  "type": "calling",
+  "parameters": {
+    "tool_name": "tool_name",
+    "tool_params": {
+      "query": "Determin the current version of ..."
+    },
+    "output_vars": [...]
+  }
+}
+```
+
+**Error Explanation**:
+
+- **Do Not Assume Specific Environment Information**: Do not make assumptions about (or generate) specific details of the environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed specific environment information.
+- **Avoid Obtain Specific Data with General Tools**: General tools like `retrieve_knowledge_graph`, `vector_search` and `llm_generate` can only access public documentation and general knowledge. They cannot access:
+  - Current system configuration
+  - Current version
+  - Cluster status
+  - Any private or runtime information
+  Such specific environment information can only be obtained through specialized tools explicitly designed for that purpose, or should be provided by the user as part of their query.
