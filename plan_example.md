@@ -37,7 +37,6 @@ According to the Specification:
   - **Avoid Obtain User-Specific Data with General Tools**: Do not attempt to obtain user-specific information using general tools that are not designed to access such information.
 
 Specifically, the query "Current version of TiDB cluster" assumes and retrieves user-specific data, which should be strictly prohibited.
-
 **Correct Approach**:
 
 A correct approach would involve querying for general upgrade steps or best practices for a TiDB upgrade rather than querying for the specific version of the user’s TiDB cluster. For instance, the query could be updated to:
@@ -86,20 +85,26 @@ A correct approach would involve querying for general upgrade steps or best prac
          - The latest stable version of TiDB is the most relevant for current optimization practices.
          - E-commerce applications have specific performance requirements that may differ from general use cases.
 
-      4. **Alternative Approaches Considered**:
+      4. Compliance Checks:
+       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)
+       - ✓ All responses will maintain consistent language (English)
+       - ✓ Final recommendations will be stored in final_answer
+       - ✓ All variable references use correct ${var} syntax
+
+      5. **Alternative Approaches Considered**:
          - We could have used only vector search, but this might miss important structured relationships in the data.
          - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
 
-      5. **Expected Outcomes**:
+      6. **Expected Outcomes**:
          - **Steps 1-2**: Identification of the latest TiDB version
          - **Steps 3-6**: Gathering of version-specific and general TiDB information
          - **Steps 7-8**: Collection of performance techniques and e-commerce-specific optimizations
          - **Steps 9-10**: Synthesis of gathered information into actionable recommendations
 
-      6. **Information Combination**:
+      7. **Information Combination**:
          The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
 
-      7. **Limitations**:
+      8. **Limitations**:
          - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
          - If no specific version is found, our recommendations may be more general and less tailored.
 
@@ -215,3 +220,4 @@ A correct approach would involve querying for general upgrade steps or best prac
     }
   }
 ]
+
