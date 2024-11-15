@@ -49,6 +49,7 @@ def remove_label_id_from_tree(tree: List[Dict]):
             remove_label_id_from_tree(label["children"])
     return tree
 
+
 def get_label_path(session: Session, label: Label) -> List[str]:
     """
     Retrieves the label path from the given label up to the root label.
