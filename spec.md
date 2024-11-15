@@ -47,8 +47,8 @@ Each instruction in the plan is represented as a JSON object with the following 
   "seq_no": 1,
   "type": "assign",
   "parameters": {
-    "number": 42,
-    "explanation": "The choosen number is ${number}"
+    "random_number": 42,
+    "final_answer": "{recommendations_report}"
   }
 }
 ```
@@ -259,9 +259,16 @@ Parameters can be either direct values or variable references. To reference a va
     - **Variable Content**: When inserting variables into the `final_answer`, make sure they are in the target language or have been processed to match it.
 
 - **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
+
+- **Avoid Assuming User-Specific Data**:
+  - **Do Not Assume Specific Information**: Do not make assumptions about specific details of the user’s environment, such as their current system configuration, current versions, or private data. Plans should be designed to be adaptable and not rely on presumed user-specific information.
+  - **Avoid Retrieving User-Specific Data with General Tools**: Do not attempt to retrieve user-specific information using tools like retrieve_knowledge_graph or vector_search. These tools are intended for accessing general knowledge and shared information, not data specific to a particular user’s environment.
+  - **Recommendation**: Attempting to assume or retrieve user-specific data can lead to incorrect or invalid plans. Proceed with general guidance that does not rely on such specifics.
+
 - **Best Practices for Utilizing Knowledge Graph Search**:
-  1. When a knowledge graph is available, begin by using the Knowledge Graph Search tool to retrieve relevant knowledge points and understand the relationships between them.
-  2. After retrieving knowledge, integrate the question with the knowledge graph data. Use an LLM generation tool to analyze both the user's intent and the graph data, generating a more precise knowledge for the question.
+  - When a knowledge graph is available, use the Knowledge Graph Search tool to retrieve relevant knowledge points and their relationships. Since the search may return extensive data, focus on identifying the most relevant information.
+  - After retrieving the data, use an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s question.
+
 - **Best Practices for Utilizing Vector Search**:
   - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
   - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
