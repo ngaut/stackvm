@@ -105,12 +105,7 @@ class PlanExecutionVM:
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if not handler:
             self.logger.warning(f"Unknown instruction: {step_type}")
-            return {
-                "success": False,
-                "error": f"Unknown instruction: {step_type}",
-                "step_type": step_type,
-                "seq_no": seq_no,
-            }
+            handler = self.instruction_handlers.unknown_handler
 
         success, output = handler(params, **kwargs)
         if success:

@@ -106,6 +106,11 @@ class InstructionHandlers:
             )
             return False, output_vars_record
 
+    def unknown_handler(
+        self, params: Dict[str, Any], **kwargs
+    ) -> Tuple[bool, Dict[str, Any]]:
+        return self.calling_handler(params, **kwargs)
+
     def calling_handler(
         self, params: Dict[str, Any], **kwargs
     ) -> Tuple[bool, Dict[str, Any]]:
