@@ -70,6 +70,17 @@ def retrieve_knowledge_graph(query):
         return {"error": f"Invalid response format: {str(e)}"}
 
 
+def get_chunk_content(chunk):
+    if isinstance(chunk, dict):
+        if "content" in chunk:
+            return chunk["content"]
+        elif "node" in chunk:
+            node = chunk["node"]
+            return node.get("text", None)
+
+    logger.warning("Chunk is malformed or missing 'content' field.")
+    return None
+
 @tool
 def vector_search(query, top_k=5):
     """
@@ -128,12 +139,11 @@ def vector_search(query, top_k=5):
 
         total_token_count = 0
         for chunk in data:
-            if isinstance(chunk, dict) and "content" in chunk:
-                tokens = encoding.encode(chunk["content"])
-                token_count = len(tokens)
-                total_token_count += token_count
-            else:
-                logger.warning("Chunk is malformed or missing 'content' field.")
+            chunk_content = get_chunk_content(chunk)
+            if chunk_content is not None:
+                    tokens = encoding.encode(chunk_content)
+                    token_count = len(tokens)
+                    total_token_count += token_count
 
         if total_token_count <= MAX_CHUNK_TOKENS:
             return data
@@ -141,57 +151,34 @@ def vector_search(query, top_k=5):
         logger.info(
             f"Total token count ({total_token_count}) exceeds MAX_CHUNK_TOKENS ({MAX_CHUNK_TOKENS}). Initiating truncation process."
         )
-        # Sort chunks by score ascending (lowest score first)
+        # Sort chunks by score descending (highest score first)
         sorted_chunks_with_indices = sorted(
-            enumerate(data), key=lambda x: x[1].get("score", 0)
+            enumerate(data), key=lambda x: x[1].get("score", 0), reverse=True
         )
-        # Define the number of tokens to truncate per chunk
-        truncate_per_chunk = MAX_CHUNK_TOKENS // top_k
+
+        choosen_chunks = []
+        choosen_chunks_count = 0
         for idx, chunk in sorted_chunks_with_indices:
-            if "content" not in chunk:
+            text = get_chunk_content(chunk)
+            if text is None:
                 logger.warning(
                     "Chunk is missing 'content' field. Skipping truncation for this chunk."
                 )
                 continue
 
-            text = chunk["content"]
-            current_token_count = len(encoding.encode(chunk["content"]))
+            # Update choosen_chunks_count
+            choosen_chunks_count += len(encoding.encode(text))
+            logger.debug(f"Remaining total token count: {choosen_chunks_count}")
 
-            if current_token_count <= truncate_per_chunk:
-                logger.warning(
-                    f"Chunk {idx} has {current_token_count} tokens, which is less than or equal to the truncation limit ({truncate_per_chunk}). Skipping truncation."
-                )
-                continue
-
-            # Calculate the number of tokens to remove
-            tokens_to_remove = current_token_count - truncate_per_chunk
-
-            # Truncate the text to fit within the truncation limit
-            truncated_tokens = encoding.encode(text)[:truncate_per_chunk]
-            truncated_text = encoding.decode(truncated_tokens)
-            logger.warning(
-                f"Truncating chunk {idx} from {current_token_count} tokens to {truncate_per_chunk} tokens."
-            )
-            chunk["content"] = truncated_text
-
-            # Update total_token_count
-            total_token_count -= tokens_to_remove
-            logger.debug(f"Updated total token count: {total_token_count}")
-
-            # Check if the total token count is now within the limit
-            if total_token_count <= MAX_CHUNK_TOKENS:
+            # Check if the choosen token count is now within the limit
+            choosen_chunks.append(chunk)
+            if choosen_chunks_count >= MAX_CHUNK_TOKENS:
                 logger.info(
-                    "Total token count is now within the limit after truncation. Stopping truncation process."
+                    f"Total token count {choosen_chunks_count} will exceed {MAX_CHUNK_TOKENS}. Return now"
                 )
-                break
+                return choosen_chunks
 
-        # Final check
-        if total_token_count > MAX_CHUNK_TOKENS:
-            logger.warning(
-                f"After truncation, total token count ({total_token_count}) still exceeds MAX_CHUNK_TOKENS ({MAX_CHUNK_TOKENS}). Some chunks may still be too large."
-            )
-
-        return data
+        return choosen_chunks
 
     except requests.exceptions.RequestException as e:
         logger.error("Request to retrieve_embedding failed: %s", str(e))
