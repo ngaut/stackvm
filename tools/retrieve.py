@@ -1,6 +1,7 @@
 import os
 import requests
 import logging
+import tiktoken
 
 from app.instructions.tools import tool
 
@@ -9,6 +10,9 @@ logger = logging.getLogger(__name__)
 API_KEY = os.environ.get("TIDB_AI_API_KEY")
 if not API_KEY:
     logger.error("TIDB_AI_API_KEY not found in environment variables")
+
+MAX_TOP_K = 5
+MAX_CHUNK_TOKENS = 3072
 
 
 @tool
@@ -101,18 +105,60 @@ def vector_search(query, top_k=5):
     - **Ensure your query is clear and focused on a single objective or aspect.** Avoid queries with multiple purposes to achieve the most accurate and relevant results.
     """
 
+    # Initialize the tokenizer for the specified model at module level
+    try:
+        encoding = tiktoken.encoding_for_model(
+            "gpt-4"
+        )  # Automatically selects the appropriate encoding
+    except Exception as e:
+        logger.error("Failed to initialize the token encoder: %s", str(e))
+        encoding = tiktoken.get_encoding("cl100k_base")
+
     url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
     params = {"question": query, "chat_engine": "default", "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()  # Raises HTTPError for bad responses
-        return response.json()
+        data = response.json()
+
+        # Verify that the response is a list of chunks
+        if not isinstance(data, list):
+            return data
+
+        processed_chunks = []
+        for idx, chunk in enumerate(data):
+            if not isinstance(chunk, dict) or "content" not in chunk:
+                logger.warning(
+                    f"Chunk at index {idx} is malformed or missing 'text' field. Skipping."
+                )
+                continue
+
+            text = chunk["content"]
+            token_count = len(encoding.encode(text))
+            if token_count > MAX_CHUNK_TOKENS:
+                # Truncate the text to fit within the token limit
+                truncated_tokens = encoding.encode(text)[:MAX_CHUNK_TOKENS]
+                truncated_text = encoding.decode(truncated_tokens)
+                logger.warning(
+                    f"Chunk at index {idx} exceeds MAX_CHUNK_TOKENS={MAX_CHUNK_TOKENS}. "
+                    f"Truncating from {token_count} tokens to {MAX_CHUNK_TOKENS} tokens."
+                )
+                chunk["content"] = truncated_text
+                # If you prefer to ignore excessively large chunks instead of truncating, uncomment the next line:
+                # continue
+
+            processed_chunks.append(chunk)
+
+        return processed_chunks
     except requests.exceptions.RequestException as e:
         logger.error("Request to retrieve_embedding failed: %s", str(e))
         return {"error": f"Failed to perform retrieve_embedding request: {str(e)}"}
-    except ValueError:
+    except ValueError as e:
         logger.error(
             "Invalid JSON response received from retrieve_embedding: %s", str(e)
         )
         return {"error": f"Invalid response format: {str(e)}"}
+    except Exception as e:
+        logger.error("An unexpected error occurred in vector_search: %s", str(e))
+        return {"error": f"An unexpected error occurred: {str(e)}"}
