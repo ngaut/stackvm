@@ -5,7 +5,9 @@ import openai
 import requests
 from abc import ABC, abstractmethod
 import json
+import logging
 
+logger = logging.getLogger(__name__)
 
 class BaseLLMProvider(ABC):
     """
