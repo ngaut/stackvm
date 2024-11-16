@@ -560,6 +560,9 @@ def stream_execute_vm():
                     )
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message("error")
+                    task.task_orm.status = "failed"
+                    task.task_orm.logs = f"Error during VM execution: {error_message}"
+                    task.save()
                     return
 
                 if not step_result.get("success", False):
@@ -572,6 +575,9 @@ def stream_execute_vm():
                     )
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message("error")
+                    task.task_orm.status = "failed"
+                    task.task_orm.logs = f"Error during VM execution: {error}"
+                    task.save()
                     return
 
                 step_type = step_result.get("step_type")
@@ -615,6 +621,9 @@ def stream_execute_vm():
             error_message = f"Error during VM execution: {str(e)}"
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
+            task.task_orm.status = "failed"
+            task.task_orm.logs = f"Error during VM execution: {error}"
+            task.save()
 
     return Response(
         stream_with_context(event_stream()),
