@@ -155,7 +155,7 @@ def vector_search(query, top_k=5):
                 continue
 
             text = chunk["content"]
-            current_token_count = tokens = len(encoding.encode(chunk["content"]))
+            current_token_count = len(encoding.encode(chunk["content"]))
 
             if current_token_count <= truncate_per_chunk:
                 logger.warning(
