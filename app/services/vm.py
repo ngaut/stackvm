@@ -148,7 +148,7 @@ class PlanExecutionVM:
                 "output": output,
                 "seq_no": seq_no,
                 "commit_message_dict": commit_message_dict,
-                "target_seq": output.get("target_seq"),
+                "target_seq": output.get("target_seq", None),
             }
         else:
             self.logger.error(
@@ -236,8 +236,20 @@ class PlanExecutionVM:
             if not step_result["success"]:
                 return step_result
 
-            # Increment program counter unless it's a jump
-            if step["type"] not in ("jmp"):
+            if step_result.get("target_seq") is not None:
+                target_seq = step_result["target_seq"]
+                target_index = self.find_step_index(target_seq)
+                if target_index is not None:
+                    self.state["program_counter"] = target_index
+                else:
+                    self.state["errors"].append(
+                        f"Target step {target_seq} not found for step {step.get('seq_no')}"
+                    )
+                    return {
+                        "success": False,
+                        "error": f"Target step {target_seq} not found for step {step.get('seq_no')}",
+                    }
+            else:
                 self.state["program_counter"] += 1
 
             # Garbage collect if necessary
