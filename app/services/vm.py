@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import json
 import logging
 import os
@@ -9,6 +10,31 @@ from app.services import GitManager, VariableManager
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
+
+
+class Executable(ABC):
+    @abstractmethod
+    def execute(self) -> Dict[int, Dict[str, Any]]:
+        """
+        return a dictionary map{seq_no => execution result}
+        """
+        pass
+
+
+class StepBlock(Executable):
+    def __init__(self, step: Dict[str, Any], vm: PlanExecutionVM):
+        if step.get("seq_no") is None:
+            raise ValueError("StepBlock must have a seq_no")
+        self.step_no = step.get("seq_no")
+        self.step = step
+        self.vm = vm
+
+    def execute(self, **kwargs) -> Dict[int, Dict[str, Any]]:
+        result: Dict[str, Any] = self.vm.execute_step_handler(self.step, **kwargs)
+        return {self.step_no: result}
+
+    def __str__(self):
+        return f"StepBlock({self.step_no}): {self.step}"
 
 
 class PlanExecutionVM:
@@ -32,6 +58,7 @@ class PlanExecutionVM:
         self.repo_path = repo_path
         self.branch_manager = GitManager(self.repo_path)
         self.set_state(self.branch_manager.get_current_commit_hash())
+        self.blocks: Dict[int, Executable] = {}  # map seq_no to Executable
 
         os.chdir(self.repo_path)
 
@@ -77,6 +104,7 @@ class PlanExecutionVM:
         """Set the plan for the VM and save the state."""
         self.state["current_plan"] = plan
         # self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
+        self.blocks = self.parse_plan(plan)
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
@@ -110,7 +138,7 @@ class PlanExecutionVM:
         success, output = handler(params, **kwargs)
         if success:
             self.save_state()
-            execution_result = self._log_step_execution(
+            commit_message_dict = self._log_step_execution(
                 step_type, params, seq_no, output
             )
             return {
@@ -119,7 +147,8 @@ class PlanExecutionVM:
                 "parameters": params,
                 "output": output,
                 "seq_no": seq_no,
-                "execution_result": execution_result,
+                "commit_message_dict": commit_message_dict,
+                "target_seq": output.get("target_seq"),
             }
         else:
             self.logger.error(
@@ -220,7 +249,7 @@ class PlanExecutionVM:
                 commit_info={
                     "type": StepType.STEP_EXECUTION.value,
                     "seq_no": str(step.get("seq_no", "Unknown")),
-                    **step_result.get("execution_result", {}),
+                    **step_result.get("commit_message_dict", {}),
                 }
             )
 
@@ -308,6 +337,7 @@ class PlanExecutionVM:
                 loaded_state.get("variables", {}),
                 loaded_state.get("variables_refs", {}),
             )
+            self.blocks = self.parse_plan(self.state["current_plan"])
             self.logger.info("State loaded from commit %s", commit_hash)
         else:
             self.logger.error("Failed to load state from commit %s", commit_hash)
@@ -334,3 +364,119 @@ class PlanExecutionVM:
 
     def get_current_step(self) -> dict:
         return self.state["current_plan"][self.state["program_counter"]]
+
+    def parse_plan(self, plan: List[Dict[str, Any]]) -> Dict[int, Executable]:
+        executables = {}
+        for step in plan:
+            seq_no = step.get("seq_no")
+            if seq_no is not None:
+                executables[seq_no] = StepBlock(step, self)
+            else:
+                self.logger.warning("Step without seq_no: %s", step)
+        return executables
+
+    def execute_block(self):
+        """Execute the next block in the plan and return step details."""
+        if self.state["program_counter"] >= len(self.state["current_plan"]):
+            self.logger.error(
+                "Program counter (%d) out of range for current plan (length: %d)",
+                self.state["program_counter"],
+                len(self.state["current_plan"]),
+            )
+            self.state["errors"].append(
+                f"Program counter out of range: {self.state['program_counter']}"
+            )
+            return {
+                "success": False,
+                "error": f"Program counter out of range: {self.state['program_counter']}",
+            }
+
+        block = self.blocks.get(self.state["program_counter"])
+        if block is None:
+            self.logger.error(
+                "Block not found for program counter %d", self.state["program_counter"]
+            )
+            self.state["errors"].append(
+                f"Block not found for program counter {self.state['program_counter']}"
+            )
+            return {
+                "success": False,
+                "error": f"Block not found for program counter {self.state['program_counter']}",
+            }
+
+        self.logger.info(
+            "Executing block: %s (program counter:%d), plan length: %d",
+            block,
+            self.state["program_counter"],
+            len(self.state["current_plan"]),
+        )
+
+        try:
+            results = block.execute(**kwargs)
+
+            success = True
+            errors = []
+            program_counter = self.state["program_counter"]
+            for seq_no, result in results.items():
+                if not result["success"]:
+                    success = False
+                    errors.append(result["error"])
+
+                # Check if the step has a target_seq and jump to that step if it exists
+                if result.get("target_seq") is not None:
+                    target_seq = result["target_seq"]
+                    target_index = self.find_step_index(target_seq)
+                    if target_index is not None:
+                        program_counter = target_index
+                    else:
+                        errors.append(
+                            f"Target step {target_seq} not found for step {seq_no}"
+                        )
+                        success = False
+
+                # forwards the program counter if the step was executed successfully
+                if seq_no >= program_counter:
+                    program_counter += 1
+
+            if not success:
+                self.logger.error(
+                    "Failed to execute block from step %d: %s",
+                    self.state["program_counter"],
+                    results,
+                )
+                self.state["errors"].extend(errors)
+                return {
+                    "success": False,
+                    "error": f"Failed to execute block from step {self.state['program_counter']}: {results}",
+                }
+
+            # Garbage collect if necessary
+            if program_counter < len(self.state["current_plan"]):
+                self.garbage_collect()
+            self.state["program_counter"] = program_counter
+
+            self.save_state()
+            commit_hash = self.branch_manager.commit_changes(
+                commit_info={
+                    "type": StepType.STEP_EXECUTION.value,
+                    "seq_no": str(step.get("seq_no", "Unknown")),
+                    **step_result.get("commit_message_dict", {}),
+                }
+            )
+            return {
+                "success": True,
+                "commit_hash": commit_hash,
+                "instruction_results": results,
+            }
+        except Exception as e:
+            traceback.print_exc()
+            self.logger.error(
+                "Error executing step %d: %s", self.state["program_counter"], str(e)
+            )
+            self.state["errors"].append(
+                f"Error in step {self.state['program_counter']}: {str(e)}"
+            )
+            return {
+                "success": False,
+                "error": f"Error in step {self.state['program_counter']}: {str(e)}",
+            }

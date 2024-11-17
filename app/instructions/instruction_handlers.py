@@ -284,28 +284,7 @@ class InstructionHandlers:
                 None,
             )
 
-        try:
-            target_index = self.vm.find_step_index(target_seq)
-            if target_index is None:
-                return (
-                    self._handle_error(
-                        f"Target sequence number {target_seq} not found in the plan.",
-                        "jmp",
-                        params,
-                    ),
-                    None,
-                )
-
-            self.vm.state["program_counter"] = target_index
-            self.vm.logger.info(f"Jumped to seq_no {target_seq}")
-            return True, {"target_seq": target_seq}
-        except Exception as e:
-            return (
-                self._handle_error(
-                    f"Unexpected error in jmp_handler: {str(e)}", "jmp", params
-                ),
-                None,
-            )
+        return True, {"target_seq": target_seq}
 
     def assign_handler(
         self, params: Dict[str, Any], **kwargs

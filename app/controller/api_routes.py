@@ -580,21 +580,22 @@ def stream_execute_vm():
                     task.save()
                     return
 
-                step_type = step_result.get("step_type")
-                params = step_result.get("parameters", {})
-                output = step_result.get("output", {})
-                seq_no = step_result.get("seq_no", -1)  # -1 means unknown.
+                for instruction_result in step_result.get("instruction_results", []):
+                    step_type = instruction_result.get("step_type")
+                    params = instruction_result.get("parameters", {})
+                    output = instruction_result.get("output", {})
+                    seq_no = instruction_result.get("seq_no", -1)  # -1 means unknown.
 
-                # Tool Call (Part a) if the step is a tool call
-                if step_type == "calling":
-                    yield protocol.send_tool_result(seq_no, output)
+                    # Tool Call (Part a) if the step is a tool call
+                    if step_type == "calling":
+                        yield protocol.send_tool_result(seq_no, output)
 
-                # Step State (Part 8)
-                yield protocol.send_state(
-                    task_id, task_branch, step_seq_no, task.vm.state
-                )
-                # Step Finish (Part e)
-                yield protocol.send_step_finish(seq_no)
+                    # Step State (Part 8)
+                    yield protocol.send_state(
+                        task_id, task_branch, step_seq_no, task.vm.state
+                    )
+                    # Step Finish (Part e)
+                    yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
                 final_answer = None
