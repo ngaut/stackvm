@@ -113,8 +113,7 @@ class PlanExecutionVM:
         params = step.get("parameters", {})
         seq_no = step.get("seq_no", "Unknown")
         if not isinstance(step_type, str):
-            self.logger.error("Invalid step type.")
-            return False, None
+            raise ValueError("Invalid step type.")
 
         self.logger.info(f"Executing step {seq_no}: {step_type}")
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
