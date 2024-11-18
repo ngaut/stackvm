@@ -9,7 +9,7 @@ from concurrent.futures import Future
 
 class StepStatus(Enum):
     PENDING = "pending"
-    SUMMITED = "summitted"
+    SUBMITTED = "submitted"
     RUNNING = "running"
     FAILED = "failed"
     SUCCESSFUL = "successful"
@@ -39,7 +39,7 @@ class Step:
         Start step execution. This method is non-blocking and changes the step status.
         """
         with self._lock:
-            if self.status not in (StepStatus.PENDING, StepStatus.SUMMITED):
+            if self.status not in (StepStatus.PENDING, StepStatus.SUBMITTED):
                 return
             self.status = StepStatus.RUNNING
             self.start_execution_time = datetime.utcnow()

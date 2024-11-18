@@ -197,7 +197,7 @@ class PlanExecutionVM:
             for step in concurrent_steps:
                 if step.get_status() == StepStatus.PENDING:
                     self.logger.info("Executing concurrent step %s", step)
-                    step.set_status(StepStatus.SUMMITED)
+                    step.set_status(StepStatus.SUBMITTED)
                     future = self.executor.submit(step.run, **kwargs)
                     step.set_future(future)
 
@@ -207,7 +207,7 @@ class PlanExecutionVM:
                     "Executing step %d: %s", self.state["program_counter"], current_step
                 )
                 current_step.run(**kwargs)
-            elif current_step.get_status() in (StepStatus.SUMMITED, StepStatus.RUNNING):
+            elif current_step.get_status() in (StepStatus.SUBMITTED, StepStatus.RUNNING):
                 # wait future
                 self.logger.info(
                     "Waiting for concurrent step %s to complete", current_step

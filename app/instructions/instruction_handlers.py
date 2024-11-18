@@ -270,10 +270,12 @@ class InstructionHandlers:
         self, params: Dict[str, Any], **kwargs
     ) -> Tuple[bool, Dict[str, Any]]:
         """Handle variable assignment."""
+        output_vars_record = {}
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
             self.vm.set_variable(var_name, value_resolved)
-        return True, {var_name: value_resolved}
+            output_vars_record[var_name] = value_resolved
+        return True, output_vars_record
 
     def reasoning_handler(
         self, params: Dict[str, Any], **kwargs
@@ -296,10 +298,9 @@ class InstructionHandlers:
         )
 
         self.vm.set_state_msg(
-            {
+            json.dumps({
                 "chain_of_thoughts": chain_of_thoughts,
                 "dependency_analysis": dependency_analysis,
-            }
+            })
         )
-
         return True, None
