@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import traceback
-import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, List
 
@@ -207,12 +206,11 @@ class PlanExecutionVM:
                     "Executing step %d: %s", self.state["program_counter"], current_step
                 )
                 current_step.run(**kwargs)
-            elif current_step.get_status() == StepStatus.RUNNING:
+            elif current_step.get_status() in (StepStatus.SUMMITED, StepStatus.RUNNING):
                 # wait future
                 self.logger.info(
                     "Waiting for concurrent step %s to complete", current_step
                 )
-                time.sleep(5)
                 try:
                     current_step.get_future().result()
                 except Exception as e:
