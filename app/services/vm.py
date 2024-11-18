@@ -192,13 +192,14 @@ class PlanExecutionVM:
         current_step_dict = self.state["current_plan"][self.state["program_counter"]]
         current_step = self.steps[current_step_dict["seq_no"]]
 
-        concurrent_steps = self._find_concurrent_steps()
-        for step in concurrent_steps:
-            if step.get_status() == StepStatus.PENDING:
-                self.logger.info("Executing concurrent step %s", step)
-                step.set_status(StepStatus.SUMMITED)
-                future = self.executor.submit(step.run, **kwargs)
-                step.set_future(future)
+        if current_step.get_status() == StepStatus.PENDING:
+            concurrent_steps = self._find_concurrent_steps()
+            for step in concurrent_steps:
+                if step.get_status() == StepStatus.PENDING:
+                    self.logger.info("Executing concurrent step %s", step)
+                    step.set_status(StepStatus.SUMMITED)
+                    future = self.executor.submit(step.run, **kwargs)
+                    step.set_future(future)
 
         try:
             if current_step.get_status() == StepStatus.PENDING:
