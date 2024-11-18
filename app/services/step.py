@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
@@ -10,12 +9,13 @@ from concurrent.futures import Future
 
 class StepStatus(Enum):
     PENDING = "pending"
+    SUMMITED = "summitted"
     RUNNING = "running"
     FAILED = "failed"
     SUCCESSFUL = "successful"
 
 
-class Step(ABC):
+class Step:
     """Abstract base class for all execution steps."""
 
     def __init__(
@@ -39,10 +39,12 @@ class Step(ABC):
         Start step execution. This method is non-blocking and changes the step status.
         """
         with self._lock:
-            if self.status != StepStatus.PENDING:
+            if self.status not in (StepStatus.PENDING, StepStatus.SUMMITED):
                 return
             self.status = StepStatus.RUNNING
             self.start_execution_time = datetime.utcnow()
+
+        self.logger.info("[Thread] Running %s", self.__str__())
 
         try:
             success, output = self.handler(self.parameters, **kwargs)
@@ -54,12 +56,13 @@ class Step(ABC):
                     self.status = StepStatus.FAILED
                     self.error = str(output)
                 self.end_execution_time = datetime.utcnow()
+            self.logger.info("[Thread] Finished %s", self.__str__())
         except Exception as e:
             with self._lock:
                 self.status = StepStatus.FAILED
                 self.error = str(e)
                 self.end_execution_time = datetime.utcnow()
-            self.logger.error(f"Error executing step {self.seq_no}: {str(e)}")
+            self.logger.info("[Thread] Failed %s", self.__str__())
 
     def get_result(self) -> Tuple[bool, Any]:
         """
@@ -71,13 +74,19 @@ class Step(ABC):
         elif self.status == StepStatus.FAILED:
             return False, self.error
         elif self.status == StepStatus.RUNNING:
-            raise RuntimeError("Step is still running")
+            raise RuntimeError(f"Step {self} is still running")
         else:
-            raise RuntimeError("Step has not been started")
+            raise RuntimeError(f"Step {self} has not been started")
+
+    def set_status(self, status: StepStatus) -> None:
+        """Set the status of the step."""
+        with self._lock:
+            self.status = status
 
     def get_status(self) -> StepStatus:
         """Get the status of the step."""
-        return self.status
+        with self._lock:
+            return self.status
 
     def set_future(self, future: Future) -> None:
         """Set the future object for this step when executed in thread pool."""
@@ -88,4 +97,4 @@ class Step(ABC):
         return self._future
 
     def __str__(self) -> str:
-        return f"Step(seq_no={self.seq_no}, type={self.step_type}, status={self.status.value})"
+        return f"Step(seq_no={self.seq_no}, type={self.step_type}, status={self.status.value}, parameters={self.parameters})"

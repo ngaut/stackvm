@@ -11,34 +11,6 @@ class InstructionHandlers:
         self.vm = vm  # Store the vm instance
         self.tools_calling = ToolsHub()
 
-    def _handle_error(
-        self,
-        message: str,
-        instruction: Optional[str] = None,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> bool:
-        """
-        Common error handling method with enhanced context for reflection.
-
-        Args:
-            message (str): The error message.
-            instruction (Optional[str]): The instruction that caused the error.
-            params (Optional[Dict[str, Any]]): The parameters of the instruction.
-
-        Returns:
-            bool: Always returns False to indicate an error occurred.
-        """
-        error_context = {
-            "error_message": message,
-            "instruction": instruction,
-            "params": params,
-            "program_counter": self.vm.state.get("program_counter"),
-        }
-
-        self.vm.logger.error(f"Error occurred: {json.dumps(error_context, indent=2)}")
-        self.vm.state["errors"].append(error_context)
-        return False
-
     def _set_output_vars(
         self,
         instruction_output: Any,
@@ -117,20 +89,24 @@ class InstructionHandlers:
         tool_name = params.get("tool_name")
         if tool_name is None:
             return (
-                self._handle_error(
-                    "Missing 'tool_name' in calling parameters", "calling", params
-                ),
-                None,
+                False,
+                {
+                    "error_message": "Missing 'tool_name' in calling parameters",
+                    "instruction": "calling",
+                    "params": params,
+                },
             )
 
         # Retrieve the tool handler from the tools_calling dictionary
         tool_handler = self.tools_calling.get_tool_handler(tool_name)
         if tool_handler is None:
             return (
-                self._handle_error(
-                    f"Tool '{tool_name}' is not registered.", "calling", params
-                ),
-                None,
+                False,
+                {
+                    "error_message": f"Tool '{tool_name}' is not registered.",
+                    "instruction": "calling",
+                    "params": params,
+                },
             )
 
         tool_parameters = {
@@ -140,19 +116,21 @@ class InstructionHandlers:
         output_vars = params.get("output_vars", None)
         if output_vars is None:
             return (
-                self._handle_error(
-                    "Missing 'output_vars' in calling parameters", "calling", params
-                ),
-                None,
+                False,
+                {
+                    "error_message": "Missing 'output_vars' in calling parameters",
+                    "instruction": "calling",
+                    "params": params,
+                },
             )
         if not isinstance(output_vars, list):
             return (
-                self._handle_error(
-                    "Invalid 'output_vars' type in calling parameters",
-                    "calling",
-                    params,
-                ),
-                None,
+                False,
+                {
+                    "error_message": "Invalid 'output_vars' type in calling parameters",
+                    "instruction": "calling",
+                    "params": params,
+                },
             )
         if len(output_vars) > 1:
             tool_parameters["response_format"] = (
@@ -178,12 +156,12 @@ class InstructionHandlers:
             return self._set_output_vars(result, output_vars)
 
         return (
-            self._handle_error(
-                f"Failed to fetch response from tool '{tool_name}'.",
-                "calling",
-                params,
-            ),
-            output_vars,
+            False,
+            {
+                "error_message": f"Failed to fetch response from tool '{tool_name}', output {output_vars}",
+                "instruction": "calling",
+                "params": params,
+            },
         )
 
     def _construct_response_format_example(
@@ -213,12 +191,12 @@ class InstructionHandlers:
             # Conditional jump
             if jump_if_true is None or jump_if_false is None:
                 return (
-                    self._handle_error(
-                        "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
-                        instruction="jmp",
-                        params=params,
-                    ),
-                    None,
+                    False,
+                    {
+                        "error_message": "Missing 'condition_prompt', 'jump_if_true', or 'jump_if_false' in parameters.",
+                        "instruction": "jmp",
+                        "params": params,
+                    },
                 )
 
             condition_prompt_with_response_format = (
@@ -241,12 +219,12 @@ class InstructionHandlers:
 
                 if not isinstance(condition_result, bool):
                     return (
-                        self._handle_error(
-                            f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
-                            instruction="jmp",
-                            params=params,
-                        ),
-                        None,
+                        False,
+                        {
+                            "error_message": f"Invalid condition result type: {type(condition_result)} in response {json_object}. Expected boolean.",
+                            "instruction": "jmp",
+                            "params": params,
+                        },
                     )
 
                 if condition_result:
@@ -260,28 +238,30 @@ class InstructionHandlers:
                 )
             except json.JSONDecodeError:
                 return (
-                    self._handle_error(
-                        f"Failed to parse JSON response from LLM: {response}.",
-                        instruction="jmp",
-                        params=params,
-                    ),
-                    None,
+                    False,
+                    {
+                        "error_message": f"Failed to parse JSON response from LLM: {response}.",
+                        "instruction": "jmp",
+                        "params": params,
+                    },
                 )
             except Exception as e:
                 return (
-                    self._handle_error(
-                        f"Unexpected error in jmp_handler: {str(e)}",
-                        instruction="jmp",
-                        params=params,
-                    ),
-                    None,
+                    False,
+                    {
+                        "error_message": f"Unexpected error in jmp_handler: {str(e)}",
+                        "instruction": "jmp",
+                        "params": params,
+                    },
                 )
         elif target_seq is None:
             return (
-                self._handle_error(
-                    "Missing 'target_seq' for unconditional jump.", "jmp", params
-                ),
-                None,
+                False,
+                {
+                    "error_message": "Missing 'target_seq' for unconditional jump.",
+                    "instruction": "jmp",
+                    "params": params,
+                },
             )
 
         return True, {"target_seq": target_seq}
@@ -305,16 +285,21 @@ class InstructionHandlers:
         if not isinstance(chain_of_thoughts, str) or not isinstance(
             dependency_analysis, str
         ):
-            return self._handle_error("Invalid parameters for 'reasoning'."), None
+            return False, {
+                "error_message": "Invalid parameters for 'reasoning'.",
+                "instruction": "reasoning",
+                "params": params,
+            }
 
         self.vm.logger.info(
             f"Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
         )
 
-        self.vm.state["msgs"].append(
+        self.vm.set_state_msg(
             {
                 "chain_of_thoughts": chain_of_thoughts,
                 "dependency_analysis": dependency_analysis,
             }
         )
+
         return True, None
