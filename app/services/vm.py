@@ -2,10 +2,13 @@ import json
 import logging
 import os
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, List
+
 from app.instructions import InstructionHandlers
 from app.services import StepType
 from app.services import GitManager, VariableManager
+from app.services.step import Step, StepStatus
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
@@ -16,7 +19,7 @@ class PlanExecutionVM:
     Virtual Machine for executing plans.
     """
 
-    def __init__(self, repo_path: str, llm_interface: Any = None):
+    def __init__(self, repo_path: str, llm_interface: Any = None, max_workers=3):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
             "errors": [],
@@ -31,17 +34,30 @@ class PlanExecutionVM:
         self.llm_interface = llm_interface
         self.repo_path = repo_path
         self.branch_manager = GitManager(self.repo_path)
-        self.set_state(self.branch_manager.get_current_commit_hash())
+
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.steps: Dict[str, Step] = {}
 
         os.chdir(self.repo_path)
 
         self.handlers_registered = False
         self.register_handlers()
+        self.set_state(self.branch_manager.get_current_commit_hash())
 
     def _setup_logger(self) -> logging.Logger:
         """Set up and return a logger for the class."""
         logger = logging.getLogger(__name__)
         return logger
+
+    def close_executor(self):
+        self.executor.shutdown(wait=True)
+        self.logger.info("ThreadPoolExecutor has been shut down.")
+
+    def __del__(self):
+        try:
+            self.close_executor()
+        except Exception as e:
+            self.logger.error(f"Error shutting down executor: {str(e)}")
 
     def register_handlers(self) -> None:
         """Register all instruction handlers."""
@@ -76,7 +92,6 @@ class PlanExecutionVM:
     def set_plan(self, plan: List[Dict[str, Any]]) -> None:
         """Set the plan for the VM and save the state."""
         self.state["current_plan"] = plan
-        # self.logger.info("Plan set: %s for goal: %s", plan, self.state["goal"])
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
@@ -86,56 +101,28 @@ class PlanExecutionVM:
             self.variable_manager.decrease_ref_count(var)
         return self.variable_manager.interpolate_variables(param)
 
-    def execute_step_handler(self, step: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Execute a single step in the plan and return step execution details."""
+    def set_state_msg(self, msg: str) -> None:
+        """Add a message to the state."""
+        self.state["msgs"].append(msg)
+        self.logger.info("Message added to state: %s", msg)
+
+    def create_step(self, step: Dict[str, Any]) -> Step:
+        """Create a Step object from a dictionary."""
+
         step_type = step.get("type")
         params = step.get("parameters", {})
-        seq_no = step.get("seq_no", "Unknown")
-
+        seq_no = step.get("seq_no")
         if not isinstance(step_type, str):
-            self.logger.error("Invalid step type.")
-            self.state["errors"].append("Invalid step type.")
-            return {
-                "success": False,
-                "error": "Invalid step type.",
-                "step_type": step_type,
-                "seq_no": seq_no,
-            }
+            raise ValueError(f"Invalid step type for {step}.")
+        if not isinstance(seq_no, int):
+            raise ValueError(f"Invalid seq_no {step}.")
 
         handler = getattr(self.instruction_handlers, f"{step_type}_handler", None)
         if not handler:
             self.logger.warning(f"Unknown instruction: {step_type}")
             handler = self.instruction_handlers.unknown_handler
 
-        success, output = handler(params, **kwargs)
-        if success:
-            self.save_state()
-            execution_result = self._log_step_execution(
-                step_type, params, seq_no, output
-            )
-            return {
-                "success": True,
-                "step_type": step_type,
-                "parameters": params,
-                "output": output,
-                "seq_no": seq_no,
-                "execution_result": execution_result,
-            }
-        else:
-            self.logger.error(
-                "Failed to execute step %d: %s",
-                self.state["program_counter"],
-                step["type"],
-            )
-            self.state["errors"].append(
-                f"Failed to execute step {self.state['program_counter']}: {step['type']}"
-            )
-            return {
-                "success": False,
-                "error": f"Failed to execute step {self.state['program_counter']}: {step['type']}",
-                "step_type": step_type,
-                "seq_no": seq_no,
-            }
+        return Step(handler, seq_no, step_type, params)
 
     def _log_step_execution(
         self,
@@ -154,7 +141,9 @@ class PlanExecutionVM:
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
 
-        self.logger.info("%s with parameters: %s", description, json.dumps(params))
+        self.logger.info(
+            "Commit message -  %s with parameters: %s", description, json.dumps(params)
+        )
         if output_parameters:
             output_parameters = {
                 k: self._preview_value(v) for k, v in output_parameters.items()
@@ -178,7 +167,7 @@ class PlanExecutionVM:
         )
 
     def step(self, **kwargs) -> Dict[str, Any]:
-        """Execute the next step in the plan and return step details."""
+        """Execute the next step in the plan."""
         if self.state["program_counter"] >= len(self.state["current_plan"]):
             self.logger.error(
                 "Program counter (%d) out of range for current plan (length: %d)",
@@ -193,22 +182,94 @@ class PlanExecutionVM:
                 "error": f"Program counter out of range: {self.state['program_counter']}",
             }
 
-        step = self.state["current_plan"][self.state["program_counter"]]
-        self.logger.info(
-            "Executing step %d: %s, seq_no: %s, plan length: %d",
-            self.state["program_counter"],
-            step["type"],
-            step.get("seq_no", "Unknown"),
-            len(self.state["current_plan"]),
-        )
+        if len(self.steps) == 0:
+            self.steps = {
+                step_dict["seq_no"]: self.create_step(step_dict)
+                for step_dict in self.state["current_plan"]
+            }
+
+        current_step_dict = self.state["current_plan"][self.state["program_counter"]]
+        current_step = self.steps[current_step_dict["seq_no"]]
+
+        if current_step.get_status() == StepStatus.PENDING:
+            concurrent_steps = self._find_concurrent_steps()
+            for step in concurrent_steps:
+                if step.get_status() == StepStatus.PENDING:
+                    self.logger.info("Executing concurrent step %s", step)
+                    step.set_status(StepStatus.SUBMITTED)
+                    future = self.executor.submit(step.run, **kwargs)
+                    step.set_future(future)
 
         try:
-            step_result = self.execute_step_handler(step, **kwargs)
-            if not step_result["success"]:
-                return step_result
+            if current_step.get_status() == StepStatus.PENDING:
+                self.logger.info(
+                    "Executing step %d: %s", self.state["program_counter"], current_step
+                )
+                current_step.run(**kwargs)
+            elif current_step.get_status() in (
+                StepStatus.SUBMITTED,
+                StepStatus.RUNNING,
+            ):
+                # wait future
+                self.logger.info(
+                    "Waiting for concurrent step %s to complete", current_step
+                )
+                try:
+                    current_step.get_future().result()
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to execute step {current_step.seq_no}: {str(e)}"
+                    )
+                    self.state["errors"].append(
+                        f"Failed to execute step {current_step.seq_no}: {str(e)}"
+                    )
+                    return {
+                        "success": False,
+                        "error": f"Failed to execute step {current_step.seq_no}: {str(e)}",
+                        "step_type": current_step.step_type,
+                        "seq_no": current_step.seq_no,
+                    }
 
-            # Increment program counter unless it's a jump
-            if step["type"] not in ("jmp"):
+            if current_step.get_status() == StepStatus.RUNNING:
+                raise RuntimeError("Step is still running")
+
+            success, step_result = current_step.get_result()
+            if not success:
+                self.logger.error(
+                    f"Failed to execute step {current_step.seq_no}: {step_result}"
+                )
+                self.state["errors"].append(
+                    f"Failed to execute step {current_step.seq_no}: {step_result}"
+                )
+                return {
+                    "success": False,
+                    "error": step_result,
+                    "step_type": current_step.step_type,
+                    "seq_no": current_step.seq_no,
+                }
+
+            output = step_result.get("output_vars", {}) if step_result is not None else None
+            if output is not None:
+                for var_name, var_value in output.items():
+                    self.set_variable(var_name, var_value)
+
+            commit_message_dict = self._log_step_execution(
+                current_step.step_type,
+                current_step.parameters,
+                current_step.seq_no,
+                output,
+            )
+
+            if output is not None and output.get("target_seq") is not None:
+                target_index = self.find_step_index(output["target_seq"])
+                if target_index is not None:
+                    self.state["program_counter"] = target_index
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Target step {output['target_seq']} not found",
+                    }
+            else:
                 self.state["program_counter"] += 1
 
             # Garbage collect if necessary
@@ -216,16 +277,23 @@ class PlanExecutionVM:
                 self.garbage_collect()
 
             self.save_state()
+
             commit_hash = self.branch_manager.commit_changes(
                 commit_info={
                     "type": StepType.STEP_EXECUTION.value,
-                    "seq_no": str(step.get("seq_no", "Unknown")),
-                    **step_result.get("execution_result", {}),
+                    "seq_no": current_step.seq_no,
+                    **commit_message_dict,
                 }
             )
 
-            step_result["commit_hash"] = commit_hash
-            return step_result
+            return {
+                "success": True,
+                "step_type": current_step.step_type,
+                "parameters": current_step.parameters,
+                "output": output,
+                "seq_no": current_step.seq_no,
+                "commit_hash": commit_hash,
+            }
         except Exception as e:
             traceback.print_exc()
             self.logger.error(
@@ -308,6 +376,7 @@ class PlanExecutionVM:
                 loaded_state.get("variables", {}),
                 loaded_state.get("variables_refs", {}),
             )
+
             self.logger.info("State loaded from commit %s", commit_hash)
         else:
             self.logger.error("Failed to load state from commit %s", commit_hash)
@@ -334,3 +403,34 @@ class PlanExecutionVM:
 
     def get_current_step(self) -> dict:
         return self.state["current_plan"][self.state["program_counter"]]
+
+    def _find_concurrent_steps(self) -> List[Step]:
+        """Find all steps that can be executed concurrently."""
+        concurrent_steps = []
+        next_index = self.state["program_counter"] + 1
+
+        while next_index < len(self.state["current_plan"]):
+            step_dict = self.state["current_plan"][next_index]
+            step = self.steps[step_dict["seq_no"]]
+
+            if step.step_type != "calling":
+                break  # only consider calling steps
+
+            # check if all referenced variables exist
+            tool_params = step.parameters.get("tool_params", {})
+            is_ready = True
+            for param_name, param_value in tool_params.items():
+                vars = self.variable_manager.find_referenced_variables_by_pattern(
+                    param_value
+                )
+                if any(
+                    var not in self.variable_manager.get_all_variables() for var in vars
+                ):
+                    is_ready = False
+                    break
+
+            if is_ready:
+                concurrent_steps.append(step)
+            next_index += 1
+
+        return concurrent_steps

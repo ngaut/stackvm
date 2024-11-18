@@ -9,6 +9,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class BaseLLMProvider(ABC):
     """
     Abstract base class for LLM providers.
