@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict
+from typing import List, Dict, Tuple, Optional
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -42,6 +42,63 @@ def get_labels_tree() -> List[Dict]:
     return root_labels
 
 
+def find_longest_matching_node(
+    tree: List[Dict], path: List[str], current_depth: int = 0
+) -> Dict:
+    """
+    Finds the longest matching node in the tree for the given path.
+    """
+    if current_depth >= len(path) or not tree:
+        return None
+
+    current_name = path[current_depth]
+
+    # find the matching node at the root level
+    matching_node = None
+    for node in tree:
+        if node["name"] == current_name:
+            matching_node = node
+            break
+
+    if not matching_node:
+        return None
+
+    # if there are more levels in the path, search for the next level in the children
+    if current_depth < len(path) - 1 and matching_node.get("children"):
+        child_match = find_longest_matching_node(
+            matching_node["children"], path, current_depth + 1
+        )
+        return child_match if child_match else matching_node
+
+    return matching_node
+
+
+def get_all_tasks_under_node(node: Dict) -> List[str]:
+    """
+    Recursively retrieves all tasks under the given node
+    """
+    tasks = node.get("tasks", [])
+
+    # recursively get tasks from children
+    for child in node.get("children", []):
+        tasks.extend(get_all_tasks_under_node(child))
+
+    return tasks
+
+
+def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
+    """
+    Finds the most similar task in the list of candidates
+    """
+    candidate = candidates[0]
+    # find the task best plan
+    with SessionLocal() as session:
+        task = session.query(Task).filter(Task.id == candidate.get("id")).first()
+        if not task:
+            return None
+        return f"**Goal**:\n{task.goal}\n**The plan:**\n{task.best_plan}\n"
+
+
 def remove_label_id_from_tree(tree: List[Dict]):
     for label in tree:
         label.pop("id", None)
@@ -77,7 +134,7 @@ class LabelClassifier:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
-    def generate_label_path(self, task_id: str, task_goal: str) -> List[str]:
+    def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[str]]:
         """
         Generates a label path for the given task goal.
 
@@ -88,8 +145,9 @@ class LabelClassifier:
             List[str]: A list of label names from root to leaf.
         """
         # Generate enhanced classification prompt
-        labels_tree = self.get_labels_tree_with_task_goals()
-        prompt = get_label_classification_prompt(task_goal, labels_tree)
+        labels_tree = get_labels_tree()
+        labels_tree_with_task = self.get_labels_tree_with_task_goals(labels_tree)
+        prompt = get_label_classification_prompt(task_goal, labels_tree_with_task)
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
@@ -102,7 +160,17 @@ class LabelClassifier:
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse label path JSON: {e}")
 
-        return label_path
+        # find the most similar example in the label tree
+        matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
+        if not matching_node:
+            return label_path, None
+
+        # get all tasks under the matching node
+        tasks = get_all_tasks_under_node(matching_node)
+        if len(tasks) == 0:
+            return label_path, None
+
+        return label_path, find_most_similar_task(task_goal, tasks)
 
     def insert_label_path(self, task_id: str, label_path: List[str]) -> None:
         """
@@ -153,18 +221,17 @@ class LabelClassifier:
                 session.rollback()
                 raise e
 
-    def get_labels_tree_with_task_goals(self) -> List[Dict]:
+    def get_labels_tree_with_task_goals(self, labels_tree: List[Dict]) -> List[Dict]:
         """
         Queries tasks with corresponding labels and assigns task goals to the respective leaf labels.
 
         Returns:
             List[Dict]: A list representing the hierarchical labels tree with task goals assigned to leaf labels.
         """
-        labels_tree = get_labels_tree()
-
         with SessionLocal() as session:
             task_subquery = (
                 session.query(
+                    Task.id,
                     Task.goal,
                     Task.label_id,
                     func.row_number()
@@ -179,15 +246,22 @@ class LabelClassifier:
             )
 
             limited_tasks = (
-                session.query(task_subquery.c.goal, task_subquery.c.label_id)
+                session.query(
+                    task_subquery.c.id, task_subquery.c.goal, task_subquery.c.label_id
+                )
                 .filter(task_subquery.c.rn <= 3)
-                .limit(50)
+                .limit(30)
                 .all()
             )
 
             label_to_tasks = defaultdict(list)
-            for goal, label_id in limited_tasks:
-                label_to_tasks[label_id].append(goal)
+            for id, goal, label_id in limited_tasks:
+                label_to_tasks[label_id].append(
+                    {
+                        "id": id,
+                        "goal": goal,
+                    }
+                )
 
         def insert_goals(tree: List[Dict]):
             for label in tree:

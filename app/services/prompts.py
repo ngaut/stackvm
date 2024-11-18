@@ -271,8 +271,7 @@ def get_label_classification_prompt(task_goal: str, labels_tree: dict) -> str:
 
     # Construct the prompt
     prompt = f"""
-Your task is to create a tree-structured tagging system for classifying user task. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. 
-This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
+Your task is to create a tree-structured tagging system for classifying user tasks. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
 
 ## Current Labels Tree
 
@@ -286,28 +285,55 @@ This design allows the system to be highly flexible and scalable, capable of con
 
 ## Instructions
 
-1.	Task Plan Estimation:
-    - Outline Steps: Break down the task or question into sequential steps required to accomplish it.
-    - Assess Complexity: Determine if the task involves simple information retrieval or requires complex analysis and planning.
-2.	Intent Recognition:
-    - Extract Keywords: Identify significant keywords in the task goal.
-    - Determine Intent: Understand the underlying intent behind the task based on the keywords.
-3.	Matching Classification:
-    - Select Category: Based on the task complexity and intent, choose the most appropriate top-level category.
-    - Select Subcategories: Refine the classification by selecting relevant subcategories layer by layer until the most specific applicable label is identified.
-4.	Dynamic Expansion:
-    - Identify Gaps: If the task does not fit into existing categories or subcategories, determine where to add new nodes.
-    - Expand Tree: Add new categories or subcategories at appropriate positions in the tree to accommodate the new task type.
+1. Category Matching Priority:
+   - Always prioritize matching with existing feature/topic specific categories first
+   - Match with existing leaf nodes before considering parent nodes
+   - Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
+
+2. Intent Analysis:
+   - Identify key technical terms and concepts in the task
+   - Determine if it's about:
+     * Specific feature/component (e.g., TiCDC, TiKV, etc.)
+     * Usage guidance
+     * Troubleshooting
+     * Research/Analysis
+     * Development planning
+   - For feature-specific questions, map to corresponding feature category regardless of complexity
+
+3. Classification Process:
+   - Start from root node
+   - At each level, select the most specific category that matches the task content
+   - If multiple categories seem applicable:
+     * Prioritize feature/component specific categories over general categories
+     * Choose the category that matches the main subject matter, not the format or complexity
+
+4. Validation Rules:
+   - Does the selected path lead to the most specific applicable category?
+   - Is the classification based on what the task is about rather than how complex it is?
+   - For feature-specific tasks, is it classified under the corresponding feature category?
+
+5. Examples:
+
+Good Classification:
+
+Task: "How does TiCDC handle Resolved TS?"
+Correct Path: ["Basic Knowledge", "Feature Support", "TiCDC Resolved TS"]
+Reason: Directly about TiCDC Resolved TS feature
+
+Bad Classification:
+
+Task: "How does TiCDC handle Resolved TS?"
+Wrong Path: ["Complex Task Planning", "Research & Analysis", "Technical Design"]
+Reason: Though technical in nature, it's primarily about a specific feature (TiCDC Resolved TS)
 
 Response Format:
-
-Respond only with the label path as a JSON array of label names, for example:
+Return ONLY the label path as a JSON array of label names, for example:
 
 ```json
 [
-"Basic Knowledge",
-"Feature Support",
-"Foreign Key"
+"Label 1",
+"Label 2",
+"Label 3"
 ]
 ```
 """
