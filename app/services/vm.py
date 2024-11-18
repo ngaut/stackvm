@@ -150,7 +150,7 @@ class PlanExecutionVM:
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
 
-        self.logger.info("%s with parameters: %s", description, json.dumps(params))
+        self.logger.info("Commit message -  %s with parameters: %s", description, json.dumps(params))
         if output_parameters:
             output_parameters = {
                 k: self._preview_value(v) for k, v in output_parameters.items()
