@@ -695,7 +695,7 @@ async function optimizeStep(commitHash, seqNo) {
             });
 
             if (executeData.success) {
-                await updateUIAfterExecution(executeData.branch_name);
+                await updateUIAfterExecution(executeData.current_branch);
                 showNotification('Execution completed successfully', 'success');
             } else {
                 showNotification('Execution failed: ' + (executeData.error || 'Unknown error'), 'danger');

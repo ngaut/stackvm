@@ -233,21 +233,25 @@ class PlanExecutionVM:
             if current_step.get_status() == StepStatus.RUNNING:
                 raise RuntimeError("Step is still running")
 
-            success, output = current_step.get_result()
-
+            success, step_result = current_step.get_result()
             if not success:
                 self.logger.error(
-                    f"Failed to execute step {current_step.seq_no}: {output}"
+                    f"Failed to execute step {current_step.seq_no}: {step_result}"
                 )
                 self.state["errors"].append(
-                    f"Failed to execute step {current_step.seq_no}: {output}"
+                    f"Failed to execute step {current_step.seq_no}: {step_result}"
                 )
                 return {
                     "success": False,
-                    "error": output,
+                    "error": step_result,
                     "step_type": current_step.step_type,
                     "seq_no": current_step.seq_no,
                 }
+
+            output = step_result.get("output_vars", {}) if step_result is not None else None
+            if output is not None:
+                for var_name, var_value in output.items():
+                    self.set_variable(var_name, var_value)
 
             commit_message_dict = self._log_step_execution(
                 current_step.step_type,
