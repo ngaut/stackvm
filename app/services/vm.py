@@ -59,12 +59,6 @@ class PlanExecutionVM:
         except Exception as e:
             self.logger.error(f"Error shutting down executor: {str(e)}")
 
-    def _generate_cache_key(self, step: Dict[str, Any]) -> str:
-        """Generate a cache key for a step."""
-        seq_no = step.get("seq_no")
-        step_type = step.get("type")
-        return f"{step_type}_{seq_no}"
-
     def register_handlers(self) -> None:
         """Register all instruction handlers."""
         if not self.handlers_registered:
