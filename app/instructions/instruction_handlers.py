@@ -298,9 +298,11 @@ class InstructionHandlers:
         )
 
         self.vm.set_state_msg(
-            json.dumps({
-                "chain_of_thoughts": chain_of_thoughts,
-                "dependency_analysis": dependency_analysis,
-            })
+            json.dumps(
+                {
+                    "chain_of_thoughts": chain_of_thoughts,
+                    "dependency_analysis": dependency_analysis,
+                }
+            )
         )
         return True, None

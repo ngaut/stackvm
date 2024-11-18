@@ -34,7 +34,6 @@ class PlanExecutionVM:
         self.llm_interface = llm_interface
         self.repo_path = repo_path
         self.branch_manager = GitManager(self.repo_path)
-        self.set_state(self.branch_manager.get_current_commit_hash())
 
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.steps: Dict[str, Step] = {}
@@ -43,6 +42,7 @@ class PlanExecutionVM:
 
         self.handlers_registered = False
         self.register_handlers()
+        self.set_state(self.branch_manager.get_current_commit_hash())
 
     def _setup_logger(self) -> logging.Logger:
         """Set up and return a logger for the class."""
@@ -92,9 +92,6 @@ class PlanExecutionVM:
     def set_plan(self, plan: List[Dict[str, Any]]) -> None:
         """Set the plan for the VM and save the state."""
         self.state["current_plan"] = plan
-        self.steps = {
-            step_dict["seq_no"]: self.create_step(step_dict) for step_dict in plan
-        }
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:
@@ -144,7 +141,9 @@ class PlanExecutionVM:
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
 
-        self.logger.info("Commit message -  %s with parameters: %s", description, json.dumps(params))
+        self.logger.info(
+            "Commit message -  %s with parameters: %s", description, json.dumps(params)
+        )
         if output_parameters:
             output_parameters = {
                 k: self._preview_value(v) for k, v in output_parameters.items()
@@ -183,6 +182,12 @@ class PlanExecutionVM:
                 "error": f"Program counter out of range: {self.state['program_counter']}",
             }
 
+        if len(self.steps) == 0:
+            self.steps = {
+                step_dict["seq_no"]: self.create_step(step_dict)
+                for step_dict in self.state["current_plan"]
+            }
+
         current_step_dict = self.state["current_plan"][self.state["program_counter"]]
         current_step = self.steps[current_step_dict["seq_no"]]
 
@@ -201,7 +206,10 @@ class PlanExecutionVM:
                     "Executing step %d: %s", self.state["program_counter"], current_step
                 )
                 current_step.run(**kwargs)
-            elif current_step.get_status() in (StepStatus.SUBMITTED, StepStatus.RUNNING):
+            elif current_step.get_status() in (
+                StepStatus.SUBMITTED,
+                StepStatus.RUNNING,
+            ):
                 # wait future
                 self.logger.info(
                     "Waiting for concurrent step %s to complete", current_step
@@ -364,7 +372,7 @@ class PlanExecutionVM:
                 loaded_state.get("variables", {}),
                 loaded_state.get("variables_refs", {}),
             )
-            self.set_plan(self.state["current_plan"])
+
             self.logger.info("State loaded from commit %s", commit_hash)
         else:
             self.logger.error("Failed to load state from commit %s", commit_hash)
