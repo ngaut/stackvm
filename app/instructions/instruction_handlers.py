@@ -153,10 +153,8 @@ class InstructionHandlers:
         # Call the tool handler with the filtered parameters
         result = tool_handler(**final_parameters)
         if result is not None:
-            success, output_vars_record =  self._set_output_vars(result, output_vars)
-            return success, {
-                "output_vars": output_vars_record
-            }
+            success, output_vars_record = self._set_output_vars(result, output_vars)
+            return success, {"output_vars": output_vars_record}
 
         return (
             False,
@@ -278,9 +276,7 @@ class InstructionHandlers:
             value_resolved = self.vm.resolve_parameter(value)
             # self.vm.set_variable(var_name, value_resolved)
             output_vars_record[var_name] = value_resolved
-        return True, {
-            "output_vars": output_vars_record
-        }
+        return True, {"output_vars": output_vars_record}
 
     def reasoning_handler(
         self, params: Dict[str, Any], **kwargs

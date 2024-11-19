@@ -248,7 +248,9 @@ class PlanExecutionVM:
                     "seq_no": current_step.seq_no,
                 }
 
-            output = step_result.get("output_vars", {}) if step_result is not None else None
+            output = (
+                step_result.get("output_vars", {}) if step_result is not None else None
+            )
             if output is not None:
                 for var_name, var_value in output.items():
                     self.set_variable(var_name, var_value)

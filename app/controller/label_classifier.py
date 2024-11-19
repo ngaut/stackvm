@@ -25,7 +25,11 @@ def get_labels_tree() -> List[Dict]:
     with SessionLocal() as session:
         labels = session.query(Label).all()
         label_map = {
-            label.id: {"id": label.id, "name": label.name, "children": []}
+            label.id: {
+                "name": label.name,
+                "description": label.description,
+                "children": [],
+            }
             for label in labels
         }
 
@@ -43,7 +47,7 @@ def get_labels_tree() -> List[Dict]:
 
 
 def find_longest_matching_node(
-    tree: List[Dict], path: List[str], current_depth: int = 0
+    tree: List[Dict], path: List[Dict], current_depth: int = 0
 ) -> Dict:
     """
     Finds the longest matching node in the tree for the given path.
@@ -51,12 +55,12 @@ def find_longest_matching_node(
     if current_depth >= len(path) or not tree:
         return None
 
-    current_name = path[current_depth]
+    current_label = path[current_depth]
 
     # find the matching node at the root level
     matching_node = None
     for node in tree:
-        if node["name"] == current_name:
+        if node["name"] == current_label['label']:
             matching_node = node
             break
 
@@ -94,7 +98,7 @@ def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
     # find the task best plan
     with SessionLocal() as session:
         task = session.query(Task).filter(Task.id == candidate.get("id")).first()
-        if not task:
+        if not task or task.best_plan is None:
             return None
         return f"**Goal**:\n{task.goal}\n**The plan:**\n{task.best_plan}\n"
 
@@ -102,9 +106,23 @@ def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
 def remove_label_id_from_tree(tree: List[Dict]):
     for label in tree:
         label.pop("id", None)
+        label.pop("parent_id", None)
         if len(label["children"]) > 0:
             remove_label_id_from_tree(label["children"])
     return tree
+
+def remove_task_id_from_tree(tree: List[Dict]):
+    tree_json = json.dumps(tree, ensure_ascii=False)
+    new_tree = json.loads(tree_json)
+    for label in new_tree:
+        if "tasks" in label:
+            tasks = []
+            for task in label["tasks"]:
+                tasks.append(task["goal"])
+            label["tasks"] = tasks
+        if len(label["children"]) > 0:
+            remove_task_id_from_tree(label["children"])
+    return new_tree
 
 
 def get_label_path(session: Session, label: Label) -> List[str]:
@@ -126,6 +144,83 @@ def get_label_path(session: Session, label: Label) -> List[str]:
     return path
 
 
+def get_labels_tree_with_task_goals() -> List[Dict]:
+    """
+    Retrieves and structures the labels into a hierarchical tree format with task goals assigned
+    to the respective leaf labels, using a single optimized SQL query.
+
+    Returns:
+        List[Dict]: A list representing the hierarchical labels tree with task goals.
+    """
+    with SessionLocal() as session:
+        # Subquery to get up to 3 tasks per label using window function
+        task_subquery = (
+            session.query(
+                Task.id.label("task_id"),
+                Task.goal.label("task_goal"),
+                Task.label_id.label("task_label_id"),
+                func.row_number()
+                .over(
+                    partition_by=Task.label_id,
+                    order_by=Task.id,
+                )
+                .label("rn"),
+            )
+            .filter(Task.label_id.isnot(None))
+            .subquery()
+        )
+
+        # Main query: join labels with the limited tasks
+        labels_with_tasks = (
+            session.query(
+                Label.id.label("label_id"),
+                Label.name.label("label_name"),
+                Label.description.label("label_description"),
+                Label.parent_id.label("label_parent_id"),
+                task_subquery.c.task_id,
+                task_subquery.c.task_goal,
+            )
+            .outerjoin(
+                task_subquery,
+                (Label.id == task_subquery.c.task_label_id) & (task_subquery.c.rn <= 3),
+            )
+            .order_by(Label.id)
+            .all()
+        )
+
+    # Build a mapping from label ID to label details
+    label_map = {}
+    for row in labels_with_tasks:
+        label_id = row.label_id
+        if label_id not in label_map:
+            label_map[label_id] = {
+                "id": label_id,
+                "name": row.label_name,
+                "description": row.label_description,
+                "parent_id": row.label_parent_id,
+                "children": [],
+                "tasks": [],
+            }
+        # Add task if present
+        if row.task_id:
+            label_map[label_id]["tasks"].append(
+                {"id": row.task_id, "goal": row.task_goal}
+            )
+
+    # Build the hierarchical tree
+    root_labels = []
+    for label in label_map.values():
+        parent_id = label_map[label["id"]].get("parent_id", None)
+        if parent_id:
+            parent = label_map.get(parent_id)
+            if parent:
+                parent["children"].append(label)
+        else:
+            root_labels.append(label)
+
+    return remove_label_id_from_tree(root_labels)
+
+
 class LabelClassifier:
     """
     Service responsible for generating and validating label paths based on task goals.
@@ -145,13 +240,11 @@ class LabelClassifier:
             List[str]: A list of label names from root to leaf.
         """
         # Generate enhanced classification prompt
-        labels_tree = get_labels_tree()
-        labels_tree_with_task = self.get_labels_tree_with_task_goals(labels_tree)
-        prompt = get_label_classification_prompt(task_goal, labels_tree_with_task)
+        labels_tree_with_task = get_labels_tree_with_task_goals()
+        prompt = get_label_classification_prompt(task_goal, remove_task_id_from_tree(labels_tree_with_task))
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
-
         # Parse the LLM response to extract label path
         label_path_str = extract_json(response)
 
@@ -172,7 +265,7 @@ class LabelClassifier:
 
         return label_path, find_most_similar_task(task_goal, tasks)
 
-    def insert_label_path(self, task_id: str, label_path: List[str]) -> None:
+    def insert_label_path(self, task_id: str, label_path: List[Dict]) -> None:
         """
         Validates the label path and creates any missing labels using SQLAlchemy ORM.
         Finally, updates the task's label_id.
@@ -186,8 +279,13 @@ class LabelClassifier:
 
         with SessionLocal() as session:
             try:
-                for label_name in label_path:
+                for current_label in label_path:
                     # Query if the label exists with the current parent_id
+                    label_name = current_label.get("label", None)
+                    label_description = current_label.get("description", None)
+                    if not label_name or not label_description:
+                        raise ValueError("Label name and description are required.")
+
                     label = (
                         session.query(Label)
                         .filter_by(name=label_name, parent=parent)
@@ -197,7 +295,7 @@ class LabelClassifier:
                     if not label:
                         # Create a new Label instance
                         label = Label(
-                            id=str(uuid.uuid4()), name=label_name, parent=parent
+                            id=str(uuid.uuid4()), name=label_name, parent=parent, description=label_description
                         )
                         session.add(label)
                         session.flush()  # Flush to assign an ID if needed
@@ -220,57 +318,3 @@ class LabelClassifier:
             except Exception as e:
                 session.rollback()
                 raise e
-
-    def get_labels_tree_with_task_goals(self, labels_tree: List[Dict]) -> List[Dict]:
-        """
-        Queries tasks with corresponding labels and assigns task goals to the respective leaf labels.
-
-        Returns:
-            List[Dict]: A list representing the hierarchical labels tree with task goals assigned to leaf labels.
-        """
-        with SessionLocal() as session:
-            task_subquery = (
-                session.query(
-                    Task.id,
-                    Task.goal,
-                    Task.label_id,
-                    func.row_number()
-                    .over(
-                        partition_by=Task.label_id,
-                        order_by=Task.id,
-                    )
-                    .label("rn"),
-                )
-                .filter(Task.label_id != None)
-                .subquery()
-            )
-
-            limited_tasks = (
-                session.query(
-                    task_subquery.c.id, task_subquery.c.goal, task_subquery.c.label_id
-                )
-                .filter(task_subquery.c.rn <= 3)
-                .limit(30)
-                .all()
-            )
-
-            label_to_tasks = defaultdict(list)
-            for id, goal, label_id in limited_tasks:
-                label_to_tasks[label_id].append(
-                    {
-                        "id": id,
-                        "goal": goal,
-                    }
-                )
-
-        def insert_goals(tree: List[Dict]):
-            for label in tree:
-                label_id = label.get("id")
-                if label_id and label_id in label_to_tasks:
-                    label["tasks"] = label_to_tasks[label_id]
-                if label.get("children"):
-                    insert_goals(label["children"])
-
-        insert_goals(labels_tree)
-
-        return remove_label_id_from_tree(labels_tree)

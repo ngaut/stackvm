@@ -1,5 +1,6 @@
 import json
 import datetime
+from typing import Dict, List
 
 
 def get_plan_update_prompt(
@@ -254,13 +255,13 @@ Provide only the updated step in JSON format.
 """
 
 
-def get_label_classification_prompt(task_goal: str, labels_tree: dict) -> str:
+def get_label_classification_prompt(task_goal: str, labels_tree: List[Dict]) -> str:
     """
-    Generates an enhanced prompt for the LLM to classify the task goal into a label path.
+    Generates an enhanced prompt for the LLM to classify the task goal into a label path with descriptions.
 
     Args:
         task_goal (str): The goal of the task.
-        labels_tree (dict): The current labels tree.
+        labels_tree (dict): The current labels tree with label descriptions.
 
     Returns:
         str: The generated prompt.
@@ -270,8 +271,7 @@ def get_label_classification_prompt(task_goal: str, labels_tree: dict) -> str:
     labels_tree_json = json.dumps(labels_tree, indent=4, ensure_ascii=False)
 
     # Construct the prompt
-    prompt = f"""
-Your task is to create a tree-structured tagging system for classifying user tasks. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
+    prompt = f"""Your task is to create a tree-structured tagging system for classifying user tasks. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
 
 ## Current Labels Tree
 
@@ -279,16 +279,13 @@ Your task is to create a tree-structured tagging system for classifying user tas
 {labels_tree_json}
 ```
 
-## Task Goal
-
-"{task_goal}"
-
 ## Instructions
 
 1. Category Matching Priority:
    - Always prioritize matching with existing feature/topic specific categories first
    - Match with existing leaf nodes before considering parent nodes
    - Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
+   - Use label descriptions to better understand the scope and intent of each category
 
 2. Intent Analysis:
    - Identify key technical terms and concepts in the task
@@ -299,43 +296,80 @@ Your task is to create a tree-structured tagging system for classifying user tas
      * Research/Analysis
      * Development planning
    - For feature-specific questions, map to corresponding feature category regardless of complexity
+   - Compare task intent with label descriptions for better matching
 
 3. Classification Process:
    - Start from root node
    - At each level, select the most specific category that matches the task content
+   - Consider both label names and their descriptions when making decisions
    - If multiple categories seem applicable:
      * Prioritize feature/component specific categories over general categories
      * Choose the category that matches the main subject matter, not the format or complexity
+     * Use descriptions to break ties between similar categories
 
 4. Validation Rules:
    - Does the selected path lead to the most specific applicable category?
    - Is the classification based on what the task is about rather than how complex it is?
    - For feature-specific tasks, is it classified under the corresponding feature category?
+   - Do the selected labels' descriptions align well with the task content?
 
 5. Examples:
 
 Good Classification:
 
 Task: "How does TiCDC handle Resolved TS?"
-Correct Path: ["Basic Knowledge", "Feature Support", "TiCDC Resolved TS"]
-Reason: Directly about TiCDC Resolved TS feature
+Correct Path: [
+    {{
+        "label": "Basic Knowledge",
+        "description": "Fundamental concepts and knowledge about database features and components"
+    }},
+    {{
+        "label": "Feature Support",
+        "description": "Specific database features and their functionalities"
+    }},
+    {{
+        "label": "TiCDC Resolved TS",
+        "description": "Understanding and implementation of Resolved Timestamp in TiCDC"
+    }}
+]
+Reason: Directly about TiCDC Resolved TS feature, descriptions match the task intent
 
 Bad Classification:
 
 Task: "How does TiCDC handle Resolved TS?"
-Wrong Path: ["Complex Task Planning", "Research & Analysis", "Technical Design"]
+Wrong Path: [
+    {{
+        "label": "Complex Task Planning",
+        "description": "Planning and coordination of complex technical tasks"
+    }},
+    {{
+        "label": "Research & Analysis",
+        "description": "In-depth research and technical analysis of problems"
+    }}
+]
 Reason: Though technical in nature, it's primarily about a specific feature (TiCDC Resolved TS)
 
+
+## Task Goal
+
+"{task_goal}"
+
 Response Format:
-Return ONLY the label path as a JSON array of label names, for example:
+Return the label path as a JSON array of objects containing both label names and descriptions, for example:
 
 ```json
 [
-"Label 1",
-"Label 2",
-"Label 3"
+    {{
+        "label": "Label 1",
+        "description": "Description of Label 1"
+    }},
+    {{
+        "label": "Label 2",
+        "description": "Description of Label 2"
+    }}
 ]
 ```
+
 """
 
     return prompt

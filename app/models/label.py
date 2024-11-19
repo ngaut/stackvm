@@ -5,16 +5,14 @@ from app.database import Base
 import uuid
 
 """
-How to initialize the label table, take tidb bot as an example:
-
 -- Insert Level 1 Labels with Root as Parent
 INSERT INTO `labels` (`id`, `name`, `description`, `created_at`, `updated_at`) VALUES
-(UUID(), 'Basic Knowledge', 'Queries about simple facts or common knowledge regarding TiDB, such as configuration parameters and component design.', NOW(), NOW()),
-(UUID(), 'Operation Guide', 'Looking for step-by-step instructions to perform specific operations in TiDB, such as setting up replication or configuring a feature.', NOW(), NOW()),
-(UUID(), 'Comparative Analysis', 'Analysis comparing TiDB features, performance, or configurations with other database systems.', NOW(), NOW()),
-(UUID(), 'Troubleshooting', 'Troubleshooting issues like error messages or unexpected behavior in TiDB, aiming to identify causes and solutions.', NOW(), NOW()),
-(UUID(), 'Complex Task Planning', 'Planning and executing multi-step, complex goals related to TiDB, requiring comprehensive guidance or strategies.', NOW(), NOW()),
-(UUID(), 'Other Topics', 'Discussing miscellaneous topics unrelated to TiDB, or general database-related queries.', NOW(), NOW());
+(UUID(), 'Basic Knowledge', 'Queries about simple facts or common knowledge, such as Concept Explanation, Feature Support, and component architectures.', NOW(), NOW()),
+(UUID(), 'Operation Guide', 'Looking for step-by-step instructions to perform specific operations. Covers topics like deployment procedures, feature configuration, and maintenance tasks.', NOW(), NOW()),
+(UUID(), 'Comparative Analysis', 'Detailed analysis and comparison of different designs, different version or the same features across different products. Includes evaluating trade-offs between various approaches and comparing implementation strategies.', NOW(), NOW()),
+(UUID(), 'Troubleshooting', 'Diagnostic guidance and problem-solving approaches for system issues, error conditions, or unexpected behaviors. Focuses on root cause analysis and resolution strategies for common operational challenges.', NOW(), NOW()),
+(UUID(), 'Complex Task Planning', 'Strategic planning and implementation guidance for sophisticated, multi-phase technical projects. Covers system design decisions and large-scale operational changes.', NOW(), NOW()),
+(UUID(), 'Other Topics', 'General technical discussions and queries that don''t fit into the above categories.', NOW(), NOW());
 """
 
 
