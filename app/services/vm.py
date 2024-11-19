@@ -324,7 +324,7 @@ class PlanExecutionVM:
             if step["type"] == "calling":
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = self.variable_manager.find_referenced_variables(
+                referenced_vars = self.variable_manager.find_referenced_variables_by_pattern(
                     param_value
                 )
                 if var_name in referenced_vars:
@@ -348,7 +348,7 @@ class PlanExecutionVM:
             if step["type"] == "calling":
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = self.variable_manager.find_referenced_variables(
+                referenced_vars = self.variable_manager.find_referenced_variables_by_pattern(
                     param_value
                 )
                 for var_name in variables_refs.keys():
