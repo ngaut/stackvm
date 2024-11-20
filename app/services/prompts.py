@@ -156,7 +156,7 @@ Goal: {goal}
 ## 8. Available Tools for `calling` instruction
 {tools_instruction_content}
 
-## 9. Example Plan
+## 9. Example Plan: Below is a similar example that you can refer to when creating or evaluating your plan
 {plan_example_content}
 
 -------------------------------

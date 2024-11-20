@@ -122,6 +122,7 @@ def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
         task = session.query(Task).filter(Task.id == candidate.get("id")).first()
         if not task or task.best_plan is None:
             return None
+
         return f"**Goal**:\n{task.goal}\n**The plan:**\n{task.best_plan}\n"
 
 
@@ -256,7 +257,7 @@ def get_labels_tree_with_task_goals() -> List[Dict]:
             )
             .outerjoin(
                 task_subquery,
-                (Label.id == task_subquery.c.task_label_id) & (task_subquery.c.rn <= 3),
+                (Label.id == task_subquery.c.task_label_id) & (task_subquery.c.rn <= 2),
             )
             .order_by(Label.id)
             .all()
@@ -335,7 +336,7 @@ class LabelClassifier:
             raise ValueError(f"Invalid label path format. {label_path}")
 
         if len(label_path) > 0 and isinstance(label_path[-1], str):
-            label_path = [{"label": item, "description": None} for item in label_path]
+            label_path = [{"label": item} for item in label_path]
 
         # find the most similar example in the label tree
         matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
@@ -348,6 +349,35 @@ class LabelClassifier:
             return label_path, None
 
         return label_path, find_most_similar_task(task_goal, tasks)
+
+    def generate_label_description(self, task_goal: str) -> List[str]:
+        """
+        Generates a label path for the given task goal.
+
+        Args:
+            task_goal (str): The goal of the task.
+
+        Returns:
+            List[str]: A list of label names from root to leaf.
+        """
+        # Generate enhanced classification prompt
+        labels_tree_with_task = get_labels_tree_with_task_goals()
+
+        prompt = get_label_classification_prompt(
+            task_goal, remove_task_id_from_tree(labels_tree_with_task)
+        )
+
+        # Call LLM to get classification
+        response = self.llm_interface.generate(prompt)
+        # Parse the LLM response to extract label path
+        label_path_str = extract_json(response)
+
+        try:
+            label_path = json.loads(label_path_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse label path JSON: {e}")
+
+        return label_path
 
     def insert_label_path(self, task_id: str, label_path: List[Dict]) -> None:
         """
