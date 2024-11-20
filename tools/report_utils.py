@@ -8,7 +8,6 @@ from app.config.settings import GENERATED_FILES_DIR
 
 logger = logging.getLogger(__name__)
 
-@tool
 def generate_file_download_link(content: str):
     """
     Generates a download link for the given content. It usually used to generate a report for download.
