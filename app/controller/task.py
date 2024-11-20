@@ -12,6 +12,7 @@ from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
     LLMInterface,
     PlanExecutionVM,
+    get_generate_plan_prompt,
     get_step_update_prompt,
     parse_step,
     StepType,
@@ -22,9 +23,10 @@ from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT, GIT_REPO_PATH
 
 from .plan import generate_updated_plan, should_update_plan, generate_plan
-
+from .label_classifier import LabelClassifier
 
 logger = logging.getLogger(__name__)
+classifer = LabelClassifier()
 
 
 class Task:
@@ -92,7 +94,9 @@ class Task:
 
     def generate_plan(self):
         """Generate a plan for the task."""
-        plan = generate_plan(self.vm.llm_interface, self.task_orm.goal)
+        label_path, example = classifer.generate_label_path(self.task_orm.goal)
+        logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
+        plan = generate_plan(self.vm.llm_interface, self.task_orm.goal, example=example)
         if plan:
             self.vm.set_plan(plan)
         return plan

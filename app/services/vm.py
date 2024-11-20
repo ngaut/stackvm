@@ -132,7 +132,7 @@ class PlanExecutionVM:
         output_parameters: Dict[str, Any],
     ):
         """Log the execution of a step and prepare commit message."""
-        if step_type == "calling":
+        if step_type == "calling" or "tool_params" in params:
             input_vars = params.get("tool_params", {})
             description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
         else:
@@ -326,10 +326,8 @@ class PlanExecutionVM:
             if step["type"] == "calling" or "tool_params" in parameters:
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = (
-                    self.variable_manager.find_referenced_variables(
-                        param_value
-                    )
+                referenced_vars = self.variable_manager.find_referenced_variables(
+                    param_value
                 )
                 if var_name in referenced_vars:
                     reference_count += 1
@@ -352,10 +350,8 @@ class PlanExecutionVM:
             if step["type"] == "calling" or "tool_params" in parameters:
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = (
-                    self.variable_manager.find_referenced_variables(
-                        param_value
-                    )
+                referenced_vars = self.variable_manager.find_referenced_variables(
+                    param_value
                 )
                 for var_name in variables_refs.keys():
                     if var_name in referenced_vars:

@@ -25,7 +25,7 @@ from app.instructions import global_tools_hub
 logger = logging.getLogger(__name__)
 
 
-def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
+def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None, example=None):
     if not goal:
         logger.error("No goal is set.")
         return []
@@ -34,7 +34,7 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None):
         goal,
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(),
-        PLAN_EXAMPLE_CONTENT,
+        example or PLAN_EXAMPLE_CONTENT,
     )
 
     plan_response = llm_interface.generate(prompt)

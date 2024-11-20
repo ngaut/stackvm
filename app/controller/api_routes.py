@@ -453,7 +453,7 @@ def get_best_plans():
                 "id": task.id,
                 "goal": task.goal,
                 "best_plan": task.best_plan,
-                "label_path": get_label_path(session, task.label) if task.label else [],
+                "label_path": get_label_path(task.label) if task.label else [],
             }
             for task in tasks
         ]
