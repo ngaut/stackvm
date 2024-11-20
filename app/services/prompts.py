@@ -373,3 +373,98 @@ Return the label path as a JSON array of objects containing both label names and
 """
 
     return prompt
+
+
+def get_label_classification_prompt_wo_description(
+    task_goal: str, labels_tree: List[Dict], tasks: List[Dict]
+) -> str:
+    """
+    Generates an enhanced prompt for the LLM to classify the task goal into a label path without descriptions.
+
+    Args:
+        task_goal (str): The goal of the task.
+        labels_tree (dict): The current labels tree with label descriptions.
+
+    Returns:
+        str: The generated prompt.
+    """
+
+    # Convert the labels tree to a JSON string with indentation for readability
+    labels_tree_json = json.dumps(labels_tree, indent=4, ensure_ascii=False)
+    tasks_json = json.dumps(tasks, indent=4, ensure_ascii=False)
+
+    # Construct the prompt
+    prompt = f"""Your task is to create a tree-structured tagging system for classifying user tasks. The system starts from the root node and refines layer by layer; concepts closer to the root node are more abstract and higher-level. This design allows the system to be highly flexible and scalable, capable of continuous expansion and maintenance as data increases.
+
+## Current Labels Tree
+
+```json
+{labels_tree_json}
+```
+
+## Instructions
+
+1. Category Matching Priority:
+   - Always prioritize matching with existing feature/topic specific categories first
+   - Match with existing leaf nodes before considering parent nodes
+   - Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
+   - Use label descriptions to better understand the scope and intent of each category
+
+2. Intent Analysis:
+   - Identify key technical terms and concepts in the task
+   - Determine if it's about:
+     * Specific feature/component (e.g., TiCDC, TiKV, etc.)
+     * Usage guidance
+     * Troubleshooting
+     * Research/Analysis
+     * Development planning
+   - For feature-specific questions, map to corresponding feature category regardless of complexity
+   - Compare task intent with label descriptions for better matching
+
+3. Classification Process:
+   - Start from root node
+   - At each level, select the most specific category that matches the task content
+   - Consider both label names and their descriptions when making decisions
+   - If multiple categories seem applicable:
+     * Prioritize feature/component specific categories over general categories
+     * Use descriptions to break ties between similar categories
+
+4. Validation Rules:
+   - Does the selected path lead to the most specific applicable category?
+   - Is the classification based on what the task is about rather than how complex it is?
+   - For feature-specific tasks, is it classified under the corresponding feature category?
+   - Do the selected labels' descriptions align well with the task content?
+
+5. Examples:
+
+Good Classification:
+
+Task: "How does TiCDC handle Resolved TS?"
+Correct Path: ["Basic Knowledge", "Feature Support", "TiCDC Resolved TS"]
+Reason: This question can be directly answered using the feature introduction document for TiCDC Resolved TS.
+
+Bad Classification:
+
+Task: "How does TiCDC handle Resolved TS?"
+Wrong Path: ["Complex Task Planning", "Research & Analysis", "Technical Design"]
+Reason: This question does not require complex research or involve multiple aspects. It is specific to understanding a single feature, making the “Complex Task Planning” category unnecessary.
+
+{tasks_json}
+
+## Task Goal
+
+{task_goal}
+
+Response Format:
+Return the label path as a JSON array of labels, for example:
+
+```json
+[
+    "Label 1",
+    "Label 2"
+]
+```
+
+"""
+
+    return prompt

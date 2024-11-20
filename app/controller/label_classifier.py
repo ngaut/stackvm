@@ -1,12 +1,15 @@
 import json
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from collections import defaultdict
 import uuid
 
-from app.services.prompts import get_label_classification_prompt
+from app.services.prompts import (
+    get_label_classification_prompt,
+    get_label_classification_prompt_wo_description,
+)
 from app.services.llm_interface import LLMInterface
 from app.models.label import Label
 from app.database import SessionLocal
@@ -44,6 +47,25 @@ def get_labels_tree() -> List[Dict]:
                 root_labels.append(label_map[label.id])
 
     return root_labels
+
+
+def get_label_path(label: Label) -> List[str]:
+    """
+    Retrieves the label path from the given label up to the root label.
+
+    Args:
+        session (Session): SQLAlchemy session.
+        label (Label): The label for which to retrieve the path.
+
+    Returns:
+        List[str]: A list of label names from root to the given label.
+    """
+    path = []
+    current_label = label
+    while current_label:
+        path.insert(0, current_label.name)
+        current_label = current_label.parent
+    return path
 
 
 def find_longest_matching_node(
@@ -115,34 +137,85 @@ def remove_label_id_from_tree(tree: List[Dict]):
 def remove_task_id_from_tree(tree: List[Dict]):
     tree_json = json.dumps(tree, ensure_ascii=False)
     new_tree = json.loads(tree_json)
-    for label in new_tree:
-        if "tasks" in label:
+
+    def remove_task_id_recursive(node: Dict[str, Any]):
+        if "tasks" in node:
             tasks = []
-            for task in label["tasks"]:
+            for task in node["tasks"]:
                 tasks.append(task["goal"])
-            label["tasks"] = tasks
-        if len(label["children"]) > 0:
-            remove_task_id_from_tree(label["children"])
+            node["tasks"] = tasks
+        if len(node["children"]) > 0:
+            for child in node["children"]:
+                remove_task_id_recursive(child)
+
+    for label in new_tree:
+        remove_task_id_recursive(label)
+
     return new_tree
 
 
-def get_label_path(session: Session, label: Label) -> List[str]:
+def remove_task_from_tree(tree: List[Dict]):
+    tree_json = json.dumps(tree, ensure_ascii=False)
+    new_tree = json.loads(tree_json)
+
+    def remove_task_recursive(node: Dict[str, Any]):
+        node.pop("tasks", None)
+        if len(node["children"]) > 0:
+            for child in node["children"]:
+                remove_task_recursive(child)
+
+    for label in new_tree:
+        remove_task_recursive(label)
+
+    return new_tree
+
+
+def extract_task_from_label_tree(tree: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Retrieves the label path from the given label up to the root label.
+    Extracts all tasks from the label tree, including the complete label path for each task.
 
     Args:
-        session (Session): SQLAlchemy session.
-        label (Label): The label for which to retrieve the path.
+        tree (List[Dict]): A hierarchical tree structure of labels with tasks
 
     Returns:
-        List[str]: A list of label names from root to the given label.
+        List[Dict]: A list of dictionaries containing task goals and their label paths
+        Example:
+        [
+            {
+                "task_goal": "How to configure replication?",
+                "label_path": ["Operation Guide", "Replication", "Configuration"]
+            }
+        ]
     """
-    path = []
-    current_label = label
-    while current_label:
-        path.insert(0, current_label.name)
-        current_label = current_label.parent
-    return path
+
+    def extract_tasks_recursive(
+        node: Dict[str, Any], current_path: List[str]
+    ) -> List[Dict[str, Any]]:
+        results = []
+
+        # Add current node's label name to the path
+        path = current_path + [node["name"]]
+        # Extract tasks from current node
+        for task in node.get("tasks", []):
+            results.append(
+                {
+                    "task_goal": task["goal"],
+                    "labels": path.copy(),  # Create a copy of the path for each task
+                }
+            )
+
+        # Recursively process children
+        for child in node.get("children", []):
+            results.extend(extract_tasks_recursive(child, path))
+
+        return results
+
+    # Process all root nodes
+    all_tasks = []
+    for root_node in tree:
+        all_tasks.extend(extract_tasks_recursive(root_node, []))
+
+    return all_tasks
 
 
 def get_labels_tree_with_task_goals() -> List[Dict]:
@@ -242,8 +315,10 @@ class LabelClassifier:
         """
         # Generate enhanced classification prompt
         labels_tree_with_task = get_labels_tree_with_task_goals()
-        prompt = get_label_classification_prompt(
-            task_goal, remove_task_id_from_tree(labels_tree_with_task)
+        tasks = extract_task_from_label_tree(labels_tree_with_task)
+
+        prompt = get_label_classification_prompt_wo_description(
+            task_goal, remove_task_id_from_tree(labels_tree_with_task), tasks
         )
 
         # Call LLM to get classification
@@ -255,6 +330,12 @@ class LabelClassifier:
             label_path = json.loads(label_path_str)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse label path JSON: {e}")
+
+        if not label_path or not isinstance(label_path, list):
+            raise ValueError(f"Invalid label path format. {label_path}")
+
+        if len(label_path) > 0 and isinstance(label_path[-1], str):
+            label_path = [{"label": item, "description": None} for item in label_path]
 
         # find the most similar example in the label tree
         matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
