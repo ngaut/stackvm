@@ -132,7 +132,7 @@ class PlanExecutionVM:
         output_parameters: Dict[str, Any],
     ):
         """Log the execution of a step and prepare commit message."""
-        if step_type == "calling":
+        if step_type == "calling" or "tool_params" in parameters:
             input_vars = params.get("tool_params", {})
             description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
         else:
