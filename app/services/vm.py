@@ -191,7 +191,7 @@ class PlanExecutionVM:
         current_step_dict = self.state["current_plan"][self.state["program_counter"]]
         current_step = self.steps[current_step_dict["seq_no"]]
 
-        if current_step.get_status() == StepStatus.PENDING:
+        if current_step.get_status() == StepStatus.PENDING and current_step.step_type != "jmp":
             concurrent_steps = self._find_concurrent_steps()
             for step in concurrent_steps:
                 if step.get_status() == StepStatus.PENDING:
@@ -262,14 +262,14 @@ class PlanExecutionVM:
                 output,
             )
 
-            if output is not None and output.get("target_seq") is not None:
-                target_index = self.find_step_index(output["target_seq"])
+            if step_result is not None and step_result.get("target_seq") is not None:
+                target_index = self.find_step_index(step_result["target_seq"])
                 if target_index is not None:
                     self.state["program_counter"] = target_index
                 else:
                     return {
                         "success": False,
-                        "error": f"Target step {output['target_seq']} not found",
+                        "error": f"Target step {step_result['target_seq']} not found",
                     }
             else:
                 self.state["program_counter"] += 1
@@ -408,6 +408,7 @@ class PlanExecutionVM:
 
     def _find_concurrent_steps(self) -> List[Step]:
         """Find all steps that can be executed concurrently."""
+
         concurrent_steps = []
         next_index = self.state["program_counter"] + 1
 

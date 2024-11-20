@@ -302,7 +302,11 @@ class LabelClassifier:
     """
 
     def __init__(self):
-        self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+        llm_model = LLM_MODEL
+        if LLM_PROVIDER == "openai":
+            llm_model = "gpt-4o-mini"
+
+        self.llm_interface = LLMInterface(LLM_PROVIDER, llm_model)
 
     def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[str]]:
         """

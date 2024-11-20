@@ -237,6 +237,8 @@ class InstructionHandlers:
                     f"Jumping to seq_no {target_seq} based on condition result: {condition_result}. "
                     f"Explanation: {explanation}"
                 )
+
+                return True, {"target_seq": target_seq}
             except json.JSONDecodeError:
                 return (
                     False,
@@ -255,7 +257,7 @@ class InstructionHandlers:
                         "params": params,
                     },
                 )
-        elif target_seq is None:
+
             return (
                 False,
                 {
@@ -264,8 +266,6 @@ class InstructionHandlers:
                     "params": params,
                 },
             )
-
-        return True, {"target_seq": target_seq}
 
     def assign_handler(
         self, params: Dict[str, Any], **kwargs
