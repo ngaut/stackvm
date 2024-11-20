@@ -323,11 +323,13 @@ class PlanExecutionVM:
         ):
             step = self.state["current_plan"][i]
             parameters = step.get("parameters", {})
-            if step["type"] == "calling":
+            if step["type"] == "calling" or "tool_params" in parameters:
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = self.variable_manager.find_referenced_variables(
-                    param_value
+                referenced_vars = (
+                    self.variable_manager.find_referenced_variables(
+                        param_value
+                    )
                 )
                 if var_name in referenced_vars:
                     reference_count += 1
@@ -347,11 +349,13 @@ class PlanExecutionVM:
         for i in range(self.state["program_counter"], len(self.state["current_plan"])):
             step = self.state["current_plan"][i]
             parameters = step.get("parameters", {})
-            if step["type"] == "calling":
+            if step["type"] == "calling" or "tool_params" in parameters:
                 parameters = parameters.get("tool_params", {})
             for param_name, param_value in parameters.items():
-                referenced_vars = self.variable_manager.find_referenced_variables(
-                    param_value
+                referenced_vars = (
+                    self.variable_manager.find_referenced_variables(
+                        param_value
+                    )
                 )
                 for var_name in variables_refs.keys():
                     if var_name in referenced_vars:
