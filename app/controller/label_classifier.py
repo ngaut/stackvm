@@ -60,7 +60,7 @@ def find_longest_matching_node(
     # find the matching node at the root level
     matching_node = None
     for node in tree:
-        if node["name"] == current_label['label']:
+        if node["name"] == current_label["label"]:
             matching_node = node
             break
 
@@ -110,6 +110,7 @@ def remove_label_id_from_tree(tree: List[Dict]):
         if len(label["children"]) > 0:
             remove_label_id_from_tree(label["children"])
     return tree
+
 
 def remove_task_id_from_tree(tree: List[Dict]):
     tree_json = json.dumps(tree, ensure_ascii=False)
@@ -241,7 +242,9 @@ class LabelClassifier:
         """
         # Generate enhanced classification prompt
         labels_tree_with_task = get_labels_tree_with_task_goals()
-        prompt = get_label_classification_prompt(task_goal, remove_task_id_from_tree(labels_tree_with_task))
+        prompt = get_label_classification_prompt(
+            task_goal, remove_task_id_from_tree(labels_tree_with_task)
+        )
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
@@ -295,7 +298,10 @@ class LabelClassifier:
                     if not label:
                         # Create a new Label instance
                         label = Label(
-                            id=str(uuid.uuid4()), name=label_name, parent=parent, description=label_description
+                            id=str(uuid.uuid4()),
+                            name=label_name,
+                            parent=parent,
+                            description=label_description,
                         )
                         session.add(label)
                         session.flush()  # Flush to assign an ID if needed
