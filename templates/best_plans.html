@@ -72,7 +72,7 @@
                 const formattedBestPlan = JSON.stringify(plan.best_plan, null, 2); // Format JSON with indentation
                 // Safely handle label_path
                 const labelPath = Array.isArray(plan.label_path) && plan.label_path.length > 0
-                    ? escapeHtml(plan.label_path.join(' > '))
+                    ? escapeHtml(plan.label_path.join(' -> '))
                     : 'N/A'; // Fallback if label_path is undefined or empty
                 const row = `
                     <tr>
