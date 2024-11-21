@@ -31,6 +31,7 @@ BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGIN
 # LLM settings
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 LLM_MODEL = os.environ.get("LLM_MODEL", "aya-expanse")
+FAST_LLM_MODEL = os.environ.get("FAST_LLM_MODEL", None)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
@@ -45,6 +46,8 @@ GENERATED_FILES_DIR = os.environ.get("GENERATED_FILES_DIR", "/tmp/stack_vm/gener
 VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")
 PLAN_EXAMPLE_PATH = os.path.join(os.getcwd(), "plan_example.md")
 
+if FAST_LLM_MODEL is None:
+    FAST_LLM_MODEL = LLM_MODEL
 
 if not os.path.exists(GIT_REPO_PATH):
     try:
