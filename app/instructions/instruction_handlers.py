@@ -68,7 +68,7 @@ class InstructionHandlers:
                         raise ValueError(
                             f"Not found variable {var_name} in parsed_output {parsed_output}."
                         )
-                # self.vm.set_variable(var_name, var_value)
+                self.vm.set_variable(var_name, var_value)
                 output_vars_record[var_name] = var_value
 
             return True, output_vars_record
@@ -274,7 +274,7 @@ class InstructionHandlers:
         output_vars_record = {}
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
-            # self.vm.set_variable(var_name, value_resolved)
+            self.vm.set_variable(var_name, value_resolved)
             output_vars_record[var_name] = value_resolved
         return True, {"output_vars": output_vars_record}
 

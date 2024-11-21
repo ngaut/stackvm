@@ -530,7 +530,9 @@ def stream_execute_vm():
 
                     def execute_step():
                         nonlocal step_result
-                        step_result = task.vm.step(stream_queue=queue)
+                        step_result = task.vm.step(
+                            enable_parallel=True, stream_queue=queue
+                        )
 
                     step_thread = Thread(target=execute_step)
                     step_thread.start()

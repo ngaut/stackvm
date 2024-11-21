@@ -166,7 +166,7 @@ class PlanExecutionVM:
             else value_str
         )
 
-    def step(self, **kwargs) -> Dict[str, Any]:
+    def step(self, enable_parallel: bool = True, **kwargs) -> Dict[str, Any]:
         """Execute the next step in the plan."""
         if self.state["program_counter"] >= len(self.state["current_plan"]):
             self.logger.error(
@@ -191,7 +191,11 @@ class PlanExecutionVM:
         current_step_dict = self.state["current_plan"][self.state["program_counter"]]
         current_step = self.steps[current_step_dict["seq_no"]]
 
-        if current_step.get_status() == StepStatus.PENDING and current_step.step_type != "jmp":
+        if (
+            enable_parallel
+            and current_step.get_status() == StepStatus.PENDING
+            and current_step.step_type != "jmp"
+        ):
             concurrent_steps = self._find_concurrent_steps()
             for step in concurrent_steps:
                 if step.get_status() == StepStatus.PENDING:
@@ -251,9 +255,6 @@ class PlanExecutionVM:
             output = (
                 step_result.get("output_vars", {}) if step_result is not None else None
             )
-            if output is not None:
-                for var_name, var_value in output.items():
-                    self.set_variable(var_name, var_value)
 
             commit_message_dict = self._log_step_execution(
                 current_step.step_type,

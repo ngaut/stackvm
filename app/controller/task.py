@@ -101,10 +101,10 @@ class Task:
             self.vm.set_plan(plan)
         return plan
 
-    def _run(self):
+    def _run(self, enable_parallel=True):
         """Execute the plan for the task."""
         while True:
-            execution_result = self.vm.step()
+            execution_result = self.vm.step(enable_parallel=enable_parallel)
             if execution_result.get("success") is not True:
                 raise ValueError(
                     f"Failed to execute step:{execution_result.get('error')}"
@@ -190,7 +190,7 @@ class Task:
                 else:
                     raise ValueError("Failed to commit updated plan")
 
-                self._run()
+                self._run(enable_parallel=False)
                 return {
                     "success": True,
                     "current_branch": self.vm.branch_manager.get_current_branch(),
@@ -236,7 +236,7 @@ class Task:
                             last_commit_hash = new_commit_hash
 
                     try:
-                        execution_result = self.vm.step()
+                        execution_result = self.vm.step(enable_parallel=False)
                     except Exception as e:
                         error_msg = f"Error during VM step execution: {str(e)}"
                         logger.error(error_msg, exc_info=True)
@@ -337,7 +337,7 @@ class Task:
                         f"Failed to create or checkout branch '{branch_name}'"
                     )
 
-                self._run()
+                self._run(enable_parallel=False)
                 return {
                     "success": True,
                     "current_branch": self.vm.branch_manager.get_current_branch(),
