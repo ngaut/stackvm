@@ -2,7 +2,11 @@ FROM python:3.12
 
 WORKDIR /app/
 
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 RUN pip install poetry poetry-plugin-export gunicorn
+
+RUN git config --global init.defaultBranch main
 
 COPY pyproject.toml /app/pyproject.toml
 COPY poetry.lock /app/poetry.lock
