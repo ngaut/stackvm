@@ -253,6 +253,14 @@ Parameters can be either direct values or variable references. To reference a va
   - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
   - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
 
+- **Best Practices for LLM Generation with References**:
+
+  -	When to Include References: Only for text responses, include source_uri links if (and only if) specific source data retrieved from the vector search results is referenced in the final answer.
+    - While summarizing results, ensure that citations (source_uri) from the relevant vector search documents are carried over to the summary.
+    - Map each claim or insight in the final answer to its corresponding source_uri, ensuring traceability.
+  - Include Citations from Sub-summaries: When combining multiple summaries, extract citations from the provided context (e.g., ${architecture_summary}, ${scalability_summary}) and map them to the claims in the final answer.
+	- Formatting References: Use clear formats like [Reference Title](Reference Link) to enable direct indexing.
+	- Relevance and Clarity: Include only critical references that directly support the answer. Avoid overloading responses.
 
 ## 8. Common Errors
 
