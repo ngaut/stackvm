@@ -56,7 +56,6 @@ def llm_generate(
     Best practices:
     - Always use llm_generate within a "calling" instruction in your plan.
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
-    - Only for Text Response: if (and only if) reference specific information from the context to construct your answer, include the corresponding reference source_uri link(s) clearly. Ensure the references are formatted properly to enable direct indexing to the source for further details.
     """
     if response_format:
         prompt += f"\n\n{response_format}"
