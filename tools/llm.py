@@ -61,6 +61,8 @@ def llm_generate(
     """
     if response_format:
         prompt += f"\n\n{response_format}"
+    elif context is not None:
+        prompt += "\nIf (and only if) you reference specific information from the context to construct your answer, include the corresponding reference source_uri link(s) clearly. Ensure the references are formatted properly to enable direct indexing to the source for further details."
 
     if stream_queue:
         final_answer = ""
