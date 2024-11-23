@@ -3,13 +3,15 @@ from typing import Optional
 from queue import Queue
 
 from app.instructions.tools import tool
-from app.config.settings import LLM_PROVIDER, LLM_MODEL
+from app.config.settings import LLM_PROVIDER, FAST_LLM_MODEL
 from app.services import LLMInterface
 
 logger = logging.getLogger(__name__)
 
 
-llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+llm_client = LLMInterface(
+    LLM_PROVIDER, FAST_LLM_MODEL
+)
 
 
 @tool
