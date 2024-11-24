@@ -622,7 +622,7 @@ def stream_execute_vm():
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
             task.task_orm.status = "failed"
-            task.task_orm.logs = f"Error during VM execution: {error}"
+            task.task_orm.logs = f"Error during VM execution: {error_message}"
             task.save()
 
     return Response(
