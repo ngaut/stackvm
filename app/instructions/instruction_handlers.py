@@ -202,8 +202,9 @@ class InstructionHandlers:
 
             condition_prompt_with_response_format = (
                 condition_prompt
-                + '\nRespond only with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
+                + '\n Assume no prior knowledge. Base your response only on the input provided in this query or its explicitly mentioned sources. Respond only with a JSON object in the following format:\n{\n  "result": boolean,\n  "explanation": string\n}'
             )
+
             response = self.vm.llm_interface.generate(
                 condition_prompt_with_response_format, context
             )
