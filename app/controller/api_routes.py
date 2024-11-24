@@ -617,13 +617,13 @@ def stream_execute_vm():
             # Finish Message (Part d)
             yield protocol.send_finish_message(response=final_answer)
         except GeneratorExit:
-            current_app.logger.info("Client disconnected. Cleaning up.")
+            current_app.logger.info(f"Client disconnected ({task.id}). Cleaning up.")
             task.task_orm.status = "failed"
             task.task_orm.logs = "Execution was interrupted by the client."
             task.save()
             raise
         except Exception as e:
-            error_message = f"Error during VM execution: {str(e)}"
+            error_message = f"Error during VM execution ({task.id}): {str(e)}"
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
             task.task_orm.status = "failed"
