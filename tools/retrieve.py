@@ -59,7 +59,7 @@ def retrieve_knowledge_graph(query):
     }
     data = {"query": query, "include_meta": False, "depth": 2, "with_degree": False}
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=10)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -129,7 +129,7 @@ def vector_search(query, top_k=5):
     params = {"question": query, "chat_engine": "default", "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.get(url, headers=headers, params=params, timeout=30)
         response.raise_for_status()  # Raises HTTPError for bad responses
         data = response.json()
 

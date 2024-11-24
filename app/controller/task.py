@@ -94,8 +94,12 @@ class Task:
 
     def generate_plan(self):
         """Generate a plan for the task."""
-        label_path, example = classifer.generate_label_path(self.task_orm.goal)
-        logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
+        try:
+            label_path, example = classifer.generate_label_path(self.task_orm.goal)
+            logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
+        except Exception as e:
+            logger.error("Failed to generate label path: %s", str(e))
+            example = None
         plan = generate_plan(self.vm.llm_interface, self.task_orm.goal, example=example)
         if plan:
             self.vm.set_plan(plan)
