@@ -13,7 +13,7 @@ from app.services.prompts import (
 from app.services.llm_interface import LLMInterface
 from app.models.label import Label
 from app.database import SessionLocal
-from app.config.settings import LLM_PROVIDER, LLM_MODEL
+from app.config.settings import LLM_PROVIDER, FAST_LLM_MODEL
 from app.utils import extract_json
 from app.models.task import Task
 
@@ -302,11 +302,7 @@ class LabelClassifier:
     """
 
     def __init__(self):
-        llm_model = LLM_MODEL
-        if LLM_PROVIDER == "openai":
-            llm_model = "gpt-4o-mini"
-
-        self.llm_interface = LLMInterface(LLM_PROVIDER, llm_model)
+        self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
 
     def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[str]]:
         """
