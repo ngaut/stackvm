@@ -505,7 +505,7 @@ def stream_execute_vm():
             already_streamed = False
             streaming_response_steps = []
 
-            print("final_answer_structure", final_answer_structure)
+            current_app.logger.info(f"final_answer_structure {final_answer_structure}")
 
             if final_answer_structure:
                 if (
@@ -517,7 +517,7 @@ def stream_execute_vm():
                     ]
                 elif len(final_answer_structure.get("variables")) == 1:
                     dependencies_variables = final_answer_structure.get("variables")
-                    print("dependencies_variables", dependencies_variables)
+                    current_app.logger.info(f"dependencies_variables {dependencies_variables}")
                     dependencies_steps = task.vm.parse_dependencies(
                         dependencies_variables
                     )
@@ -525,7 +525,7 @@ def stream_execute_vm():
                         dependencies_variables[0]
                     ]
 
-            print("streaming_response_steps", streaming_response_steps)
+            current_app.logger.info(f"streaming_response_steps {streaming_response_steps}")
 
             # Start executing steps
             while True:
