@@ -191,7 +191,10 @@ class PlanExecutionVM:
         current_step_dict = self.state["current_plan"][self.state["program_counter"]]
         current_step = self.steps[current_step_dict["seq_no"]]
 
-        if current_step.get_status() == StepStatus.PENDING and current_step.step_type != "jmp":
+        if (
+            current_step.get_status() == StepStatus.PENDING
+            and current_step.step_type != "jmp"
+        ):
             concurrent_steps = self._find_concurrent_steps()
             for step in concurrent_steps:
                 if step.get_status() == StepStatus.PENDING:
@@ -405,6 +408,58 @@ class PlanExecutionVM:
 
     def get_current_step(self) -> dict:
         return self.state["current_plan"][self.state["program_counter"]]
+
+    def parse_dependencies(self, vars: List[str]) -> Dict:
+        result = {var: [] for var in vars}
+
+        for i in range(len(self.state["current_plan"]) - 1, -1, -1):
+            step = self.state["current_plan"][i]
+            parameters = step.get("parameters", {})
+            if step.get("type") == "assign":
+                for param_name in parameters:
+                    if param_name in vars:
+                        result[param_name].append(step.get("seq_no"))
+            elif step.get("type") == "calling":
+                tool_output_vars = parameters.get("output_vars", [])
+                for var in tool_output_vars:
+                    if var in vars:
+                        result[var].append(step.get("seq_no"))
+        return result
+
+    def parse_final_answer(self):
+        for i in range(len(self.state["current_plan"]) - 1, -1, -1):
+            step = self.state["current_plan"][i]
+            parameters = step.get("parameters", {})
+            if step.get("type") == "assign":
+                for param_name, param_value in parameters.items():
+                    if param_name == "final_answer":
+                        # Check if the value contains variable references
+                        referenced_variables = (
+                            self.variable_manager.find_referenced_variables_by_pattern(
+                                param_value
+                            )
+                        )
+                        # Determine if it's a template (contains both static text and at least one variable)
+                        is_template = len(referenced_variables) == 0 or len(
+                            param_value.strip()
+                        ) > (len(referenced_variables[0]) + 3)
+                        return {
+                            "seq_no": step.get("seq_no"),
+                            "is_template": is_template,
+                            "template": param_value,
+                            "variables": referenced_variables,
+                        }
+            elif step.get("type") == "calling":
+                tool_output_vars = parameters.get("output_vars", [])
+                if "final_answer" in tool_output_vars:
+                    return {
+                        "seq_no": step.get("seq_no"),
+                        "is_template": False,
+                    }
+            else:
+                return None
+
+        return None
 
     def _find_concurrent_steps(self) -> List[Step]:
         """Find all steps that can be executed concurrently."""

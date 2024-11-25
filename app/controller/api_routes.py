@@ -500,15 +500,32 @@ def stream_execute_vm():
 
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
+            final_answer_structure = task.vm.parse_final_answer()
             # Determine the last or second last calling step
             already_streamed = False
-            last_calling_step_index = -1
-            plan_length = len(task.vm.state["current_plan"])
-            for i in range(plan_length - 1, max(plan_length - 3, -1), -1):
-                step = task.vm.state["current_plan"][i]
-                if step.get("type") == "calling":
-                    last_calling_step_index = step.get("seq_no", -1)
-                    break
+            streaming_response_steps = []
+
+            print("final_answer_structure", final_answer_structure)
+
+            if final_answer_structure:
+                if (
+                    final_answer_structure.get("is_template", False)
+                    or final_answer_structure.get("variables") is None
+                ):
+                    streaming_response_steps = [
+                        final_answer_structure.get("seq_no", -1)
+                    ]
+                elif len(final_answer_structure.get("variables")) == 1:
+                    dependencies_variables = final_answer_structure.get("variables")
+                    print("dependencies_variables", dependencies_variables)
+                    dependencies_steps = task.vm.parse_dependencies(
+                        dependencies_variables
+                    )
+                    streaming_response_steps = dependencies_steps[
+                        dependencies_variables[0]
+                    ]
+
+            print("streaming_response_steps", streaming_response_steps)
 
             # Start executing steps
             while True:
@@ -523,7 +540,7 @@ def stream_execute_vm():
                     yield protocol.send_tool_call(tool_call_id, tool_name, tool_args)
 
                 # Pass the queue only to the last calling step
-                if step_seq_no == last_calling_step_index:
+                if step_seq_no in streaming_response_steps:
                     # Execute step in a separate thread when stream_queue is needed
                     step_result = None
                     queue = Queue()
