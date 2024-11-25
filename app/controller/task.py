@@ -363,7 +363,7 @@ class Task:
             and "current_plan" in detail[0]["vm_state"]
         ):
             current_plan = detail[0]["vm_state"]["current_plan"]
-            self.task_orm.best_plan = json.dumps(current_plan)
+            self.task_orm.best_plan = current_plan
             self.save()
             return True
 
