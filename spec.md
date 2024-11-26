@@ -215,7 +215,7 @@ Parameters can be either direct values or variable references. To reference a va
     "tool_name": "vector_search",
     "tool_params": {
       "query": "What are the key features and improvements in TiDB version ${latest_stable_tidb_version}?",
-      "top_k": 5
+      "top_k": 10
     },
     "output_vars": ["tidb_key_features_and_improvements"]
   }

@@ -11,7 +11,7 @@ API_KEY = os.environ.get("TIDB_AI_API_KEY")
 if not API_KEY:
     logger.error("TIDB_AI_API_KEY not found in environment variables")
 
-MAX_TOP_K = 5
+MAX_TOP_K = 10
 MAX_CHUNK_TOKENS = 10240
 
 
@@ -82,7 +82,7 @@ def get_chunk_content(chunk):
     return None
 
 @tool
-def vector_search(query, top_k=5):
+def vector_search(query, top_k=10):
     """
     Retrieves the most relevant data chunks based on embedding similarity to the query.
 
@@ -104,7 +104,7 @@ def vector_search(query, top_k=5):
             "tool_name": "vector_search",
             "tool_params": {
                 "query": "Information about ...",
-                "top_k": 5
+                "top_k": 10
             },
             "output_vars": ["embedded_chunks"]
         }
