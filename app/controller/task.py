@@ -124,8 +124,13 @@ class Task:
         except Exception as e:
             logger.error("Failed to generate label path: %s", str(e), exc_info=True)
         if plan is None:
+
+            goal = self.task_orm.goal
+            if self.task_orm.meta and self.task_orm.meta.get("requirements", None):
+                goal = f"{goal} {self.task_orm.meta['requirements']}"
+            logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
-                self.vm.llm_interface, self.task_orm.goal, example=example_str
+                self.vm.llm_interface, goal, example=example_str
             )
         if plan:
             self.vm.set_plan(plan)
