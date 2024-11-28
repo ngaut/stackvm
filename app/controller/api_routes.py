@@ -494,7 +494,9 @@ def stream_execute_vm():
                 session,
                 clean_goal,
                 datetime.now().strftime("%Y%m%d%H%M%S"),
-                requirements,
+                {
+                    "requirements": requirements
+                },
             )
             task_id = task.id
             task_branch = task.get_current_branch()
