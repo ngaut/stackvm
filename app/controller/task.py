@@ -21,13 +21,12 @@ from app.services import (
 from app.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT, GIT_REPO_PATH
-from app.utils import parse_goal_requirements
 
 from .plan import generate_updated_plan, should_update_plan, generate_plan
 from .label_classifier import LabelClassifier
 
 logger = logging.getLogger(__name__)
-classifer = LabelClassifier()
+classifier = LabelClassifier()
 
 
 class Task:
@@ -98,23 +97,45 @@ class Task:
         example_str = None
         plan = None
         try:
-            label_path, example = classifer.generate_label_path(self.task_orm.goal)
+            label_path, example = classifier.generate_label_path(self.task_orm.goal)
             example_goal = example.get("goal", None)
             example_plan = example.get("best_plan", None)
+            example_response_format = example.get("response_format", None)
+            response_format = (
+                self.task_orm.meta.get("response_format")
+                if self.task_orm.meta
+                else None
+            )
 
             logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
 
             if example_goal is not None and example_plan is not None:
-                example_clean_goal, _ = parse_goal_requirements(example_goal)
                 # if the example goal is the same as the task goal, use the example plan
+
                 if (
-                    example_clean_goal is not None
-                    and self.task_orm.goal.strip().lower()
-                    == example_clean_goal.strip().lower()
+                    self.task_orm.goal.strip().lower() == example_goal.strip().lower()
                     and isinstance(example_plan, list)
                 ):
-                    logger.info("Reusing the example plan of goal %s", example_goal)
-                    plan = example_plan
+                    lang_match = False
+
+                    if response_format and example_response_format:
+                        task_lang = response_format.get("Lang") or response_format.get(
+                            "lang"
+                        )
+                        example_lang = example_response_format.get(
+                            "Lang"
+                        ) or example_response_format.get("lang")
+
+                        if (
+                            task_lang
+                            and example_lang
+                            and task_lang.strip().lower()
+                            == example_lang.strip().lower()
+                        ):
+                            logger.info(
+                                "Reusing the example plan of goal %s", example_goal
+                            )
+                            plan = example_plan
 
             if plan is None and example_plan is not None:
                 # use it as an example to generate a plan
@@ -126,12 +147,10 @@ class Task:
         if plan is None:
 
             goal = self.task_orm.goal
-            if self.task_orm.meta and self.task_orm.meta.get("requirements", None):
-                goal = f"{goal} {self.task_orm.meta['requirements']}"
+            if response_format:
+                goal = f"{goal} {response_format}"
             logger.info("Generating plan for goal: %s", goal)
-            plan = generate_plan(
-                self.vm.llm_interface, goal, example=example_str
-            )
+            plan = generate_plan(self.vm.llm_interface, goal, example=example_str)
         if plan:
             self.vm.set_plan(plan)
         return plan
