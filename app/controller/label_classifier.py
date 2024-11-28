@@ -123,7 +123,7 @@ def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
         if not task or task.best_plan is None:
             return None
 
-        return f"**Goal**:\n{task.goal}\n**The plan:**\n{task.best_plan}\n"
+        return {"goal": task.goal, "best_plan": task.best_plan}
 
 
 def remove_label_id_from_tree(tree: List[Dict]):
@@ -304,7 +304,7 @@ class LabelClassifier:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
 
-    def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[str]]:
+    def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[Dict]]:
         """
         Generates a label path for the given task goal.
 
