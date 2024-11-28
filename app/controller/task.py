@@ -113,13 +113,14 @@ class Task:
                     == example_clean_goal.strip().lower()
                     and isinstance(example_plan, list)
                 ):
-                    logger.info("Reusing the example plan of goal: %s", example_goal)
+                    logger.info("Reusing the example plan of goal %s", example_goal)
                     plan = example_plan
-                else:
-                    # use it as an example to generate a plan
-                    example_str = (
-                        f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
-                    )
+
+            if plan is None and example_plan is not None:
+                # use it as an example to generate a plan
+                example_str = (
+                    f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
+                )
         except Exception as e:
             logger.error("Failed to generate label path: %s", str(e), exc_info=True)
         if plan is None:
