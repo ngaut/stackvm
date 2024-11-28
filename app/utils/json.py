@@ -87,19 +87,19 @@ def parse_goal_response_format(goal: str) -> Tuple[str, Dict[str, str]]:
                              and the content within the last parentheses.
         """
         stack = []
-        last_close = s.rfind(')')
+        last_close = s.rfind(")")
         if last_close == -1:
             return s, ""  # No closing parenthesis found
 
         for i in range(last_close, -1, -1):
-            if s[i] == ')':
+            if s[i] == ")":
                 stack.append(i)
-            elif s[i] == '(':
+            elif s[i] == "(":
                 if stack:
                     stack.pop()
                     if not stack:
                         # Found the matching opening parenthesis
-                        return s[:i].strip(), s[i + 1:last_close].strip()
+                        return s[:i].strip(), s[i + 1 : last_close].strip()
         return s, ""  # No matching opening parenthesis found
 
     # Extract the last parentheses content
@@ -122,10 +122,10 @@ def _parse_response_format(response_format_str: str) -> Dict[str, str]:
         Dict[str, str]: A dictionary of parsed requirements.
     """
     requirements = {}
-    parts = re.split(r',\s*(?=\w[\w\s]*:\s*[^,()]+)', response_format_str)
+    parts = re.split(r",\s*(?=\w[\w\s]*:\s*[^,()]+)", response_format_str)
     for part in parts:
-        if ':' in part:
-            key, value = part.split(':', 1)
+        if ":" in part:
+            key, value = part.split(":", 1)
             requirements[key.strip()] = value.strip()
         else:
             requirements[part.strip()] = None

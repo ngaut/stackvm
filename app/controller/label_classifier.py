@@ -116,14 +116,24 @@ def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
     """
     Finds the most similar task in the list of candidates
     """
+
     candidate = candidates[0]
+    for c in candidates:
+        if c["goal"] == task:
+            candidate = c
+            break
+
     # find the task best plan
     with SessionLocal() as session:
         task = session.query(Task).filter(Task.id == candidate.get("id")).first()
         if not task or task.best_plan is None:
             return None
 
-        return {"goal": task.goal, "best_plan": task.best_plan}
+        return {
+            "goal": task.goal,
+            "best_plan": task.best_plan,
+            "response_format": task.meta.get("response_format") if task.meta else None,
+        }
 
 
 def remove_label_id_from_tree(tree: List[Dict]):
