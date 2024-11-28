@@ -21,6 +21,7 @@ from app.services import (
 from app.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT, GIT_REPO_PATH
+from app.utils import parse_goal_requirements
 
 from .plan import generate_updated_plan, should_update_plan, generate_plan
 from .label_classifier import LabelClassifier
@@ -94,13 +95,42 @@ class Task:
 
     def generate_plan(self):
         """Generate a plan for the task."""
+        example_str = None
+        plan = None
         try:
             label_path, example = classifer.generate_label_path(self.task_orm.goal)
+            example_goal = example.get("goal", None)
+            example_plan = example.get("best_plan", None)
+
+            if example_goal is not None and example_plan is not None:
+                example_clean_goal, _ = parse_goal_requirements(example_goal)
+                logger.info(
+                    "example goal: %s, task goal: %s, equal %s",
+                    example_clean_goal,
+                    self.task_orm.goal,
+                    self.task_orm.goal.strip().lower()
+                    == example_clean_goal.strip().lower(),
+                )
+                # if the example goal is the same as the task goal, use the example plan
+                if (
+                    example_clean_goal is not None
+                    and self.task_orm.goal.strip().lower()
+                    == example_clean_goal.strip().lower()
+                    and isinstance(example_plan, list)
+                ):
+                    plan = example_plan
+                else:
+                    # use it as an example to generate a plan
+                    example_str = (
+                        f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
+                    )
             logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
         except Exception as e:
-            logger.error("Failed to generate label path: %s", str(e))
-            example = None
-        plan = generate_plan(self.vm.llm_interface, self.task_orm.goal, example=example)
+            logger.error("Failed to generate label path: %s", str(e), exc_info=True)
+        if plan is None:
+            plan = generate_plan(
+                self.vm.llm_interface, self.task_orm.goal, example=example_str
+            )
         if plan:
             self.vm.set_plan(plan)
         return plan
@@ -393,11 +423,17 @@ class TaskService:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
-    def create_task(self, session: Session, goal: str, repo_name: str) -> Task:
+    def create_task(
+        self, session: Session, goal: str, repo_name: str, meta: Optional[Dict] = None
+    ) -> Task:
         try:
             repo_path = os.path.join(GIT_REPO_PATH, repo_name)
             task_orm = TaskORM(
-                id=uuid.uuid4(), goal=goal, repo_path=repo_path, status="pending"
+                id=uuid.uuid4(),
+                goal=goal,
+                repo_path=repo_path,
+                status="pending",
+                meta=meta,
             )
             session.add(task_orm)
             session.commit()

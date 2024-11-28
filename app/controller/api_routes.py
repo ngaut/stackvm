@@ -30,6 +30,7 @@ from app.config.settings import (
     GENERATED_FILES_DIR,
     TASK_QUEUE_WORKERS,
 )
+from app.utils import parse_goal_requirements
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -477,18 +478,29 @@ def stream_execute_vm():
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
 
+    clean_goal, requirements = parse_goal_requirements(goal)
+    if not clean_goal:
+        return log_and_return_error("Invalid goal format", "error", 400)
+
+    current_app.logger.info(
+        f"Receive goal: {clean_goal} with requirements: {requirements}"
+    )
+
     def event_stream():
         protocol = StreamingProtocol()
 
         with SessionLocal() as session:
             task = ts.create_task(
-                session, goal, datetime.now().strftime("%Y%m%d%H%M%S")
+                session,
+                clean_goal,
+                datetime.now().strftime("%Y%m%d%H%M%S"),
+                requirements,
             )
             task_id = task.id
             task_branch = task.get_current_branch()
 
         try:
-            current_app.logger.info(f"Starting VM execution with goal: {goal}")
+            current_app.logger.info(f"Starting VM execution with goal: {clean_goal}")
             # Generate Plan
             plan = task.generate_plan()
             if not plan:
@@ -517,7 +529,9 @@ def stream_execute_vm():
                     ]
                 elif len(final_answer_structure.get("variables")) == 1:
                     dependencies_variables = final_answer_structure.get("variables")
-                    current_app.logger.info(f"dependencies_variables {dependencies_variables}")
+                    current_app.logger.info(
+                        f"dependencies_variables {dependencies_variables}"
+                    )
                     dependencies_steps = task.vm.parse_dependencies(
                         dependencies_variables
                     )
@@ -525,7 +539,9 @@ def stream_execute_vm():
                         dependencies_variables[0]
                     ]
 
-            current_app.logger.info(f"streaming_response_steps {streaming_response_steps}")
+            current_app.logger.info(
+                f"streaming_response_steps {streaming_response_steps}"
+            )
 
             # Start executing steps
             while True:
