@@ -102,15 +102,10 @@ class Task:
             example_goal = example.get("goal", None)
             example_plan = example.get("best_plan", None)
 
+            logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
+
             if example_goal is not None and example_plan is not None:
                 example_clean_goal, _ = parse_goal_requirements(example_goal)
-                logger.info(
-                    "example goal: %s, task goal: %s, equal %s",
-                    example_clean_goal,
-                    self.task_orm.goal,
-                    self.task_orm.goal.strip().lower()
-                    == example_clean_goal.strip().lower(),
-                )
                 # if the example goal is the same as the task goal, use the example plan
                 if (
                     example_clean_goal is not None
@@ -118,13 +113,13 @@ class Task:
                     == example_clean_goal.strip().lower()
                     and isinstance(example_plan, list)
                 ):
+                    logger.info("Reusing the example plan of goal: %s", example_goal)
                     plan = example_plan
                 else:
                     # use it as an example to generate a plan
                     example_str = (
                         f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
                     )
-            logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
         except Exception as e:
             logger.error("Failed to generate label path: %s", str(e), exc_info=True)
         if plan is None:
