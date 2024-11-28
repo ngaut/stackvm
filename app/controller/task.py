@@ -127,7 +127,7 @@ class Task:
 
             goal = self.task_orm.goal
             if self.task_orm.meta and self.task_orm.meta.get("requirements", None):
-                goal = f"{goal}\n{self.task_orm.meta['requirements']}"
+                goal = f"{goal} {self.task_orm.meta['requirements']}"
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
                 self.vm.llm_interface, goal, example=example_str
