@@ -96,11 +96,12 @@ class Task:
         """Generate a plan for the task."""
         example_str = None
         plan = None
+        response_format = None
         try:
             label_path, example = classifier.generate_label_path(self.task_orm.goal)
-            example_goal = example.get("goal", None)
-            example_plan = example.get("best_plan", None)
-            example_response_format = example.get("response_format", None)
+            example_goal = example.get("goal", None) if example else None
+            example_plan = example.get("best_plan", None) if example else None
+            example_response_format = example.get("response_format", None) if example else None
             response_format = (
                 self.task_orm.meta.get("response_format")
                 if self.task_orm.meta
@@ -144,8 +145,8 @@ class Task:
                 )
         except Exception as e:
             logger.error("Failed to generate label path: %s", str(e), exc_info=True)
-        if plan is None:
 
+        if plan is None:
             goal = self.task_orm.goal
             if response_format:
                 goal = f"{goal} {response_format}"
