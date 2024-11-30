@@ -24,9 +24,11 @@ from app.config.settings import VM_SPEC_CONTENT, GIT_REPO_PATH
 
 from .plan import generate_updated_plan, should_update_plan, generate_plan
 from .label_classifier import LabelClassifier
+from .simple_cache import initialize_cache
 
 logger = logging.getLogger(__name__)
 classifier = LabelClassifier()
+simple_semantic_cache = initialize_cache()
 
 
 class Task:
@@ -96,64 +98,54 @@ class Task:
         """Generate a plan for the task."""
         example_str = None
         plan = None
-        response_format = None
+        response_format = (
+            self.task_orm.meta.get("response_format") if self.task_orm.meta else None
+        )
+
+        # check if the goal is in the cache
         try:
-            label_path, example = classifier.generate_label_path(self.task_orm.goal)
-            example_goal = example.get("goal", None) if example else None
-            example_plan = example.get("best_plan", None) if example else None
-            example_response_format = example.get("response_format", None) if example else None
-            response_format = (
-                self.task_orm.meta.get("response_format")
-                if self.task_orm.meta
-                else None
-            )
+            candidate = simple_semantic_cache.get(self.task_orm.goal, response_format)
+            if candidate:
+                if candidate.get("matched") is True:
+                    plan = candidate["cached_goal"].get("best_plan", None)
+                    logger.info("Reusing the cache plan of goal %s", self.task_orm.goal)
+                elif candidate.get("reference_goal"):
+                    logger.info(
+                        "Using the reference goal %s to generate a new plan",
+                        candidate["reference_goal"]["goal"],
+                    )
+                    example_str = f"**Goal**:\n{candidate['reference_goal']['goal']}\n**The plan:**\n{candidate['reference_goal']['best_plan']}\n"
 
-            logger.info("Label path: %s for task %s", label_path, self.task_orm.goal)
+        except Exception as e:
+            logger.error("Failed to get plan from cache: %s", str(e), exc_info=True)
 
-            if example_goal is not None and example_plan is not None:
-                # if the example goal is the same as the task goal, use the example plan
-
-                if (
-                    self.task_orm.goal.strip().lower() == example_goal.strip().lower()
-                    and isinstance(example_plan, list)
-                ):
-                    lang_match = False
-
-                    if response_format and example_response_format:
-                        task_lang = response_format.get("Lang") or response_format.get(
-                            "lang"
-                        )
-                        example_lang = example_response_format.get(
-                            "Lang"
-                        ) or example_response_format.get("lang")
-
-                        if (
-                            task_lang
-                            and example_lang
-                            and task_lang.strip().lower()
-                            == example_lang.strip().lower()
-                        ):
-                            logger.info(
-                                "Reusing the example plan of goal %s", example_goal
-                            )
-                            plan = example_plan
-
-            if plan is None and example_plan is not None:
+        if plan is None and example_str is None:
+            # find the similar task from label tree
+            try:
+                label_path, example = classifier.generate_label_path(self.task_orm.goal)
+                example_goal = example.get("goal", None) if example else None
+                example_plan = example.get("best_plan", None) if example else None
+                logger.info(
+                    "Label path: %s for task %s", label_path, self.task_orm.goal
+                )
                 # use it as an example to generate a plan
                 example_str = (
                     f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
                 )
-        except Exception as e:
-            logger.error("Failed to generate label path: %s", str(e), exc_info=True)
+            except Exception as e:
+                logger.error("Failed to generate label path: %s", str(e), exc_info=True)
 
+        # generate plan if not found in cache
         if plan is None:
             goal = self.task_orm.goal
             if response_format:
                 goal = f"{goal} {response_format}"
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(self.vm.llm_interface, goal, example=example_str)
+
         if plan:
             self.vm.set_plan(plan)
+
         return plan
 
     def _run(self):
