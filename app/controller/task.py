@@ -108,14 +108,18 @@ class Task:
             if candidate:
                 if candidate.get("matched") is True:
                     plan = candidate["cached_goal"].get("best_plan", None)
+
+                if plan is not None:
                     logger.info("Reusing the cache plan of goal %s", self.task_orm.goal)
                 elif candidate.get("reference_goal"):
                     logger.info(
                         "Using the reference goal %s to generate a new plan",
                         candidate["reference_goal"]["goal"],
                     )
-                    example_str = f"**Goal**:\n{candidate['reference_goal']['goal']}\n**The plan:**\n{candidate['reference_goal']['best_plan']}\n"
-
+                    example_goal = candidate["reference_goal"].get("goal", None)
+                    example_plan = candidate["reference_goal"].get("best_plan", None)
+                    if example_goal and example_plan:
+                        example_str = f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
         except Exception as e:
             logger.error("Failed to get plan from cache: %s", str(e), exc_info=True)
 
@@ -129,9 +133,10 @@ class Task:
                     "Label path: %s for task %s", label_path, self.task_orm.goal
                 )
                 # use it as an example to generate a plan
-                example_str = (
-                    f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
-                )
+                if example_goal and example_plan:
+                    example_str = (
+                        f"**Goal**:\n{example_goal}\n**The plan:**\n{example_plan}\n"
+                    )
             except Exception as e:
                 logger.error("Failed to generate label path: %s", str(e), exc_info=True)
 
