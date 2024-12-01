@@ -18,7 +18,7 @@ MAX_CHUNK_TOKENS = 10240
 @tool
 def retrieve_knowledge_graph(query):
     """
-    Retrieves information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
+    Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
 
     Arguments:
     - `query`: The query string. Can be a direct string or a variable reference.
@@ -84,7 +84,7 @@ def get_chunk_content(chunk):
 @tool
 def vector_search(query, top_k=10):
     """
-    Retrieves the most relevant data chunks based on embedding similarity to the query.
+    Retrieves the most relevant TiDB Document data chunks based on embedding similarity to the query.
 
     Arguments:
     - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
