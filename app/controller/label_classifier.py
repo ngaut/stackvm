@@ -247,7 +247,7 @@ def get_labels_tree_with_task_goals() -> List[Dict]:
                 func.row_number()
                 .over(
                     partition_by=Task.label_id,
-                    order_by=Task.id,
+                    order_by=Task.updated_at.desc(),
                 )
                 .label("rn"),
             )
