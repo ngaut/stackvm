@@ -1,11 +1,16 @@
 import difflib
 import re
 import logging
+import threading
+import time
 
 from app.database import SessionLocal
 from app.models.task import Task
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def normalize_goal(goal):
@@ -21,75 +26,106 @@ def normalize_goal(goal):
 
 
 class SimpleCache:
-    def __init__(self, items: list = []):
+    def __init__(self):
         self.cache = {}
         self.goals_in_cache = []
-        for item in items:
-            self.add(item["goal"], item["response_format"], item["best_plan"])
+        self.lock = threading.Lock()  # Lock for updating the cache
+        self.scheduler = BackgroundScheduler()
 
-    def add(self, goal, response_format, best_plan):
-        """
-        Adds goal and its plan to the cache.
-        """
-        clean_goal = normalize_goal(goal)
-        if goal is None or goal in self.goals_in_cache:
-            return
-        self.cache[clean_goal] = {
-            "goal": goal,
-            "response_format": response_format,
-            "best_plan": best_plan,
-        }
-        self.goals_in_cache.append(clean_goal)
+        # Schedule the cache to refresh every 24 hours, first run after 10 seconds
+        self.scheduler.add_job(
+            self.refresh_cache, "interval", hours=24, next_run_time=time.time() + 10
+        )
+        self.scheduler.start()
+        logger.info("Started cache refresh scheduler to run every 24 hours.")
+
+        self.refresh_cache()  # Initial cache population
 
     def get(self, goal, response_format):
         """
         Retrieves the best plan for a given goal using simple string matching.
         """
-        goal = normalize_goal(goal)
-        if goal is None:
+        normalized_goal = normalize_goal(goal)
+        if normalized_goal is None:
             return None
 
+        # Access the cache without locking for read operations
         closest_matches = difflib.get_close_matches(
-            goal, self.goals_in_cache, cutoff=0.95
+            normalized_goal, self.goals_in_cache, cutoff=0.95
         )
 
         if not closest_matches:
             return None
 
-        for goal in closest_matches:
-            candidate = self.cache[goal]
-            candidate_response_format = candidate["response_format"]
-            if candidate_response_format:
+        for matched_goal in closest_matches:
+            candidate = self.cache.get(matched_goal)
+            if candidate and candidate["response_format"]:
                 goal_lang = response_format.get("Lang") or response_format.get("lang")
-                candidate_lang = candidate_response_format.get(
-                    "Lang"
-                ) or candidate_response_format.get("lang")
+                candidate_lang = candidate["response_format"].get("Lang") or candidate[
+                    "response_format"
+                ].get("lang")
 
-                if goal_lang and candidate_lang and candidate_lang == goal_lang:
-                    logger.info("Reusing the cache plan of goal %s", goal)
+                if goal_lang and candidate_lang and goal_lang == candidate_lang:
+                    logger.info("Reusing the cache plan of goal %s", matched_goal)
                     return {"matched": True, "cached_goal": candidate}
 
         return {
             "matched": False,
             "reference_goal": (
-                self.cache[closest_matches[0]] if len(closest_matches) > 0 else None
+                self.cache.get(closest_matches[0]) if closest_matches else None
             ),
         }
 
+    def refresh_cache(self):
+        """
+        Refreshes the cache by reloading data from the database.
+        """
+        try:
+            logger.info("Starting cache refresh...")
+            with SessionLocal() as session:
+                tasks = session.query(Task).filter(Task.best_plan.isnot(None)).all()
+                candidates = [
+                    {
+                        "goal": task.goal,
+                        "best_plan": task.best_plan,
+                        "response_format": (
+                            task.meta.get("response_format") if task.meta else None
+                        ),
+                    }
+                    for task in tasks
+                ]
+
+            new_cache = {}
+            new_goals_in_cache = []
+            for item in candidates:
+                clean_goal = normalize_goal(item["goal"])
+                if clean_goal is None or clean_goal in new_goals_in_cache:
+                    continue
+                new_cache[clean_goal] = {
+                    "goal": item["goal"],
+                    "response_format": item["response_format"],
+                    "best_plan": item["best_plan"],
+                }
+                new_goals_in_cache.append(clean_goal)
+
+            with self.lock:
+                self.cache = new_cache
+                self.goals_in_cache = new_goals_in_cache
+                logger.info("Cache refresh completed successfully.")
+        except Exception as e:
+            logger.error("Failed to refresh cache: %s", e)
+
+    def stop_periodic_refresh(self):
+        """
+        Stops the background scheduler.
+        """
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Stopped cache refresh scheduler.")
+
 
 def initialize_cache() -> SimpleCache:
-    with SessionLocal() as session:
-        tasks = session.query(Task).filter(Task.best_plan.isnot(None)).all()
-        candidates = []
-        for task in tasks:
-            candidates.append(
-                {
-                    "goal": task.goal,
-                    "best_plan": task.best_plan,
-                    "response_format": (
-                        task.meta.get("response_format") if task.meta else None
-                    ),
-                }
-            )
-
-        return SimpleCache(candidates)
+    """
+    Initializes SimpleCache and starts the periodic refresh.
+    """
+    return SimpleCache()
