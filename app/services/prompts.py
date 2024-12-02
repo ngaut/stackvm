@@ -468,3 +468,53 @@ Return the label path as a JSON array of labels, for example:
 """
 
     return prompt
+
+
+def get_best_pratices_prompt(
+    label_path: str,
+    formatted_task_plan: str,
+) -> str:
+
+    return f"""Background:
+
+    You are provided with a series of task plans related to the topic: {label_path}. Each task plan outlines a method for addressing specific user tasks within this topic. Your goal is to analyze these plans to extract the underlying best practices and planning schemas that can be applied to similar tasks.
+
+    Your Task:
+
+    - Analyze the following task plans to identify common patterns, strategies, and methodologies used to solve tasks in the {label_path} category.
+    - Summarize the best practices for planning and executing these tasks, focusing on efficiency and effectiveness.
+    - Identify the meta-thinking and planning schemas that are unique to this type of task.
+    - Provide a clear and concise analysis that can guide others in approaching and solving similar tasks.
+
+    Instructions:
+
+    1. Review Each Task Plan Carefully:
+    - Examine the sequence of steps (seq_no) and the types of actions taken (type), such as reasoning, calling tools, conditional jumps, and assignments.
+    - Note the tools used (e.g., retrieve_knowledge_graph, vector_search, llm_generate) and their purposes.
+
+    2. Identify Common Patterns and Best Practices:
+    - Look for recurring strategies in how the tasks are approached and solved.
+    - Pay attention to how information is gathered, processed, and synthesized.
+
+    3. Extract Meta-Thinking and Planning Schemas:
+    - Determine the underlying principles that guide the planning of these tasks.
+    - Understand how decisions are made regarding tool selection, conditional logic, and information synthesis.
+
+    4. Focus on Efficiency and Effectiveness:
+    - Highlight methods that streamline the task-solving process.
+    - Emphasize practices that lead to accurate and comprehensive answers with minimal steps.
+
+    5. Provide a Concise Summary:
+    - Articulate the key best practices and planning schemas.
+    - Ensure the summary is clear, actionable, and applicable to similar tasks.
+
+    Expected Output:
+
+    A clear and concise analysis that summarizes the best practices, meta-thinking, and planning schemas for tasks in the {label_path} category. The analysis should help others understand how to efficiently and effectively plan and execute similar tasks.
+
+
+    Task Plans:
+
+    {formatted_task_plan}
+
+    """

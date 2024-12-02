@@ -13,6 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 logger = logging.getLogger(__name__)
 
+
 def normalize_goal(goal):
     if goal is None:
         return None
@@ -34,10 +35,7 @@ class SimpleCache:
         # Schedule the cache to refresh every 24 hours, first run after 10 seconds
         next_run_time = datetime.datetime.now() + datetime.timedelta(seconds=10)
         self.scheduler.add_job(
-            self.refresh_cache,
-            'interval',
-            hours=24,
-            next_run_time=next_run_time
+            self.refresh_cache, "interval", hours=24, next_run_time=next_run_time
         )
         self.scheduler.start()
         logger.info("Started cache refresh scheduler to run every 24 hours.")
@@ -73,9 +71,17 @@ class SimpleCache:
         for matched_goal in closest_matches:
             candidate = cache.get(matched_goal)
             if candidate and candidate["response_format"]:
-                goal_lang = response_format.get("Lang") or response_format.get("lang") if response_format else None
+                goal_lang = (
+                    response_format.get("Lang") or response_format.get("lang")
+                    if response_format
+                    else None
+                )
                 candidate_response = candidate.get("response_format")
-                candidate_lang = candidate_response.get("Lang") or candidate_response.get("lang") if candidate_response else None
+                candidate_lang = (
+                    candidate_response.get("Lang") or candidate_response.get("lang")
+                    if candidate_response
+                    else None
+                )
 
                 if goal_lang and candidate_lang and goal_lang == candidate_lang:
                     logger.info("Reusing the cache plan of goal %s", matched_goal)
@@ -84,7 +90,9 @@ class SimpleCache:
         logger.info("No matching language found for goal: %s", normalized_goal)
         return {
             "matched": False,
-            "reference_goal": cache.get(closest_matches[0]) if closest_matches else None,
+            "reference_goal": (
+                cache.get(closest_matches[0]) if closest_matches else None
+            ),
         }
 
     def refresh_cache(self):
@@ -99,7 +107,9 @@ class SimpleCache:
                     {
                         "goal": task.goal,
                         "best_plan": task.best_plan,
-                        "response_format": task.meta.get("response_format") if task.meta else None,
+                        "response_format": (
+                            task.meta.get("response_format") if task.meta else None
+                        ),
                     }
                     for task in tasks
                 ]

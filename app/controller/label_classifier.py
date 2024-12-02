@@ -1,4 +1,5 @@
 import json
+import copy
 from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -83,7 +84,7 @@ def find_longest_matching_node(
     matching_node = None
     for node in tree:
         if node["name"] == current_label["label"]:
-            matching_node = node
+            matching_node = copy.deepcopy(node)
             break
 
     if not matching_node:
@@ -103,7 +104,8 @@ def get_all_tasks_under_node(node: Dict) -> List[str]:
     """
     Recursively retrieves all tasks under the given node
     """
-    tasks = node.get("tasks", [])
+    tasks = []
+    tasks.extend(node.get("tasks", []))
 
     # recursively get tasks from children
     for child in node.get("children", []):
@@ -304,6 +306,33 @@ def get_labels_tree_with_task_goals() -> List[Dict]:
             root_labels.append(label)
 
     return remove_label_id_from_tree(root_labels)
+
+
+def get_task_plans(task_ids: list) -> List[Dict]:
+    """
+    Retrieves all tasks with their best plans.
+    """
+    with SessionLocal() as session:
+        # Subquery to get up to 3 tasks per label using window function
+
+        results = (
+            session.query(
+                Task.id.label("task_id"),
+                Task.goal.label("task_goal"),
+                Task.best_plan.label("best_plan"),
+            )
+            .filter(Task.best_plan.isnot(None), Task.id.in_(task_ids))
+            .all()
+        )
+
+    task_plans = {}
+    for row in results:
+        task_plans[row.task_id] = {
+            "goal": row.task_goal,
+            "best_plan": row.best_plan,
+        }
+
+    return task_plans
 
 
 class LabelClassifier:
