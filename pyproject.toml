@@ -19,6 +19,7 @@ sqlalchemy = "^2.0.36"
 flask-cors = "^5.0.0"
 pytest = "^8.3.3"
 tiktoken = "^0.8.0"
+apscheduler = "^3.11.0"
 
 
 [build-system]

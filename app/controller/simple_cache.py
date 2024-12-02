@@ -12,8 +12,6 @@ from app.models.task import Task
 from apscheduler.schedulers.background import BackgroundScheduler
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
 
 def normalize_goal(goal):
     if goal is None:
