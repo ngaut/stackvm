@@ -31,10 +31,11 @@ class SimpleCache:
     _instance_lock = threading.Lock()  # Lock for thread-safe singleton creation
 
     def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, "_instance"):
+        if not hasattr(cls, "_instance") or cls._instance is None:
             with cls._instance_lock:
                 if cls._instance is None:
                     cls._instance = super(SimpleCache, cls).__new__(cls)
+
         return cls._instance
 
     def __init__(self):
