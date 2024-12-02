@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from types import MappingProxyType
+import datetime
 
 from app.database import SessionLocal
 from app.models.task import Task
@@ -28,13 +29,18 @@ def normalize_goal(goal):
 
 class SimpleCache:
     def __init__(self):
-        self.cache = {}
-        self.goals_in_cache = []
+        self.cache_state = None  # Combined cache state
         self.lock = threading.Lock()  # Lock for updating the cache
         self.scheduler = BackgroundScheduler()
 
         # Schedule the cache to refresh every 24 hours, first run after 10 seconds
-        self.scheduler.add_job(self.refresh_cache, 'interval', hours=24, next_run_time=time.time() + 10)
+        next_run_time = datetime.datetime.now() + datetime.timedelta(seconds=10)
+        self.scheduler.add_job(
+            self.refresh_cache,
+            'interval',
+            hours=24,
+            next_run_time=next_run_time
+        )
         self.scheduler.start()
         logger.info("Started cache refresh scheduler to run every 24 hours.")
 
@@ -56,8 +62,10 @@ class SimpleCache:
             return None
 
         # Access the cache without locking for read operations
+        cache, goals_in_cache = self.cache_state if self.cache_state else ({}, [])
+
         closest_matches = difflib.get_close_matches(
-            normalized_goal, self.goals_in_cache, cutoff=0.95
+            normalized_goal, goals_in_cache, cutoff=0.95
         )
 
         if not closest_matches:
@@ -65,10 +73,11 @@ class SimpleCache:
             return None
 
         for matched_goal in closest_matches:
-            candidate = self.cache.get(matched_goal)
+            candidate = cache.get(matched_goal)
             if candidate and candidate["response_format"]:
-                goal_lang = response_format.get("Lang") or response_format.get("lang")
-                candidate_lang = candidate["response_format"].get("Lang") or candidate["response_format"].get("lang")
+                goal_lang = response_format.get("Lang") or response_format.get("lang") if response_format else None
+                candidate_response = candidate.get("response_format")
+                candidate_lang = candidate_response.get("Lang") or candidate_response.get("lang") if candidate_response else None
 
                 if goal_lang and candidate_lang and goal_lang == candidate_lang:
                     logger.info("Reusing the cache plan of goal %s", matched_goal)
@@ -77,7 +86,7 @@ class SimpleCache:
         logger.info("No matching language found for goal: %s", normalized_goal)
         return {
             "matched": False,
-            "reference_goal": self.cache.get(closest_matches[0]) if closest_matches else None,
+            "reference_goal": cache.get(closest_matches[0]) if closest_matches else None,
         }
 
     def refresh_cache(self):
@@ -113,19 +122,19 @@ class SimpleCache:
             # Convert to immutable structures
             immutable_cache = MappingProxyType(new_cache)
             immutable_goals_in_cache = tuple(new_goals_in_cache)
+            immutable_cache_state = (immutable_cache, immutable_goals_in_cache)
 
             with self.lock:
-                self.cache = immutable_cache
-                self.goals_in_cache = immutable_goals_in_cache
+                self.cache_state = immutable_cache_state
                 logger.info("Cache refresh completed successfully.")
         except Exception as e:
-            logger.error("Failed to refresh cache: %s", e)
+            logger.exception("Failed to refresh cache.")
 
     def stop_periodic_refresh(self):
         """
         Stops the background scheduler.
         """
-        if self.scheduler.running:
+        if self.scheduler.state != 0:  # STATE_STOPPED
             self.scheduler.shutdown()
             logger.info("Stopped cache refresh scheduler.")
 
