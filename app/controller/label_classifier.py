@@ -100,6 +100,37 @@ def find_longest_matching_node(
     return matching_node
 
 
+def get_nearest_best_practices(label_path: List[Dict]) -> str:
+    """
+    Finds the nearest best practices along the label path.
+
+    Args:
+        label_path (List[str]): A list of label names from root to the given label.
+
+    Returns:
+        List[BestPractice]: A list of best practices associated with the nearest label.
+    """
+    with SessionLocal() as session:
+        # Fetch all labels in the label_path with their best practices in a single query
+        labels = (
+            session.query(Label)
+            .filter(Label.name.in_([label["label"] for label in label_path]))
+            .all()
+        )
+
+        # Create a mapping from label name to label object
+        label_map = {label.name: label for label in labels}
+
+        # Iterate over label_path in reverse order to find the nearest label with best practices
+        for label_name in reversed(label_path):
+            label = label_map.get(label_name["label"])
+            if label and label.best_practices:
+                return label.best_practices
+
+        # If no best practices found, return an empty list
+        return None
+
+
 def get_all_tasks_under_node(node: Dict) -> List[str]:
     """
     Recursively retrieves all tasks under the given node
@@ -343,7 +374,9 @@ class LabelClassifier:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
 
-    def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[Dict]]:
+    def generate_label_path(
+        self, task_goal: str
+    ) -> Tuple[List[str], Optional[Dict], Optional[str]]:
         """
         Generates a label path for the given task goal.
 
@@ -380,14 +413,16 @@ class LabelClassifier:
         # find the most similar example in the label tree
         matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
         if not matching_node:
-            return label_path, None
+            return label_path, None, None
 
         # get all tasks under the matching node
         tasks = get_all_tasks_under_node(matching_node)
         if len(tasks) == 0:
-            return label_path, None
+            return label_path, None, None
 
-        return label_path, find_most_similar_task(task_goal, tasks)
+        best_practices = get_nearest_best_practices(label_path)
+
+        return label_path, find_most_similar_task(task_goal, tasks), best_practices
 
     def generate_label_description(self, task_goal: str) -> List[str]:
         """

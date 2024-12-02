@@ -141,11 +141,16 @@ Ensure your response is thorough yet concise, focusing on the most critical aspe
 
 
 def get_generate_plan_prompt(
-    goal, vm_spec_content, tools_instruction_content, plan_example_content
+    goal,
+    vm_spec_content,
+    tools_instruction_content,
+    plan_example_content,
+    plan_approach,
 ):
     """
     Get the prompt for generating a plan.
     """
+
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Your task is to generate a detailed action plan to achieve the following goal:
 Goal: {goal}
@@ -153,10 +158,17 @@ Goal: {goal}
 **MUST follow the Specification**:
 {vm_spec_content}
 
-## 8. Available Tools for `calling` instruction
+## 9. Available Tools for `calling` instruction
 {tools_instruction_content}
 
-## 9. Example Plan: Below is a similar example that you can refer to when creating or evaluating your plan
+## 10. Example: Here are an example how to handle a similar task.
+
+### The approach
+
+{plan_approach}
+
+###  Plan Example
+
 {plan_example_content}
 
 -------------------------------

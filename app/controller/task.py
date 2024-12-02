@@ -12,7 +12,6 @@ from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
     LLMInterface,
     PlanExecutionVM,
-    get_generate_plan_prompt,
     get_step_update_prompt,
     parse_step,
     StepType,
@@ -98,6 +97,7 @@ class Task:
         """Generate a plan for the task."""
         example_str = None
         plan = None
+        best_pratices = None
         response_format = (
             self.task_orm.meta.get("response_format") if self.task_orm.meta else None
         )
@@ -126,7 +126,9 @@ class Task:
         if plan is None and example_str is None:
             # find the similar task from label tree
             try:
-                label_path, example = classifier.generate_label_path(self.task_orm.goal)
+                label_path, example, best_pratices = classifier.generate_label_path(
+                    self.task_orm.goal
+                )
                 example_goal = example.get("goal", None) if example else None
                 example_plan = example.get("best_plan", None) if example else None
                 logger.info(
@@ -146,7 +148,12 @@ class Task:
             if response_format:
                 goal = f"{goal} {response_format}"
             logger.info("Generating plan for goal: %s", goal)
-            plan = generate_plan(self.vm.llm_interface, goal, example=example_str)
+            plan = generate_plan(
+                self.vm.llm_interface,
+                goal,
+                example=example_str,
+                best_practices=best_pratices,
+            )
 
         if plan:
             self.vm.set_plan(plan)

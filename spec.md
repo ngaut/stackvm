@@ -8,8 +8,9 @@
 5. Variables and Dependencies
 6. Plan Structure
 7. Best Practices
-8. Available Tools for calling instruction
-9. Example Plan
+8. Common Errors
+9. Available Tools for calling instruction
+10. Example Plan
 
 ## 1. Overview of the VM
 The VM executes plans consisting of a sequence of instructions. Each instruction performs a specific operation and may interact with variables stored in a variable store. The VM supports conditional execution and can handle dependencies between instructions through variable assignments and references.
