@@ -1,4 +1,5 @@
 import json
+import copy
 from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -83,7 +84,7 @@ def find_longest_matching_node(
     matching_node = None
     for node in tree:
         if node["name"] == current_label["label"]:
-            matching_node = node
+            matching_node = copy.deepcopy(node)
             break
 
     if not matching_node:
@@ -99,11 +100,43 @@ def find_longest_matching_node(
     return matching_node
 
 
+def get_nearest_best_practices(label_path: List[Dict]) -> str:
+    """
+    Finds the nearest best practices along the label path.
+
+    Args:
+        label_path (List[str]): A list of label names from root to the given label.
+
+    Returns:
+        List[BestPractice]: A list of best practices associated with the nearest label.
+    """
+    with SessionLocal() as session:
+        # Fetch all labels in the label_path with their best practices in a single query
+        labels = (
+            session.query(Label)
+            .filter(Label.name.in_([label["label"] for label in label_path]))
+            .all()
+        )
+
+        # Create a mapping from label name to label object
+        label_map = {label.name: label for label in labels}
+
+        # Iterate over label_path in reverse order to find the nearest label with best practices
+        for label_name in reversed(label_path):
+            label = label_map.get(label_name["label"])
+            if label and label.best_practices:
+                return label.best_practices
+
+        # If no best practices found, return an empty list
+        return None
+
+
 def get_all_tasks_under_node(node: Dict) -> List[str]:
     """
     Recursively retrieves all tasks under the given node
     """
-    tasks = node.get("tasks", [])
+    tasks = []
+    tasks.extend(node.get("tasks", []))
 
     # recursively get tasks from children
     for child in node.get("children", []):
@@ -306,6 +339,33 @@ def get_labels_tree_with_task_goals() -> List[Dict]:
     return remove_label_id_from_tree(root_labels)
 
 
+def get_task_plans(task_ids: list) -> List[Dict]:
+    """
+    Retrieves all tasks with their best plans.
+    """
+    with SessionLocal() as session:
+        # Subquery to get up to 3 tasks per label using window function
+
+        results = (
+            session.query(
+                Task.id.label("task_id"),
+                Task.goal.label("task_goal"),
+                Task.best_plan.label("best_plan"),
+            )
+            .filter(Task.best_plan.isnot(None), Task.id.in_(task_ids))
+            .all()
+        )
+
+    task_plans = {}
+    for row in results:
+        task_plans[row.task_id] = {
+            "goal": row.task_goal,
+            "best_plan": row.best_plan,
+        }
+
+    return task_plans
+
+
 class LabelClassifier:
     """
     Service responsible for generating and validating label paths based on task goals.
@@ -314,7 +374,9 @@ class LabelClassifier:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
 
-    def generate_label_path(self, task_goal: str) -> Tuple[List[str], Optional[Dict]]:
+    def generate_label_path(
+        self, task_goal: str
+    ) -> Tuple[List[str], Optional[Dict], Optional[str]]:
         """
         Generates a label path for the given task goal.
 
@@ -351,14 +413,16 @@ class LabelClassifier:
         # find the most similar example in the label tree
         matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
         if not matching_node:
-            return label_path, None
+            return label_path, None, None
 
         # get all tasks under the matching node
         tasks = get_all_tasks_under_node(matching_node)
         if len(tasks) == 0:
-            return label_path, None
+            return label_path, None, None
 
-        return label_path, find_most_similar_task(task_goal, tasks)
+        best_practices = get_nearest_best_practices(label_path)
+
+        return label_path, find_most_similar_task(task_goal, tasks), best_practices
 
     def generate_label_description(self, task_goal: str) -> List[str]:
         """

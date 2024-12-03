@@ -5,10 +5,7 @@ Visualization module for the VM execution and Git repository management.
 import json
 import logging
 
-from app.config.settings import (
-    VM_SPEC_CONTENT,
-    PLAN_EXAMPLE_CONTENT,
-)
+from app.config.settings import VM_SPEC_CONTENT, PLAN_EXAMPLE_CONTENT
 from app.services import (
     find_first_json_object,
     parse_plan,
@@ -25,7 +22,13 @@ from app.instructions import global_tools_hub
 logger = logging.getLogger(__name__)
 
 
-def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None, example=None):
+def generate_plan(
+    llm_interface: LLMInterface,
+    goal,
+    custom_prompt=None,
+    example=None,
+    best_practices=None,
+):
     if not goal:
         logger.error("No goal is set.")
         return []
@@ -35,6 +38,7 @@ def generate_plan(llm_interface: LLMInterface, goal, custom_prompt=None, example
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(),
         example or PLAN_EXAMPLE_CONTENT,
+        best_practices or "Refer the best practices and example",
     )
 
     plan_response = llm_interface.generate(prompt)
