@@ -239,7 +239,8 @@ class PlanExecutionVM:
             success, step_result = current_step.get_result()
             if not success:
                 self.logger.error(
-                    f"Failed to execute step {current_step.seq_no}: {step_result}"
+                    f"Failed to execute step {current_step.seq_no}: {step_result}",
+                    exc_info=True,
                 )
                 self.state["errors"].append(
                     f"Failed to execute step {current_step.seq_no}: {step_result}"

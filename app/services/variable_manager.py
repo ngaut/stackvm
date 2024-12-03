@@ -68,6 +68,12 @@ class VariableManager:
                     for sub_var, sub_value in value.items():
                         text = text.replace(f"${{{var}.{sub_var}}}", str(sub_value))
 
+        try:
+            result = eval(text)
+            return result
+        except Exception as e:
+            pass
+
         return text
 
     def find_referenced_variables(self, text: Any) -> list:
