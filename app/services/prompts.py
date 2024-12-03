@@ -417,10 +417,11 @@ def get_label_classification_prompt_wo_description(
 ## Instructions
 
 1. Category Matching Priority:
-   - Always prioritize matching with existing feature/topic specific categories first
-   - Match with existing leaf nodes before considering parent nodes
-   - Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
-   - Use label descriptions to better understand the scope and intent of each category
+   - Specific Over General: Always prioritize matching with existing feature/topic-specific categories first.
+   - Leaf Nodes First: Match with existing leaf nodes before considering parent nodes.
+   - Task Complexity: Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
+   - Use Descriptions: Utilize label descriptions to better understand the scope and intent of each category.
+    - Ambiguous Queries: Assign to “Other Topics” for tasks that are ambiguous, or do not fit into specific categories.
 
 2. Intent Analysis:
    - Identify key technical terms and concepts in the task
@@ -430,6 +431,7 @@ def get_label_classification_prompt_wo_description(
      * Troubleshooting
      * Research/Analysis
      * Development planning
+     * ambiguous inquiries
    - For feature-specific questions, map to corresponding feature category regardless of complexity
    - Compare task intent with label descriptions for better matching
 
@@ -460,6 +462,12 @@ Bad Classification:
 Task: "How does TiCDC handle Resolved TS?"
 Wrong Path: ["Complex Task Planning", "Research & Analysis", "Technical Design"]
 Reason: This question does not require complex research or involve multiple aspects. It is specific to understanding a single feature, making the “Complex Task Planning” category unnecessary.
+
+Task: "What is this for?"
+Wrong Path: ["Basic Knowledge", "Feature Support"]
+Reason: The task is too ambiguous to be classified under a specific feature or category. Assign it to “Other Topics” instead.
+
+## Task Related to Labels
 
 {tasks_json}
 
