@@ -287,7 +287,7 @@ def optimize_step(task_id):
         return log_and_return_error("Failed to optimize step.", "error", 500)
 
 
-@api_blueprint.route("/tasks/<task_id>/execute", methods=["GET"])
+@api_blueprint.route("/tasks/<task_id>/execute", methods=["POST"])
 def re_execute_task(task_id):
     current_app.logger.info(f"Re-execute task: {task_id}")
     new_task_id = None
