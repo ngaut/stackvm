@@ -201,6 +201,17 @@ class Task:
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
+    def execute_with_plan(self, plan):
+        with self._lock:
+            try:
+                self.vm.set_plan(plan)
+                self._run()
+            except Exception as e:
+                self.task_orm.status = "failed"
+                self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
+                self.save()
+                raise ValueError(self.task_orm.logs)
+
     def update_plan(self, branch_name: str, suggestion: str, key_factors: list = []):
         updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
