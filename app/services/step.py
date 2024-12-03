@@ -62,7 +62,7 @@ class Step:
                 self.status = StepStatus.FAILED
                 self.error = str(e)
                 self.end_execution_time = datetime.utcnow()
-            self.logger.info("[Thread] Failed %s", self.__str__())
+            self.logger.info("[Thread] Failed %s", self.__str__(), exc_info=True)
 
     def get_result(self) -> Tuple[bool, Any]:
         """

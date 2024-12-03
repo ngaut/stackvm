@@ -66,7 +66,7 @@ Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_count
 **MUST follow VM Specification**:
 {vm_spec_content}
 
-## 8. Available Tools for `calling` instruction
+## 9. Available Tools for `calling` instruction
 {tools_instruction_content}
 
 -------------------------------
@@ -192,6 +192,7 @@ Now, let's generate the plan.
 
 4. **Tool Usage Guidelines**:
    - When using a tool, always wrap it in a "calling" instruction.
+   - For calling instruction, Only select tools listed in the “Available Tools” section. Using tools outside this list will cause the plan to fail.
    - The "calling" instruction should have the following structure:
      ```json
      {{
