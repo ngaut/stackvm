@@ -2,6 +2,8 @@ import os
 import requests
 import logging
 import tiktoken
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from app.instructions.tools import tool
 
@@ -13,6 +15,24 @@ if not API_KEY:
 
 MAX_TOP_K = 10
 MAX_CHUNK_TOKENS = 10240
+
+
+# Define retry strategy
+retry_strategy = Retry(
+    total=5,  # Total number of retry attempts
+    backoff_factor=1,  # Exponential backoff factor (e.g., 1, 2, 4, 8, ...)
+    status_forcelist=[429, 500, 502, 503, 504],  # HTTP status codes to retry on
+    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],  # HTTP methods to retry
+    raise_on_status=False,  # Do not raise exceptions for status codes
+)
+
+# Create an HTTPAdapter with the retry strategy
+adapter = HTTPAdapter(max_retries=retry_strategy)
+
+# Create a session and mount the adapter
+session = requests.Session()
+session.mount("https://", adapter)
+session.mount("http://", adapter)
 
 
 @tool
@@ -60,15 +80,18 @@ def retrieve_knowledge_graph(query):
     }
     data = {"query": query, "include_meta": False, "depth": 2, "with_degree": False}
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response = session.post(url, headers=headers, json=data, timeout=60)
         response.raise_for_status()  # Raises HTTPError for bad responses
         return response.json()
+    except requests.exceptions.RetryError as e:
+        logger.error("Max retries exceeded for retrieve_knowledge_graph: %s", str(e))
+        raise
     except requests.exceptions.RequestException as e:
         logger.error("Request to search_graph failed: %s", str(e))
-        return {"error": f"Failed to perform search_graph request: {str(e)}"}
-    except ValueError:
+        raise
+    except ValueError as e:
         logger.error("Invalid JSON response received from search_graph: %s", str(e))
-        return {"error": f"Invalid response format: {str(e)}"}
+        raise
 
 
 def get_chunk_content(chunk):
@@ -131,7 +154,7 @@ def vector_search(query, top_k=10):
     params = {"question": query, "chat_engine": "default", "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response = session.get(url, headers=headers, params=params, timeout=60)
         response.raise_for_status()  # Raises HTTPError for bad responses
         data = response.json()
 
@@ -182,14 +205,17 @@ def vector_search(query, top_k=10):
 
         return choosen_chunks
 
+    except requests.exceptions.RetryError as e:
+        logger.error("Max retries exceeded for vector_search: %s", str(e))
+        raise
     except requests.exceptions.RequestException as e:
         logger.error("Request to retrieve_embedding failed: %s", str(e))
-        return {"error": f"Failed to perform retrieve_embedding request: {str(e)}"}
+        raise
     except ValueError as e:
         logger.error(
             "Invalid JSON response received from retrieve_embedding: %s", str(e)
         )
-        return {"error": f"Invalid response format: {str(e)}"}
+        raise
     except Exception as e:
         logger.error("An unexpected error occurred in vector_search: %s", str(e))
-        return {"error": f"An unexpected error occurred: {str(e)}"}
+        raise
