@@ -51,7 +51,8 @@ def retrieve_knowledge_graph(query):
     - Avoid User-Specific Queries: Do not use this tool to retrieve data that is specific to a user's environment, such as configurations, current versions, or private data. This tool is designed to handle general, shared knowledge within the graph.
     """
 
-    url = "https://tidb.ai/api/v1/admin/graph/search"
+    # hardcode to improve
+    url = "https://tidb.ai/api/v1/admin/knowledge_bases/30001/graph/search"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
@@ -80,6 +81,7 @@ def get_chunk_content(chunk):
 
     logger.warning("Chunk is malformed or missing 'content' field.")
     return None
+
 
 @tool
 def vector_search(query, top_k=10):
@@ -141,9 +143,9 @@ def vector_search(query, top_k=10):
         for chunk in data:
             chunk_content = get_chunk_content(chunk)
             if chunk_content is not None:
-                    tokens = encoding.encode(chunk_content)
-                    token_count = len(tokens)
-                    total_token_count += token_count
+                tokens = encoding.encode(chunk_content)
+                token_count = len(tokens)
+                total_token_count += token_count
 
         if total_token_count <= MAX_CHUNK_TOKENS:
             return data
