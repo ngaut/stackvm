@@ -22,7 +22,7 @@ retry_strategy = Retry(
     total=5,  # Total number of retry attempts
     backoff_factor=1,  # Exponential backoff factor (e.g., 1, 2, 4, 8, ...)
     status_forcelist=[429, 500, 502, 503, 504],  # HTTP status codes to retry on
-    method_whitelist=["HEAD", "GET", "OPTIONS", "POST"],  # HTTP methods to retry
+    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],  # HTTP methods to retry
     raise_on_status=False,  # Do not raise exceptions for status codes
 )
 
