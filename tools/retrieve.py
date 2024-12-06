@@ -139,6 +139,7 @@ def vector_search(query, top_k=10):
     Best practices:
     - Use the Vector Search tool to retrieve data that is most similar to your query based on embedding distance. This tool excels at finding relevant document snippets that provide rich context and detailed information.
     - **Ensure your query is clear and focused on a single objective or aspect.** Avoid queries with multiple purposes to achieve the most accurate and relevant results.
+    - Do not insert the raw results from vector_search directly into the final_answer. The vector search tool returns arrays or multiple document fragments that may not be immediately suitable for a coherent final response. Instead, first use an LLM generation step to summarize, refine, and unify the language of these fragments. Once processed into a concise and well-structured text in the target language, then integrate this refined output into the final_answer.
     """
 
     # Initialize the tokenizer for the specified model at module level

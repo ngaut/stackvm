@@ -255,6 +255,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Best Practices for Utilizing Vector Search**:
   - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
   - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
+  - Before including content obtained from vector_search in the final_answer, ensure that you have processed it through an LLM generation tool. Use the LLM to summarize, translate (if necessary), and combine the search results into a cohesive, single-language narrative. Avoid directly placing any raw vector search output (such as arrays or multiple fragmented chunks) into the final answer. This approach guarantees that the final answer is coherent, consistent, and well-structured.
 
 - **Best Practices for LLM Generation with References**:
 
