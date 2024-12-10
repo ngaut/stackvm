@@ -13,6 +13,8 @@ API_KEY = os.environ.get("TIDB_AI_API_KEY")
 if not API_KEY:
     logger.error("TIDB_AI_API_KEY not found in environment variables")
 
+KNOWLEDGE_ENGINE = os.environ.get("KNOWLEDGE_ENGINE", "default")
+
 MAX_TOP_K = 10
 MAX_CHUNK_TOKENS = 10240
 
@@ -152,7 +154,7 @@ def vector_search(query, top_k=10):
         encoding = tiktoken.get_encoding("cl100k_base")
 
     url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
-    params = {"question": query, "chat_engine": "default", "top_k": top_k}
+    params = {"question": query, "chat_engine": KNOWLEDGE_ENGINE, "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
     try:
         response = session.get(url, headers=headers, params=params, timeout=60)

@@ -11,6 +11,13 @@ def extract_json(plan_response: str) -> str:
     if match:
         return match.group(1)
 
+    json_code_block_pattern = re.compile(
+        r"```json\s*([\s\S]*?)\s*```", re.DOTALL
+    )
+    match = json_code_block_pattern.search(plan_response)
+    if match:
+        return match.group(1)
+
     json_str = find_first_json_array(plan_response)
     if not json_str:
         raise ValueError("No valid JSON array found in the response.")
