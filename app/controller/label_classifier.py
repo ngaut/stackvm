@@ -396,13 +396,14 @@ class LabelClassifier:
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
+
         # Parse the LLM response to extract label path
         label_path_str = extract_json(response)
 
         try:
             label_path = json.loads(label_path_str)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse label path JSON: {e}")
+            raise ValueError(f"Failed to parse label path JSON: {e}. Data {response}")
 
         if not label_path or not isinstance(label_path, list):
             raise ValueError(f"Invalid label path format. {label_path}")
