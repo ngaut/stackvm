@@ -11,9 +11,7 @@ def extract_json(plan_response: str) -> str:
     if match:
         return match.group(1)
 
-    json_code_block_pattern = re.compile(
-        r"```json\s*([\s\S]*?)\s*```", re.DOTALL
-    )
+    json_code_block_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```", re.DOTALL)
     match = json_code_block_pattern.search(plan_response)
     if match:
         return match.group(1)

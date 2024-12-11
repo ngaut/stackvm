@@ -188,6 +188,10 @@ class GitManager(BranchManager):
         """Retrieve the latest commit hash of the current branch."""
         return self.repo.head.commit.hexsha
 
+    def get_commit_hashes(self):
+        """Retrieve all commit hashes of the current branch."""
+        return [commit.hexsha for commit in self.repo.iter_commits()]
+
     def get_parent_commit_hash(self, commit_hash: str) -> str:
         """Retrieve the parent commit hash based on the commit hash."""
         commit = self.repo.commit(commit_hash)
