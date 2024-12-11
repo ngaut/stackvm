@@ -290,6 +290,11 @@ def optimize_step(task_id):
 @api_blueprint.route("/tasks/<task_id>/re_execute", methods=["POST"])
 def re_execute_task(task_id):
     current_app.logger.info(f"Re-execute task: {task_id}")
+
+    data = request.json
+    commit_hash = data.get("commit_hash", None) if data else None
+    plan = data.get("plan", None) if data else None
+
     task = None
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)
@@ -300,7 +305,7 @@ def re_execute_task(task_id):
 
     try:
         current_app.logger.info(f"re-execute task {task_id}")
-        task.re_execute()
+        task.re_execute(commit_hash, plan)
         final_answer = None
         if task.vm.state.get("goal_completed"):
             current_app.logger.info(f"re-execute task {task_id}, goal completed")

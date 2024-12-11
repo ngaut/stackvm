@@ -213,7 +213,7 @@ class Task:
                     self.vm.set_state(commit_hash)
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, commit_hash
-                    ):
+                    ) or not self.branch_manager.checkout_branch(branch_name):
                         raise ValueError(
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
