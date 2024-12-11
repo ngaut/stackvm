@@ -207,12 +207,10 @@ class Task:
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
         with self._lock:
+            branch_name = f"re_execute_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             try:
                 if commit_hash:
                     self.vm.set_state(commit_hash)
-                    branch_name = (
-                        f"re_execute_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    )
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, commit_hash
                     ):
@@ -220,19 +218,30 @@ class Task:
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
                 else:
-                    hashs = self.branch_manager.get_commit_hashes()
-                    earliest_commit_hash = hashs[0]
+                    hashes = self.branch_manager.get_commit_hashes()
+                    if len(hashes) <= 1:
+                        raise ValueError(
+                            "Please choose the existing branch with plan to re-execute"
+                        )
+
+                    earliest_commit_hash = hashes[-1]
                     print("earliest_commit_hash", earliest_commit_hash)
-                    if plan:
-                        self.vm.set_plan(plan)
-                    else:
+
+                    if not plan:
                         plan = self.vm.state.get("current_plan", None)
-                        if plan is not None:
-                            self.vm.set_plan(plan)
-                        else:
+                        if not plan:
                             raise ValueError("Failed to get plan")
 
-                return
+                    if not self.branch_manager.checkout_branch_from_commit(
+                        branch_name, earliest_commit_hash
+                    ) or not self.branch_manager.checkout_branch(branch_name):
+                        raise ValueError(
+                            f"Failed to create or checkout branch '{branch_name}'"
+                        )
+
+                    self.vm.clear_state()
+                    self.vm.set_plan(plan)
+
                 self._run()
             except Exception as e:
                 self.task_orm.status = "failed"

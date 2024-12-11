@@ -373,6 +373,17 @@ class PlanExecutionVM:
     def garbage_collect(self) -> None:
         self.variable_manager.garbage_collect()
 
+    def clear_state(self) -> None:
+        goal = self.state["goal"]
+        self.state: Dict[str, Any] = {
+            "errors": [],
+            "goal": goal,
+            "current_plan": [],
+            "program_counter": 0,
+            "goal_completed": False,
+            "msgs": [],
+        }
+
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
         loaded_state = self.branch_manager.load_state(commit_hash)
