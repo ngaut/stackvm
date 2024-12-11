@@ -201,10 +201,47 @@ class Task:
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
-    def execute_with_plan(self, plan):
+    def re_execute(
+        self,
+        commit_hash: Optional[str] = None,
+        plan: Optional[List[Dict[str, Any]]] = None,
+    ):
         with self._lock:
+            branch_name = f"re_execute_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             try:
-                self.vm.set_plan(plan)
+                if commit_hash:
+                    self.vm.set_state(commit_hash)
+                    if not self.branch_manager.checkout_branch_from_commit(
+                        branch_name, commit_hash
+                    ) or not self.branch_manager.checkout_branch(branch_name):
+                        raise ValueError(
+                            f"Failed to create or checkout branch '{branch_name}'"
+                        )
+                else:
+                    hashes = self.branch_manager.get_commit_hashes()
+                    if len(hashes) <= 1:
+                        raise ValueError(
+                            "Please choose the existing branch with plan to re-execute"
+                        )
+
+                    earliest_commit_hash = hashes[-1]
+                    print("earliest_commit_hash", earliest_commit_hash)
+
+                    if not plan:
+                        plan = self.vm.state.get("current_plan", None)
+                        if not plan:
+                            raise ValueError("Failed to get plan")
+
+                    if not self.branch_manager.checkout_branch_from_commit(
+                        branch_name, earliest_commit_hash
+                    ) or not self.branch_manager.checkout_branch(branch_name):
+                        raise ValueError(
+                            f"Failed to create or checkout branch '{branch_name}'"
+                        )
+
+                    self.vm.clear_state()
+                    self.vm.set_plan(plan)
+
                 self._run()
             except Exception as e:
                 self.task_orm.status = "failed"
@@ -376,7 +413,9 @@ class Task:
                 )
 
                 self.vm.set_state(previous_commit_hash)
-                branch_name = f"update_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                branch_name = (
+                    f"optimize_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                )
 
                 if self.branch_manager.checkout_branch_from_commit(
                     branch_name, previous_commit_hash

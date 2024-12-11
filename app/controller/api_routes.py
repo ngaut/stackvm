@@ -287,10 +287,15 @@ def optimize_step(task_id):
         return log_and_return_error("Failed to optimize step.", "error", 500)
 
 
-@api_blueprint.route("/tasks/<task_id>/execute", methods=["POST"])
+@api_blueprint.route("/tasks/<task_id>/re_execute", methods=["POST"])
 def re_execute_task(task_id):
     current_app.logger.info(f"Re-execute task: {task_id}")
-    new_task_id = None
+
+    data = request.json
+    commit_hash = data.get("commit_hash", None) if data else None
+    plan = data.get("plan", None) if data else None
+
+    task = None
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)
         if not task:
@@ -298,55 +303,34 @@ def re_execute_task(task_id):
                 f"Task with ID {task_id} not found.", "error", 404
             )
 
-        plan = task.vm.state["current_plan"]
-        if plan is None:
-            return log_and_return_error(
-                f"No plan found for task  {task_id}.", "error", 404
-            )
-
-        new_task = ts.create_task(
-            session, task.task_orm.goal, datetime.now().strftime("%Y%m%d%H%M%S")
-        )
-        if new_task is None:
-            return log_and_return_error(
-                f"Failed to create new task for task {task_id}.", "error", 500
-            )
-        new_task_id = None
-
     try:
-        current_app.logger.info(
-            f"re-execute task {task_id}, the new task id {new_task_id}"
-        )
-        new_task.execute_with_plan(plan)
+        current_app.logger.info(f"re-execute task {task_id}")
+        task.re_execute(commit_hash, plan)
         final_answer = None
-        if new_task.vm.state.get("goal_completed"):
-            current_app.logger.info(
-                f"re-execute task {task_id}, goal completed for re-execute task the new task id {new_task_id}"
-            )
+        if task.vm.state.get("goal_completed"):
+            current_app.logger.info(f"re-execute task {task_id}, goal completed")
             # Fetch the final_answer
-            final_answer = new_task.vm.get_variable("final_answer")
+            final_answer = task.vm.get_variable("final_answer")
             if final_answer:
                 return jsonify(final_answer), 200
             else:
                 return (
-                    jsonify(
-                        f"re-execute task {task_id}, not found final answer for the new task id {new_task_id}"
-                    ),
+                    jsonify(f"re-execute task {task_id}, not found final answer"),
                     200,
                 )
 
         return (
-            jsonify(
-                f"re-execute task {task_id}, goal not completed for the new task id {new_task_id}: {new_task.task_orm}"
-            ),
+            jsonify(f"re-execute task {task_id}, goal not completed: {task.task_orm}"),
             500,
         )
     except Exception as e:
         current_app.logger.error(
-            f"Failed to re-execute task {task_id}, the new task id {new_task_id}: {str(e)}",
+            f"Failed to re-execute task {task_id}: {str(e)}",
             exc_info=True,
         )
-        return log_and_return_error("Failed to re-exeucte task.", "error", 500)
+        return log_and_return_error(
+            f"Failed to re-exeucte task {task_id}.", "error", 500
+        )
 
 
 @api_blueprint.route("/download/<filename>", methods=["GET"])
