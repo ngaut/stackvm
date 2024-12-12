@@ -6,9 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, List
 
 from app.instructions import InstructionHandlers
-from app.services import StepType
-from app.services import GitManager, VariableManager, MySQLBranchManager
+from app.services.utils import StepType
 from app.services.step import Step, StepStatus
+from app.services.branch_manager import GitManager
+from app.services.variable_manager import VariableManager
+from app.services.mysql_branch_manager import MySQLBranchManager
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
