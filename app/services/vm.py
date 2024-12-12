@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, List
 
 from app.instructions import InstructionHandlers
 from app.services import StepType
-from app.services import GitManager, VariableManager
+from app.services import GitManager, VariableManager, MySQLBranchManager
 from app.services.step import Step, StepStatus
 
 # Constants
@@ -19,7 +19,7 @@ class PlanExecutionVM:
     Virtual Machine for executing plans.
     """
 
-    def __init__(self, repo_path: str, llm_interface: Any = None, max_workers=3):
+    def __init__(self, task_id: Optional[str]=None, repo_name: Optional[str]=None, llm_interface: Any = None, max_workers=3):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
             "errors": [],
@@ -32,13 +32,15 @@ class PlanExecutionVM:
 
         self.logger = self._setup_logger()
         self.llm_interface = llm_interface
-        self.repo_path = repo_path
-        self.branch_manager = GitManager(self.repo_path)
+        if task_id:
+            self.branch_manager = MySQLBranchManager(task_id)
+        elif repo_name:
+            self.repo_name = repo_name
+            self.branch_manager = GitManager(self.repo_name)
+            os.chdir(self.repo_name)
 
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.steps: Dict[str, Step] = {}
-
-        os.chdir(self.repo_path)
 
         self.handlers_registered = False
         self.register_handlers()
