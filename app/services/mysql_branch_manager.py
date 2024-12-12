@@ -14,17 +14,18 @@ from app.services.utils import StepType, parse_commit_message
 
 logger = logging.getLogger(__name__)
 
+
 class MySQLBranchManager(BranchManager):
     def __init__(self, task_id: str):
         """Initialize MySQL branch manager for a specific task."""
         self.task_id = task_id
         self._db_session = None
-        
+
         # In-memory state
         self._current_branch_name = None
         self._current_commit_hash = None
         self.current_state = {}
-        
+
         # Initialize to main branch if it exists, or create it
         main_branch = self._get_branch("main")
         if main_branch:
@@ -61,35 +62,31 @@ class MySQLBranchManager(BranchManager):
         """Helper method to get a commit by hash."""
         return (
             self._session.query(Commit)
-            .filter(
-                Commit.task_id == self.task_id,
-                Commit.commit_hash == commit_hash
-            )
+            .filter(Commit.task_id == self.task_id, Commit.commit_hash == commit_hash)
             .first()
         )
 
     def list_branches(self) -> List[Dict[str, Any]]:
         """List all branches with their latest commits."""
         branches = (
-            self._session.query(Branch)
-            .filter(Branch.task_id == self.task_id)
-            .all()
+            self._session.query(Branch).filter(Branch.task_id == self.task_id).all()
         )
-        
+
         branch_data = []
         for branch in branches:
-            branch_data.append({
-                "name": branch.name,
-                "last_commit_date": branch.head_commit.committed_at.isoformat(),
-                "last_commit_hash": branch.head_commit_hash,
-                "last_commit_message": branch.head_commit.message.get("description", ""),
-                "is_active": branch.name == self._current_branch_name,
-            })
-        
+            branch_data.append(
+                {
+                    "name": branch.name,
+                    "last_commit_date": branch.head_commit.committed_at.isoformat(),
+                    "last_commit_hash": branch.head_commit_hash,
+                    "last_commit_message": branch.head_commit.message,
+                    "is_active": branch.name == self._current_branch_name,
+                }
+            )
+
         # Sort branches by active status and commit date
         branch_data.sort(
-            key=lambda x: (-x["is_active"], x["last_commit_date"]), 
-            reverse=True
+            key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
         )
         return branch_data
 
@@ -103,7 +100,10 @@ class MySQLBranchManager(BranchManager):
             # If this is the first branch (main), create initial commit
             if not self._current_commit_hash:
                 if branch_name != "main":
-                    raise ValueError("Main branch is not created, unexpected branch name: %s", branch_name)
+                    raise ValueError(
+                        "Main branch is not created, unexpected branch name: %s",
+                        branch_name,
+                    )
 
                 initial_commit = Commit(
                     commit_hash=str(uuid.uuid4().hex),
@@ -140,7 +140,7 @@ class MySQLBranchManager(BranchManager):
         if not branch:
             logger.error("Branch %s does not exist", branch_name)
             return False
-        
+
         self._current_branch_name = branch_name
         self._current_commit_hash = branch.head_commit_hash
         self.current_state = branch.head_commit.vm_state
@@ -174,7 +174,9 @@ class MySQLBranchManager(BranchManager):
         except Exception as e:
             logger.error(
                 "Failed to create branch %s from commit %s: %s",
-                branch_name, commit_hash, str(e)
+                branch_name,
+                commit_hash,
+                str(e),
             )
             self._session.rollback()
             return False
@@ -191,16 +193,13 @@ class MySQLBranchManager(BranchManager):
                 # Find another branch to switch to
                 other_branch = (
                     self._session.query(Branch)
-                    .filter(
-                        Branch.task_id == self.task_id,
-                        Branch.name != branch_name
-                    )
+                    .filter(Branch.task_id == self.task_id, Branch.name != branch_name)
                     .first()
                 )
-                
+
                 if not other_branch:
                     raise ValueError(f"Cannot delete the only branch {branch_name}")
-                
+
                 # Update in-memory state
                 self._current_branch_name = other_branch.name
                 self._current_commit_hash = other_branch.head_commit_hash
@@ -237,29 +236,29 @@ class MySQLBranchManager(BranchManager):
 
         commits = []
         current_hash = branch.head_commit_hash
-        
+
         while current_hash:
             commit = self._get_commit(current_hash)
             if not commit:
                 break
-                
-            seq_no, title, details, commit_type = parse_commit_message(
-                commit.message.get("description", "")
+
+            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+
+            commits.append(
+                {
+                    "time": commit.committed_at.isoformat(),
+                    "title": title,
+                    "details": details,
+                    "commit_hash": commit.commit_hash,
+                    "seq_no": seq_no,
+                    "vm_state": commit.vm_state,
+                    "commit_type": commit_type,
+                    "message": commit.message,
+                }
             )
-            
-            commits.append({
-                "time": commit.committed_at.isoformat(),
-                "title": title,
-                "details": details,
-                "commit_hash": commit.commit_hash,
-                "seq_no": seq_no,
-                "vm_state": commit.vm_state,
-                "commit_type": commit_type,
-                "message": commit.message,
-            })
-            
+
             current_hash = commit.parent_hash
-            
+
         return commits
 
     def get_commit(self, commit_hash: str) -> Optional[Dict[str, Any]]:
@@ -271,7 +270,7 @@ class MySQLBranchManager(BranchManager):
         seq_no, title, details, commit_type = parse_commit_message(
             commit.message.get("description", "")
         )
-        
+
         return {
             "time": commit.committed_at.isoformat(),
             "title": title,
@@ -291,7 +290,7 @@ class MySQLBranchManager(BranchManager):
 
             # Generate commit hash
             commit_hash = str(uuid.uuid4().hex)
-            
+
             # Create new commit
             new_commit = Commit(
                 commit_hash=commit_hash,
@@ -300,20 +299,20 @@ class MySQLBranchManager(BranchManager):
                 message=commit_info,
                 vm_state=self.current_state,
             )
-            
+
             self._session.add(new_commit)
-            
+
             # Update branch pointer
             branch = self._get_branch(self._current_branch_name)
             branch.head_commit_hash = commit_hash
 
             self._session.add(branch)
-            
+
             self._session.commit()
-            
+
             # Update current commit hash
             self._current_commit_hash = commit_hash
-            
+
             return commit_hash
         except Exception as e:
             logger.error("Error committing changes: %s", str(e))
@@ -334,42 +333,42 @@ class MySQLBranchManager(BranchManager):
         commit = self._get_commit(commit_hash)
         if not commit:
             return ""
-        
+
         if not commit.parent_hash:
             return "Initial commit:\n" + json.dumps(commit.vm_state, indent=2)
-        
+
         parent = self._get_commit(commit.parent_hash)
         if not parent:
             return ""
-        
+
         # Use DeepDiff for detailed comparison
         diff = DeepDiff(parent.vm_state, commit.vm_state, verbose_level=2)
-        
+
         # Format the diff in a git-like style
         formatted_diff = []
-        
-        if 'dictionary_item_added' in diff:
+
+        if "dictionary_item_added" in diff:
             formatted_diff.append("Added:")
-            for item in diff['dictionary_item_added']:
+            for item in diff["dictionary_item_added"]:
                 path = item.replace("root", "")
                 value = eval(f"commit.vm_state{path}")
                 formatted_diff.append(f"  + {path}: {json.dumps(value)}")
-        
-        if 'dictionary_item_removed' in diff:
+
+        if "dictionary_item_removed" in diff:
             formatted_diff.append("\nRemoved:")
-            for item in diff['dictionary_item_removed']:
+            for item in diff["dictionary_item_removed"]:
                 path = item.replace("root", "")
                 value = eval(f"parent.vm_state{path}")
                 formatted_diff.append(f"  - {path}: {json.dumps(value)}")
-        
-        if 'values_changed' in diff:
+
+        if "values_changed" in diff:
             formatted_diff.append("\nModified:")
-            for path, change in diff['values_changed'].items():
+            for path, change in diff["values_changed"].items():
                 path = path.replace("root", "")
                 formatted_diff.append(f"  ~ {path}:")
                 formatted_diff.append(f"    - {json.dumps(change['old_value'])}")
                 formatted_diff.append(f"    + {json.dumps(change['new_value'])}")
-        
+
         return "\n".join(formatted_diff)
 
     def __del__(self):

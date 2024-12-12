@@ -36,6 +36,14 @@ class Task(Base):
     label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
     label = relationship("Label")
 
+    # Relationships
+    commits = relationship(
+        "Commit", back_populates="task", cascade="all, delete-orphan"
+    )
+    branches = relationship(
+        "Branch", back_populates="task", cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"<Task(goal={self.goal}, status={self.status})>"
 

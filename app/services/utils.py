@@ -74,7 +74,10 @@ def parse_commit_message(message: str) -> tuple:
     """Parse a commit message and return its components."""
     seq_no = "Unknown"
     try:
-        commit_info = json.loads(message)
+        if isinstance(message, dict):
+            commit_info = message
+        else:
+            commit_info = json.loads(message)
         title = commit_info.get("description", "No description")
         details = {
             "input_parameters": commit_info.get("input_parameters", {}),
