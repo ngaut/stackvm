@@ -234,7 +234,7 @@ class Task:
 
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, earliest_commit_hash
-                    ) or not self.branch_manager.checkout_branch(branch_name):
+                    ):
                         raise ValueError(
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
@@ -419,7 +419,7 @@ class Task:
 
                 if self.branch_manager.checkout_branch_from_commit(
                     branch_name, previous_commit_hash
-                ) and self.branch_manager.checkout_branch(branch_name):
+                ):
                     self.vm.state["current_plan"][seq_no] = updated_step
                     self.vm.state["program_counter"] = seq_no
                     self.vm.recalculate_variable_refs()
