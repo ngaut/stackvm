@@ -35,7 +35,12 @@ class Task:
         self.task_orm = task_orm
         if task_orm.status == "deleted":
             raise ValueError(f"Task {task_orm.id} is deleted.")
-        self.vm = PlanExecutionVM(task_orm.repo_path, llm_interface)
+        if task_orm.repo_path != "":
+            self.vm = PlanExecutionVM(
+                repo_name=task_orm.repo_path, llm_interface=llm_interface
+            )
+        else:
+            self.vm = PlanExecutionVM(task_id=task_orm.id, llm_interface=llm_interface)
         self.vm.set_goal(task_orm.goal)
         self._lock = threading.RLock()
 
@@ -234,7 +239,7 @@ class Task:
 
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, earliest_commit_hash
-                    ) or not self.branch_manager.checkout_branch(branch_name):
+                    ):
                         raise ValueError(
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
@@ -419,7 +424,7 @@ class Task:
 
                 if self.branch_manager.checkout_branch_from_commit(
                     branch_name, previous_commit_hash
-                ) and self.branch_manager.checkout_branch(branch_name):
+                ):
                     self.vm.state["current_plan"][seq_no] = updated_step
                     self.vm.state["program_counter"] = seq_no
                     self.vm.recalculate_variable_refs()
@@ -502,11 +507,10 @@ class TaskService:
         self, session: Session, goal: str, repo_name: str, meta: Optional[Dict] = None
     ) -> Task:
         try:
-            repo_path = os.path.join(GIT_REPO_PATH, repo_name)
             task_orm = TaskORM(
                 id=uuid.uuid4(),
                 goal=goal,
-                repo_path=repo_path,
+                repo_path="",
                 status="pending",
                 meta=meta,
             )
@@ -528,7 +532,7 @@ class TaskService:
             )
             if task_orm:
                 logger.info(f"Retrieved task with ID {task_id}")
-                if not os.path.exists(task_orm.repo_path):
+                if task_orm.repo_path != "" and not os.path.exists(task_orm.repo_path):
                     task_orm.status = "deleted"
                     session.add(task_orm)
                     session.commit()

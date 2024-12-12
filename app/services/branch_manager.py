@@ -177,6 +177,8 @@ class GitManager(BranchManager):
             # Create a new branch from the specified commit hash
             self.repo.git.branch(branch_name, commit_hash)
             logger.info(f"Created branch {branch_name} from commit {commit_hash}")
+            self.repo.git.checkout(branch_name)
+            logger.info("Checked out branch %s.", branch_name)
             return True
         except GitCommandError as e:
             logger.error(
