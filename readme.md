@@ -63,7 +63,7 @@ make migrate
 python main.py --server
 ```
 
-2. Access the web interface at [http://127.0.0.1:5000/](http://127.0.0.1:5000/)
+2. Access the web interface using [stackvm-ui](https://github.com/634750802/stackvm-ui)
 
 3. Run a specific task:
 ```bash
@@ -117,7 +117,8 @@ StackVM now supports local Language Models through Ollama integration:
 - `app/controller/task.py`: Manages task-related operations within the VM.
 - `app/services/prompts.py`: Contains functions to generate prompts for updating VM execution steps.
 - `app/services/utils.py`: Utility functions for state management and commit message parsing.
-- `app/services/branch_manager.py`: Manages Git repository initialization and operations.
+- `app/services/branch_manager.py`: Manage branches for plan execution using Git.
+- `app/services/mysql_branch_manager.py`: Manage branches for plan execution using TiDB.
 - `app/services/llm_interface.py`: Interface for interacting with the OpenAI language model.
 - `app/services/variable_manager.py`: Manages variable interpolation and references within the VM.
 - `app/services/vm.py`: Implements the `PlanExecutionVM` class for executing plans.
