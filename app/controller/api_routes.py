@@ -26,7 +26,6 @@ from flask_cors import CORS
 from app.database import SessionLocal
 from app.config.settings import (
     BACKEND_CORS_ORIGINS,
-    GIT_REPO_PATH,
     GENERATED_FILES_DIR,
     TASK_QUEUE_WORKERS,
 )
@@ -136,7 +135,7 @@ def code_diff(task_id, commit_hash):
             return jsonify({"diff": diff})
         except Exception as e:
             return log_and_return_error(
-                f"Error generating diff for commit {commit_hash} in repository '{task.repo_path}': {str(e)}",
+                f"Error generating diff for commit {commit_hash} for task '{task_id}': {str(e)}",
                 "error",
                 404,
             )
@@ -379,7 +378,11 @@ def get_tasks():
                     "created_at": task.created_at,
                     "updated_at": task.updated_at,
                     "logs": task.logs,
-                    "repo_path": task.repo_path,
+                    "repo_path": (
+                        "change storage from git to tidb"
+                        if task.repo_path == ""
+                        else task.repo_path
+                    ),
                     "tenant_id": task.tenant_id,
                     "project_id": task.project_id,
                     "best_plan": task.best_plan,
@@ -408,7 +411,7 @@ def get_branches(task_id):
             return jsonify(branch_data)
         except GitCommandError as e:
             return log_and_return_error(
-                f"Error fetching branches for repository '{task.repo_path}': {str(e)}",
+                f"Error fetching branches for task '{task_id}': {str(e)}",
                 "error",
                 500,
             )
@@ -443,7 +446,7 @@ def set_branch_route(task_id):
             return jsonify(
                 {
                     "success": True,
-                    "message": f"Switched to branch {branch_name} in repository '{task.repo_path}'",
+                    "message": f"Switched to branch {branch_name} for task '{task_id}'",
                 }
             )
         except GitCommandError as e:
@@ -477,7 +480,7 @@ def delete_branch_route(task_id, branch_name):
             return jsonify(
                 {
                     "success": True,
-                    "message": f"Branch {branch_name} deleted successfully in repository '{task.repo_path}'",
+                    "message": f"Branch {branch_name} deleted successfully for task '{task_id}'",
                     "new_active_branch": task.get_current_branch(),
                 }
             )

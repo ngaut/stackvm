@@ -19,7 +19,13 @@ class PlanExecutionVM:
     Virtual Machine for executing plans.
     """
 
-    def __init__(self, task_id: Optional[str]=None, repo_name: Optional[str]=None, llm_interface: Any = None, max_workers=3):
+    def __init__(
+        self,
+        task_id: Optional[str] = None,
+        repo_name: Optional[str] = None,
+        llm_interface: Any = None,
+        max_workers=3,
+    ):
         self.variable_manager = VariableManager()
         self.state: Dict[str, Any] = {
             "errors": [],
