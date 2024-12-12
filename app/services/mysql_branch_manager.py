@@ -26,13 +26,16 @@ class MySQLBranchManager(BranchManager):
         self.current_state = {}
 
         # Initialize to main branch if it exists, or create it
-        main_branch = self._get_branch("main")
-        if main_branch:
-            self._current_branch_name = "main"
-            self._current_commit_hash = main_branch.head_commit_hash
-            self.current_state = main_branch.head_commit.vm_state
-        else:
-            self.create_branch("main")
+        with self.get_session() as session:
+            main_branch = self._get_branch(session, "main")
+            if main_branch:
+                self._current_branch_name = "main"
+                self._current_commit_hash = main_branch.head_commit_hash
+                self.current_state = main_branch.head_commit.vm_state
+                return
+
+        # create main branch if it doesn't exist
+        self.create_branch("main")
 
     @contextmanager
     def get_session(self):
@@ -104,7 +107,7 @@ class MySQLBranchManager(BranchManager):
                     initial_commit = Commit(
                         commit_hash=str(uuid.uuid4().hex),
                         task_id=self.task_id,
-                        message={"type": "init", "description": "Initial commit"},
+                        message={"description": "Initial commit"},
                         vm_state={},
                     )
                     session.add(initial_commit)
