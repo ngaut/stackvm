@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 Scoped_Session = scoped_session(SessionLocal)
 
+
 class MySQLBranchManager(BranchManager):
     def __init__(self, task_id: str):
         """Initialize MySQL branch manager for a specific task."""
