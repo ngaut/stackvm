@@ -6,7 +6,6 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
-from cachetools import LRUCache
 
 from app.models import Task as TaskORM
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -29,9 +28,6 @@ from .simple_cache import initialize_cache
 logger = logging.getLogger(__name__)
 classifier = LabelClassifier()
 simple_semantic_cache = initialize_cache()
-
-# Cache for task objects
-TASK_CACHE_MAXSIZE = 1000
 
 
 class Task:
@@ -506,8 +502,6 @@ class Task:
 class TaskService:
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
-        self.tasks_cache = LRUCache(maxsize=TASK_CACHE_MAXSIZE)
-        self.cache_lock = threading.RLock()
 
     def create_task(
         self, session: Session, goal: str, repo_name: str, meta: Optional[Dict] = None
@@ -524,21 +518,12 @@ class TaskService:
             session.commit()
             session.refresh(task_orm)
             logger.info(f"Created new task with ID {task_orm.id}")
-            task = Task(task_orm, self.llm_interface)
-            with self.cache_lock:
-                self.tasks_cache[task.id] = task
-            return task
+            return Task(task_orm, self.llm_interface)
         except Exception as e:
             logger.error(f"Failed to create task: {str(e)}", exc_info=True)
             raise e
 
     def get_task(self, session: Session, task_id: uuid.UUID) -> Optional[Task]:
-        with self.cache_lock:
-            task = self.tasks_cache.get(task_id)
-            if task:
-                logger.info(f"Retrieved task {task_id} from cache.")
-                return task
-
         try:
             task_orm = (
                 session.query(TaskORM)
@@ -554,10 +539,7 @@ class TaskService:
                     logger.warning(f"Task with ID {task_id} is deleted.")
                     return None
 
-                task = Task(task_orm, self.llm_interface)
-                with self.cache_lock:
-                    self.tasks_cache[task.id] = task
-                return task
+                return Task(task_orm, self.llm_interface)
             else:
                 logger.warning(f"Task with ID {task_id} not found.")
                 return None
