@@ -38,57 +38,6 @@ class MySQLBranchManager(BranchManager):
         # create main branch if it doesn't exist
         self.create_branch("main")
 
-    @contextmanager
-    def get_session(self):
-        """Provide a transactional scope around a series of operations."""
-        session = Scoped_Session()
-        try:
-            yield session
-        finally:
-            session.close()
-            Scoped_Session.remove()  # Important! Remove session from registry
-
-    def _get_branch(self, session: Session, branch_name: str) -> Optional[Branch]:
-        """Helper method to get a branch by name."""
-        return (
-            session.query(Branch)
-            .filter(Branch.task_id == self.task_id, Branch.name == branch_name)
-            .first()
-        )
-
-    def _get_commit(self, session: Session, commit_hash: str) -> Optional[Commit]:
-        """Helper method to get a commit by hash."""
-        return (
-            session.query(Commit)
-            .filter(Commit.task_id == self.task_id, Commit.commit_hash == commit_hash)
-            .first()
-        )
-
-    def list_branches(self) -> List[Dict[str, Any]]:
-        """List all branches with their latest commits."""
-        with self.get_session() as session:
-            branches = (
-                session.query(Branch).filter(Branch.task_id == self.task_id).all()
-            )
-
-            branch_data = []
-            for branch in branches:
-                branch_data.append(
-                    {
-                        "name": branch.name,
-                        "last_commit_date": branch.head_commit.committed_at.isoformat(),
-                        "last_commit_hash": branch.head_commit_hash,
-                        "last_commit_message": branch.head_commit.message,
-                        "is_active": branch.name == self._current_branch_name,
-                    }
-                )
-
-            # Sort branches by active status and commit date
-            branch_data.sort(
-                key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
-            )
-            return branch_data
-
     def create_branch(self, branch_name: str) -> bool:
         """Create a new branch."""
         try:
@@ -134,6 +83,32 @@ class MySQLBranchManager(BranchManager):
             session.rollback()
             return False
 
+    @contextmanager
+    def get_session(self):
+        """Provide a transactional scope around a series of operations."""
+        session = Scoped_Session()
+        try:
+            yield session
+        finally:
+            session.close()
+            Scoped_Session.remove()  # Important! Remove session from registry
+
+    def _get_branch(self, session: Session, branch_name: str) -> Optional[Branch]:
+        """Helper method to get a branch by name."""
+        return (
+            session.query(Branch)
+            .filter(Branch.task_id == self.task_id, Branch.name == branch_name)
+            .first()
+        )
+
+    def _get_commit(self, session: Session, commit_hash: str) -> Optional[Commit]:
+        """Helper method to get a commit by hash."""
+        return (
+            session.query(Commit)
+            .filter(Commit.task_id == self.task_id, Commit.commit_hash == commit_hash)
+            .first()
+        )
+
     def _checkout_branch(self, session: Session, branch_name: str) -> bool:
         """Switch to the specified branch."""
         branch = self._get_branch(session, branch_name)
@@ -145,6 +120,31 @@ class MySQLBranchManager(BranchManager):
         self._current_commit_hash = branch.head_commit_hash
         self.current_state = branch.head_commit.vm_state
         return True
+
+    def list_branches(self) -> List[Dict[str, Any]]:
+        """List all branches with their latest commits."""
+        with self.get_session() as session:
+            branches = (
+                session.query(Branch).filter(Branch.task_id == self.task_id).all()
+            )
+
+            branch_data = []
+            for branch in branches:
+                branch_data.append(
+                    {
+                        "name": branch.name,
+                        "last_commit_date": branch.head_commit.committed_at.isoformat(),
+                        "last_commit_hash": branch.head_commit_hash,
+                        "last_commit_message": branch.head_commit.message,
+                        "is_active": branch.name == self._current_branch_name,
+                    }
+                )
+
+            # Sort branches by active status and commit date
+            branch_data.sort(
+                key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
+            )
+            return branch_data
 
     def checkout_branch(self, branch_name: str) -> bool:
         """Switch to the specified branch."""
