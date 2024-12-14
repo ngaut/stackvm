@@ -19,10 +19,6 @@ class BranchManager(ABC):
         """List all branches."""
 
     @abstractmethod
-    def create_branch(self, branch_name: str) -> bool:
-        """Create a new branch."""
-
-    @abstractmethod
     def checkout_branch(self, branch_name: str) -> bool:
         """Switch to the specified branch."""
 
@@ -124,14 +120,6 @@ class GitManager(BranchManager):
             key=lambda x: (-x["is_active"], x["last_commit_date"]), reverse=True
         )
         return branch_data
-
-    def create_branch(self, branch_name: str) -> bool:
-        try:
-            self.repo.create_head(branch_name)
-            return True
-        except GitCommandError as e:
-            logger.error("Failed to create branch %s: %s", branch_name, str(e))
-            return False
 
     def checkout_branch(self, branch_name):
         try:

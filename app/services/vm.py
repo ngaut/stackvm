@@ -10,7 +10,8 @@ from app.services.utils import StepType
 from app.services.step import Step, StepStatus
 from app.services.branch_manager import GitManager
 from app.services.variable_manager import VariableManager
-from app.services.mysql_branch_manager import MySQLBranchManager
+from app.services.branch_manager import BranchManager
+from app.services.llm_interface import LLMInterface
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
@@ -23,9 +24,9 @@ class PlanExecutionVM:
 
     def __init__(
         self,
-        task_id: Optional[str] = None,
-        repo_name: Optional[str] = None,
-        llm_interface: Any = None,
+        goal: str,
+        branch_manager: BranchManager,
+        llm_interface: LLMInterface,
         max_workers=3,
     ):
         self.variable_manager = VariableManager()
@@ -40,19 +41,18 @@ class PlanExecutionVM:
 
         self.logger = self._setup_logger()
         self.llm_interface = llm_interface
-        if task_id:
-            self.branch_manager = MySQLBranchManager(task_id)
-        elif repo_name:
-            self.repo_name = repo_name
-            self.branch_manager = GitManager(self.repo_name)
-            os.chdir(self.repo_name)
+        self.branch_manager = branch_manager
 
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.steps: Dict[str, Step] = {}
 
         self.handlers_registered = False
         self.register_handlers()
-        self.set_state(self.branch_manager.get_current_commit_hash())
+        if not self.set_state(self.branch_manager.get_current_commit_hash()):
+            raise ValueError("Failed to load state from current commit.")
+
+        if self.state.get("goal", None) is None:
+            self.state["goal"] = goal
 
     def _setup_logger(self) -> logging.Logger:
         """Set up and return a logger for the class."""
@@ -92,12 +92,6 @@ class PlanExecutionVM:
             self.instruction_handlers, f"{instruction_name}_handler", handler_method
         )
         self.logger.info("Registered handler for instruction: %s", instruction_name)
-
-    def set_goal(self, goal: str) -> None:
-        """Set the goal for the VM and save the state."""
-        self.state["goal"] = goal
-        self.logger.info("Goal set: %s", goal)
-        self.save_state()
 
     def set_plan(self, plan: List[Dict[str, Any]]) -> None:
         """Set the plan for the VM and save the state."""
@@ -397,16 +391,19 @@ class PlanExecutionVM:
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
         loaded_state = self.branch_manager.load_state(commit_hash)
-        if loaded_state:
-            self.state = loaded_state
-            self.variable_manager.set_all_variables(
-                loaded_state.get("variables", {}),
-                loaded_state.get("variables_refs", {}),
-            )
+        if loaded_state is not None:
+            if loaded_state:
+                self.state = loaded_state
+                self.variable_manager.set_all_variables(
+                    loaded_state.get("variables", {}),
+                    loaded_state.get("variables_refs", {}),
+                )
 
-            self.logger.info("State loaded from commit %s", commit_hash)
+                self.logger.info("State loaded from commit %s", commit_hash)
+            return True
         else:
-            self.logger.error("Failed to load state from commit %s", commit_hash)
+            self.logger.warning("Not found state from commit %s", commit_hash)
+            return False
 
     def save_state(self):
         state_data = self.state.copy()

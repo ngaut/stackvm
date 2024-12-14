@@ -15,11 +15,13 @@ from app.services import (
     get_step_update_prompt,
     parse_step,
     StepType,
+    MySQLBranchManager,
+    GitManager,
 )
 
 from app.database import SessionLocal
 from app.instructions import global_tools_hub
-from app.config.settings import VM_SPEC_CONTENT, GIT_REPO_PATH
+from app.config.settings import VM_SPEC_CONTENT
 
 from .plan import generate_updated_plan, should_update_plan, generate_plan
 from .label_classifier import LabelClassifier
@@ -35,14 +37,15 @@ class Task:
         self.task_orm = task_orm
         if task_orm.status == "deleted":
             raise ValueError(f"Task {task_orm.id} is deleted.")
+
         if task_orm.repo_path != "":
-            self.vm = PlanExecutionVM(
-                repo_name=task_orm.repo_path, llm_interface=llm_interface
-            )
+            self.branch_manager = GitManager(task_orm.repo_path)
+            os.chdir(self.repo_name)
         else:
-            self.vm = PlanExecutionVM(task_id=task_orm.id, llm_interface=llm_interface)
-        self.vm.set_goal(task_orm.goal)
-        self._lock = threading.RLock()
+            self.branch_manager = MySQLBranchManager(task_orm.id)
+
+        self.llm_interface = llm_interface
+        self._lock = threading.Lock()
 
     @property
     def id(self):
@@ -54,30 +57,17 @@ class Task:
         """Return the repository path of the task."""
         return self.task_orm.repo_path
 
-    @property
-    def branch_manager(self):
-        """Return the repository of the task."""
-        return self.vm.branch_manager
-
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
-
-    def create_branch(self, branch_name: str, commit_hash: str):
-        with self._lock:
-            return self.vm.branch_manager.checkout_branch_from_commit(
-                branch_name, commit_hash
-            )
 
     def get_branches(self):
         return self.branch_manager.list_branches()
 
     def set_branch(self, branch_name: str):
-        with self._lock:
-            self.branch_manager.checkout_branch(branch_name)
+        self.branch_manager.checkout_branch(branch_name)
 
     def delete_branch(self, branch_name: str):
-        with self._lock:
-            self.branch_manager.delete_branch(branch_name)
+        self.branch_manager.delete_branch(branch_name)
 
     def get_execution_details(
         self, branch_name: Optional[str] = None, commit_hash: Optional[str] = None
@@ -154,33 +144,30 @@ class Task:
                 goal = f"{goal} {response_format}"
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
-                self.vm.llm_interface,
+                self.llm_interface,
                 goal,
                 example=example_str,
                 best_practices=best_pratices,
             )
 
-        if plan:
-            self.vm.set_plan(plan)
-
         return plan
 
-    def _run(self):
+    def _run(self, vm: PlanExecutionVM):
         """Execute the plan for the task."""
         while True:
-            execution_result = self.vm.step()
+            execution_result = vm.step()
             if execution_result.get("success") is not True:
                 raise ValueError(
                     f"Failed to execute step:{execution_result.get('error')}"
                 )
 
-            if self.vm.state.get("goal_completed"):
+            if vm.state.get("goal_completed"):
                 logger.info("Goal completed during plan execution.")
                 break
 
-        if self.vm.state.get("goal_completed"):
+        if vm.state.get("goal_completed"):
             self.mark_as_completed()
-            final_answer = self.vm.get_variable("final_answer")
+            final_answer = vm.get_variable("final_answer")
             if final_answer:
                 logger.info("final_answer: %s", final_answer)
             else:
@@ -188,7 +175,7 @@ class Task:
         else:
             raise ValueError(
                 "Plan execution failed or did not complete: %s",
-                self.vm.state.get("errors"),
+                vm.state.get("errors"),
             )
 
     def execute(self):
@@ -198,8 +185,12 @@ class Task:
                 if not plan:
                     raise ValueError("Failed to generate plan")
 
+                vm = PlanExecutionVM(
+                    self.task_orm.goal, self.branch_manager, self.llm_interface
+                )
+                vm.set_plan(plan)
                 logger.info("Generated Plan:%s", json.dumps(plan, indent=2))
-                self._run()
+                self._run(vm)
             except Exception as e:
                 self.task_orm.status = "failed"
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
@@ -213,15 +204,19 @@ class Task:
     ):
         with self._lock:
             branch_name = f"re_execute_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            vm = None
             try:
                 if commit_hash:
-                    self.vm.set_state(commit_hash)
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, commit_hash
                     ) or not self.branch_manager.checkout_branch(branch_name):
                         raise ValueError(
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
+
+                    vm = PlanExecutionVM(
+                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                    )
                 else:
                     hashes = self.branch_manager.get_commit_hashes()
                     if len(hashes) <= 1:
@@ -230,12 +225,22 @@ class Task:
                         )
 
                     earliest_commit_hash = hashes[-1]
-                    print("earliest_commit_hash", earliest_commit_hash)
+                    logger.info(
+                        "re-execute from earliest commit hash %s", earliest_commit_hash
+                    )
 
                     if not plan:
-                        plan = self.vm.state.get("current_plan", None)
+                        details = self.branch_manager.get_commit(hashes[0])
+                        if details is None:
+                            raise ValueError(
+                                "Not found state from commit hash %s", hashes[0]
+                            )
+
+                        plan = details.get("vm_state", {}).get("current_plan", None)
                         if not plan:
-                            raise ValueError("Failed to get plan")
+                            raise ValueError(
+                                "Not found plan from commit hash %s", hashes[0]
+                            )
 
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, earliest_commit_hash
@@ -244,27 +249,35 @@ class Task:
                             f"Failed to create or checkout branch '{branch_name}'"
                         )
 
-                    self.vm.clear_state()
-                    self.vm.set_plan(plan)
+                    vm = PlanExecutionVM(
+                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                    )
+                    vm.set_plan(plan)
 
-                self._run()
+                self._run(vm)
             except Exception as e:
                 self.task_orm.status = "failed"
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 self.save()
                 raise ValueError(self.task_orm.logs)
 
-    def update_plan(self, branch_name: str, suggestion: str, key_factors: list = []):
-        updated_plan = generate_updated_plan(self.vm, suggestion, key_factors)
+    def update_plan(
+        self,
+        vm: PlanExecutionVM,
+        branch_name: str,
+        suggestion: str,
+        key_factors: list = [],
+    ):
+        updated_plan = generate_updated_plan(vm, suggestion, key_factors)
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
-        self.vm.set_plan(updated_plan)
-        self.vm.recalculate_variable_refs()
-        self.vm.save_state()
-        new_commit_hash = self.vm.branch_manager.commit_changes(
+        vm.set_plan(updated_plan)
+        vm.recalculate_variable_refs()
+        vm.save_state()
+        new_commit_hash = vm.branch_manager.commit_changes(
             commit_info={
                 "type": StepType.PLAN_UPDATE.value,
-                "seq_no": str(self.vm.state["program_counter"]),
+                "seq_no": str(vm.state["program_counter"]),
                 "description": suggestion,
                 "input_parameters": {"updated_plan": updated_plan},
                 "output_variables": {},
@@ -284,28 +297,29 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
-                last_commit_hash = commit_hash
+                if not self.branch_manager.checkout_branch_from_commit(
+                    new_branch_name, commit_hash
+                ):
+                    raise ValueError(
+                        f"Failed to create or checkout branch '{new_branch_name}'"
+                    )
+
+                vm = PlanExecutionVM(
+                    self.task_orm.goal, self.branch_manager, self.llm_interface
+                )
 
                 logger.info(
                     f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
-                if not self.branch_manager.checkout_branch(new_branch_name):
-                    raise ValueError(
-                        f"Failed to create or checkout branch '{new_branch_name}'"
-                    )
-
-                new_commit_hash = self.update_plan(new_branch_name, suggestion)
-                if new_commit_hash:
-                    last_commit_hash = new_commit_hash
-                else:
+                new_commit_hash = self.update_plan(vm, new_branch_name, suggestion)
+                if not new_commit_hash:
                     raise ValueError("Failed to commit updated plan")
 
-                self._run()
+                self._run(vm)
                 return {
                     "success": True,
-                    "current_branch": self.vm.branch_manager.get_current_branch(),
+                    "current_branch": vm.branch_manager.get_current_branch(),
                 }
             except Exception as e:
                 self.task_orm.status = "failed"
@@ -323,9 +337,18 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
+
+                if not self.branch_manager.checkout_branch_from_commit(
+                    new_branch_name, commit_hash
+                ):
+                    raise ValueError(
+                        f"Failed to create or checkout branch '{new_branch_name}'"
+                    )
+
+                vm = PlanExecutionVM(
+                    self.task_orm.goal, self.branch_manager, self.llm_interface
+                )
                 steps_executed = 0
-                last_commit_hash = commit_hash
 
                 logger.info(
                     f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
@@ -333,22 +356,20 @@ class Task:
 
                 if not self.branch_manager.checkout_branch(new_branch_name):
                     raise ValueError(
-                        f"Failed to create or checkout branch '{branch_name}'"
+                        f"Failed to create or checkout branch '{new_branch_name}'"
                     )
 
                 for _ in range(steps):
                     should_update, explanation, key_factors = should_update_plan(
-                        self.vm, suggestion
+                        vm, suggestion
                     )
                     if should_update:
                         new_commit_hash = self.update_plan(
-                            new_branch_name, explanation, key_factors
+                            vm, new_branch_name, explanation, key_factors
                         )
-                        if new_commit_hash:
-                            last_commit_hash = new_commit_hash
 
                     try:
-                        execution_result = self.vm.step()
+                        execution_result = vm.step()
                     except Exception as e:
                         error_msg = f"Error during VM step execution: {str(e)}"
                         logger.error(error_msg, exc_info=True)
@@ -361,22 +382,21 @@ class Task:
                             f"Execution result is not successful:{execution_result.get('error')}"
                         )
 
-                    last_commit_hash = execution_result.get("commit_hash")
                     steps_executed += 1
 
-                    if self.vm.state.get("goal_completed"):
+                    if vm.state.get("goal_completed"):
                         logger.info("Goal completed. Stopping execution.")
                         break
 
                 self.task_orm.status = (
-                    "completed" if self.vm.state.get("goal_completed") else "failed"
+                    "completed" if vm.state.get("goal_completed") else "failed"
                 )
                 self.save()
 
                 return {
                     "success": True,
                     "steps_executed": steps_executed,
-                    "current_branch": self.vm.branch_manager.get_current_branch(),
+                    "current_branch": self.branch_manager.get_current_branch(),
                 }
             except Exception as e:
                 self.task_orm.status = "failed"
@@ -390,15 +410,23 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
+                vm = PlanExecutionVM(
+                    self.task_orm.goal, self.branch_manager, self.llm_interface
+                )
+
+                if not vm.set_state(commit_hash):
+                    raise ValueError(
+                        f"Failed to set state from commit hash {commit_hash}"
+                    )
+
                 prompt = get_step_update_prompt(
-                    self.vm,
+                    vm,
                     seq_no,
                     VM_SPEC_CONTENT,
                     global_tools_hub.get_tools_description(),
                     suggestion,
                 )
-                updated_step_response = self.vm.llm_interface.generate(prompt)
+                updated_step_response = self.llm_interface.generate(prompt)
 
                 if not updated_step_response:
                     raise ValueError("Failed to generate updated step")
@@ -410,14 +438,13 @@ class Task:
                     )
 
                 logger.info(
-                    f"Updating step: {updated_step}, program_counter: {self.vm.state['program_counter']}"
+                    f"Updating step: {updated_step}, program_counter: {vm.state['program_counter']}"
                 )
 
                 previous_commit_hash = self.branch_manager.get_parent_commit_hash(
                     commit_hash
                 )
 
-                self.vm.set_state(previous_commit_hash)
                 branch_name = (
                     f"optimize_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 )
@@ -425,15 +452,18 @@ class Task:
                 if self.branch_manager.checkout_branch_from_commit(
                     branch_name, previous_commit_hash
                 ):
-                    self.vm.state["current_plan"][seq_no] = updated_step
-                    self.vm.state["program_counter"] = seq_no
-                    self.vm.recalculate_variable_refs()
-                    self.vm.save_state()
+                    vm = PlanExecutionVM(
+                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                    )
+                    vm.state["current_plan"][seq_no] = updated_step
+                    vm.state["program_counter"] = seq_no
+                    vm.recalculate_variable_refs()
+                    vm.save_state()
 
-                    new_commit_hash = self.vm.branch_manager.commit_changes(
+                    new_commit_hash = vm.branch_manager.commit_changes(
                         commit_info={
                             "type": StepType.STEP_OPTIMIZATION.value,
-                            "seq_no": str(self.vm.state["program_counter"]),
+                            "seq_no": str(vm.state["program_counter"]),
                             "description": suggestion,
                             "input_parameters": {"updated_step": updated_step},
                             "output_variables": {},
@@ -451,11 +481,11 @@ class Task:
                         f"Failed to create or checkout branch '{branch_name}'"
                     )
 
-                self._run()
+                self._run(vm)
                 return {
                     "success": True,
-                    "current_branch": self.vm.branch_manager.get_current_branch(),
-                    "latest_commit_hash": self.vm.branch_manager.get_current_commit_hash(),
+                    "current_branch": vm.branch_manager.get_current_branch(),
+                    "latest_commit_hash": vm.branch_manager.get_current_commit_hash(),
                 }
             except Exception as e:
                 self.task_orm.status = "failed"
@@ -531,7 +561,7 @@ class TaskService:
                 .first()
             )
             if task_orm:
-                logger.info(f"Retrieved task with ID {task_id}")
+                logger.info(f"Retrieved task with ID {task_id} from database.")
                 if task_orm.repo_path != "" and not os.path.exists(task_orm.repo_path):
                     task_orm.status = "deleted"
                     session.add(task_orm)

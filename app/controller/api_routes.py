@@ -164,13 +164,6 @@ def update_task(task_id):
 
     try:
         branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        if not task.create_branch(branch_name, commit_hash):
-            return log_and_return_error(
-                f"[Update Task] Failed to create branch {branch_name} for task {task_id}.",
-                "error",
-                500,
-            )
-
         task_queue.add_task(
             task_id,
             {
@@ -221,12 +214,6 @@ def dynamic_update(task_id):
 
     try:
         branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        if not task.create_branch(branch_name, commit_hash):
-            return log_and_return_error(
-                f"[Dynamic Update Task] Failed to create branch {branch_name} for task {task_id}.",
-                "error",
-                500,
-            )
 
         task_queue.add_task(
             task_id,
@@ -434,6 +421,14 @@ def set_branch_route(task_id):
     if not branch_name:
         return log_and_return_error("Missing 'branch_name' parameter", "error", 400)
 
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Switched to branch {branch_name} for task '{task_id}'",
+        }
+    )
+
+    """ Deprecated Code to remove later
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)
         if not task:
@@ -453,6 +448,7 @@ def set_branch_route(task_id):
             return log_and_return_error(
                 f"Error switching to branch {branch_name}: {str(e)}", "error", 400
             )
+    """
 
 
 @api_blueprint.route("/tasks/<task_id>/branches/<branch_name>", methods=["DELETE"])
@@ -559,6 +555,7 @@ def stream_execute_vm():
                 yield protocol.send_finish_message("error")
                 return
 
+            task.vm.set_plan(plan)
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
             final_answer_structure = task.vm.parse_final_answer()
