@@ -60,9 +60,6 @@ class Task:
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
 
-    def create_branch(self, branch_name: str, commit_hash: str):
-        return self.branch_manager.checkout_branch_from_commit(branch_name, commit_hash)
-
     def get_branches(self):
         return self.branch_manager.list_branches()
 
