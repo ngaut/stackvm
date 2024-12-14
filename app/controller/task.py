@@ -410,7 +410,6 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-
                 vm = PlanExecutionVM(
                     self.task_orm.goal, self.branch_manager, self.llm_interface
                 )

@@ -391,14 +391,15 @@ class PlanExecutionVM:
     def set_state(self, commit_hash: str) -> None:
         """Load the state from a file based on the specific commit point."""
         loaded_state = self.branch_manager.load_state(commit_hash)
-        if loaded_state:
-            self.state = loaded_state
-            self.variable_manager.set_all_variables(
-                loaded_state.get("variables", {}),
-                loaded_state.get("variables_refs", {}),
-            )
+        if loaded_state is not None:
+            if loaded_state:
+                self.state = loaded_state
+                self.variable_manager.set_all_variables(
+                    loaded_state.get("variables", {}),
+                    loaded_state.get("variables_refs", {}),
+                )
 
-            self.logger.info("State loaded from commit %s", commit_hash)
+                self.logger.info("State loaded from commit %s", commit_hash)
             return True
         else:
             self.logger.warning("Not found state from commit %s", commit_hash)
