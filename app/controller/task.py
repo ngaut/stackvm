@@ -35,14 +35,18 @@ class Task:
         self.task_orm = task_orm
         if task_orm.status == "deleted":
             raise ValueError(f"Task {task_orm.id} is deleted.")
+
         if task_orm.repo_path != "":
-            self.vm = PlanExecutionVM(
-                repo_name=task_orm.repo_path, llm_interface=llm_interface
-            )
+            self.branch_manager = GitManager(task_orm.repo_path)
+            os.chdir(self.repo_name)
         else:
-            self.vm = PlanExecutionVM(task_id=task_orm.id, llm_interface=llm_interface)
-        self.vm.set_goal(task_orm.goal)
-        self._lock = threading.RLock()
+            self.branch_manager = MySQLBranchManager(task_orm.id)
+
+        self.llm_interface = llm_interface
+
+        self.vm = PlanExecutionVM(
+            self.task_orm.goal, self.branch_manager, self.llm_interface
+        )
 
     @property
     def id(self):
@@ -54,30 +58,22 @@ class Task:
         """Return the repository path of the task."""
         return self.task_orm.repo_path
 
-    @property
-    def branch_manager(self):
-        """Return the repository of the task."""
-        return self.vm.branch_manager
-
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
 
     def create_branch(self, branch_name: str, commit_hash: str):
-        with self._lock:
-            return self.vm.branch_manager.checkout_branch_from_commit(
-                branch_name, commit_hash
-            )
+        return self.vm.branch_manager.checkout_branch_from_commit(
+            branch_name, commit_hash
+        )
 
     def get_branches(self):
         return self.branch_manager.list_branches()
 
     def set_branch(self, branch_name: str):
-        with self._lock:
-            self.branch_manager.checkout_branch(branch_name)
+        self.branch_manager.checkout_branch(branch_name)
 
     def delete_branch(self, branch_name: str):
-        with self._lock:
-            self.branch_manager.delete_branch(branch_name)
+        self.branch_manager.delete_branch(branch_name)
 
     def get_execution_details(
         self, branch_name: Optional[str] = None, commit_hash: Optional[str] = None
@@ -154,14 +150,11 @@ class Task:
                 goal = f"{goal} {response_format}"
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
-                self.vm.llm_interface,
+                self.llm_interface,
                 goal,
                 example=example_str,
                 best_practices=best_pratices,
             )
-
-        if plan:
-            self.vm.set_plan(plan)
 
         return plan
 
@@ -198,6 +191,7 @@ class Task:
                 if not plan:
                     raise ValueError("Failed to generate plan")
 
+                self.vm.set_plan(plan)
                 logger.info("Generated Plan:%s", json.dumps(plan, indent=2))
                 self._run()
             except Exception as e:
@@ -215,7 +209,8 @@ class Task:
             branch_name = f"re_execute_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             try:
                 if commit_hash:
-                    self.vm.set_state(commit_hash)
+                    if not self.vm.set_state(commit_hash):
+                        raise ValueError(f"Failed to set state from commit hash {commit_hash}")
                     if not self.branch_manager.checkout_branch_from_commit(
                         branch_name, commit_hash
                     ) or not self.branch_manager.checkout_branch(branch_name):
@@ -284,7 +279,8 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
+                if not self.vm.set_state(commit_hash):
+                    raise ValueError(f"Failed to set state from commit hash {commit_hash}")
                 last_commit_hash = commit_hash
 
                 logger.info(
@@ -323,7 +319,8 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
+                if not self.vm.set_state(commit_hash):
+                    raise ValueError(f"Failed to set state from commit hash {commit_hash}")
                 steps_executed = 0
                 last_commit_hash = commit_hash
 
@@ -390,7 +387,8 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                self.vm.set_state(commit_hash)
+                if not self.vm.set_state(commit_hash):
+                    raise ValueError(f"Failed to set state from commit hash {commit_hash}")
                 prompt = get_step_update_prompt(
                     self.vm,
                     seq_no,
@@ -417,7 +415,10 @@ class Task:
                     commit_hash
                 )
 
-                self.vm.set_state(previous_commit_hash)
+                if not self.vm.set_state(previous_commit_hash):
+                    raise ValueError(
+                        f"Failed to set state from commit hash {previous_commit_hash}"
+                    )
                 branch_name = (
                     f"optimize_step_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 )
