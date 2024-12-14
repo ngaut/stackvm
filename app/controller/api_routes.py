@@ -164,13 +164,6 @@ def update_task(task_id):
 
     try:
         branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        if not task.create_branch(branch_name, commit_hash):
-            return log_and_return_error(
-                f"[Update Task] Failed to create branch {branch_name} for task {task_id}.",
-                "error",
-                500,
-            )
-
         task_queue.add_task(
             task_id,
             {
@@ -221,12 +214,6 @@ def dynamic_update(task_id):
 
     try:
         branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        if not task.create_branch(branch_name, commit_hash):
-            return log_and_return_error(
-                f"[Dynamic Update Task] Failed to create branch {branch_name} for task {task_id}.",
-                "error",
-                500,
-            )
 
         task_queue.add_task(
             task_id,
@@ -433,7 +420,6 @@ def set_branch_route(task_id):
     branch_name = data.get("branch_name")
     if not branch_name:
         return log_and_return_error("Missing 'branch_name' parameter", "error", 400)
-
 
     return jsonify(
         {
