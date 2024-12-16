@@ -88,6 +88,11 @@ class Task:
         self.task_orm.logs = "Plan execution completed."
         self.save()
 
+    def create_vm(self):
+        return PlanExecutionVM(
+            self.task_orm.goal, self.branch_manager, self.llm_interface
+        )
+
     def generate_plan(self):
         """Generate a plan for the task."""
         example_str = None
@@ -255,6 +260,26 @@ class Task:
                     vm.set_plan(plan)
 
                 self._run(vm)
+                if vm.state.get("goal_completed"):
+                    logger.info(f"re-execute task {self.task_orm.id}, goal completed")
+                    # Fetch the final_answer
+                    final_answer = vm.get_variable("final_answer")
+                    if final_answer:
+                        return {
+                            "completed": True,
+                            "final_answer": final_answer,
+                        }
+                    else:
+                        return {
+                            "completed": True,
+                            "final_answer": None,
+                        }
+                else:
+                    return {
+                        "completed": False,
+                        "final_answer": None,
+                    }
+
             except Exception as e:
                 self.task_orm.status = "failed"
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"

@@ -9,7 +9,6 @@ from datetime import datetime
 from queue import Queue, Empty
 from threading import Thread
 
-import git
 from git.exc import GitCommandError
 from flask import (
     Blueprint,
@@ -291,24 +290,24 @@ def re_execute_task(task_id):
 
     try:
         current_app.logger.info(f"re-execute task {task_id}")
-        task.re_execute(commit_hash, plan)
-        final_answer = None
-        if task.vm.state.get("goal_completed"):
-            current_app.logger.info(f"re-execute task {task_id}, goal completed")
-            # Fetch the final_answer
-            final_answer = task.vm.get_variable("final_answer")
-            if final_answer:
-                return jsonify(final_answer), 200
+        result = task.re_execute(commit_hash, plan)
+        if result.get("completed"):
+            if result.get("final_answer"):
+                return jsonify(result.get("final_answer")), 200
             else:
                 return (
-                    jsonify(f"re-execute task {task_id}, not found final answer"),
+                    jsonify(
+                        f"re-execute task {task_id}, it completed, but not found final answer"
+                    ),
                     200,
                 )
-
-        return (
-            jsonify(f"re-execute task {task_id}, goal not completed: {task.task_orm}"),
-            500,
-        )
+        else:
+            return (
+                jsonify(
+                    f"re-execute task {task_id}, goal not completed: {task.task_orm}"
+                ),
+                500,
+            )
     except Exception as e:
         current_app.logger.error(
             f"Failed to re-execute task {task_id}: {str(e)}",
@@ -555,10 +554,12 @@ def stream_execute_vm():
                 yield protocol.send_finish_message("error")
                 return
 
-            task.vm.set_plan(plan)
+            vm = task.create_vm()
+            vm.set_plan(plan)
+
             current_app.logger.info("Generated Plan: %s", json.dumps(plan))
 
-            final_answer_structure = task.vm.parse_final_answer()
+            final_answer_structure = vm.parse_final_answer()
             # Determine the last or second last calling step
             already_streamed = False
             streaming_response_steps = []
@@ -578,9 +579,7 @@ def stream_execute_vm():
                     current_app.logger.info(
                         f"dependencies_variables {dependencies_variables}"
                     )
-                    dependencies_steps = task.vm.parse_dependencies(
-                        dependencies_variables
-                    )
+                    dependencies_steps = vm.parse_dependencies(dependencies_variables)
                     streaming_response_steps = dependencies_steps[
                         dependencies_variables[0]
                     ]
@@ -591,7 +590,7 @@ def stream_execute_vm():
 
             # Start executing steps
             while True:
-                step = task.vm.get_current_step()
+                step = vm.get_current_step()
                 step_seq_no = step.get("seq_no", -1)
 
                 if step["type"] == "calling":
@@ -609,7 +608,7 @@ def stream_execute_vm():
 
                     def execute_step():
                         nonlocal step_result
-                        step_result = task.vm.step(stream_queue=queue)
+                        step_result = vm.step(stream_queue=queue)
 
                     step_thread = Thread(target=execute_step)
                     step_thread.start()
@@ -629,13 +628,13 @@ def stream_execute_vm():
                     step_thread.join()
                 else:
                     # Normal execution without stream_queue
-                    step_result = task.vm.step()
+                    step_result = vm.step()
 
                 if not step_result:
                     error_message = "Failed to execute step."
                     current_app.logger.error(error_message)
                     yield protocol.send_state(
-                        task_id, task_branch, step_seq_no, task.vm.state
+                        task_id, task_branch, step_seq_no, vm.state
                     )
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message("error")
@@ -650,7 +649,7 @@ def stream_execute_vm():
                     )
                     current_app.logger.error(f"Error executing step: {error}")
                     yield protocol.send_state(
-                        task_id, task_branch, step_seq_no, task.vm.state
+                        task_id, task_branch, step_seq_no, vm.state
                     )
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message("error")
@@ -669,18 +668,16 @@ def stream_execute_vm():
                     yield protocol.send_tool_result(seq_no, output)
 
                 # Step State (Part 8)
-                yield protocol.send_state(
-                    task_id, task_branch, step_seq_no, task.vm.state
-                )
+                yield protocol.send_state(task_id, task_branch, step_seq_no, vm.state)
                 # Step Finish (Part e)
                 yield protocol.send_step_finish(seq_no)
 
                 # Check if goal is completed
                 final_answer = None
-                if task.vm.state.get("goal_completed"):
+                if vm.state.get("goal_completed"):
                     current_app.logger.info("Goal completed during plan execution.")
                     # Fetch the final_answer
-                    final_answer = task.vm.get_variable("final_answer")
+                    final_answer = vm.get_variable("final_answer")
                     if final_answer:
                         if already_streamed is False:
                             # Stream the final_answer using Part 0
