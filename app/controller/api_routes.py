@@ -519,10 +519,23 @@ def stream_execute_vm():
 
     data = request.json
     goal = data.get("goal")
+    response_format = data.get("response_format")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
 
-    clean_goal, response_format = parse_goal_response_format(goal)
+    if response_format and not isinstance(response_format, dict):
+        try:
+            response_format = json.loads(response_format)
+        except json.JSONDecodeError:
+            return log_and_return_error(
+                "Invalid response format, it should be a json object", "error", 400
+            )
+
+    clean_goal, response_format = (
+        parse_goal_response_format(goal)
+        if not response_format
+        else (goal, response_format)
+    )
     if not clean_goal:
         return log_and_return_error("Invalid goal format", "error", 400)
 
