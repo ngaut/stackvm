@@ -40,7 +40,7 @@ class Task:
 
         if task_orm.repo_path != "":
             self.branch_manager = GitManager(task_orm.repo_path)
-            os.chdir(self.repo_name)
+            os.chdir(task_orm.repo_path)
         else:
             self.branch_manager = MySQLBranchManager(task_orm.id)
 
