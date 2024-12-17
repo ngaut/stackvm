@@ -6,6 +6,7 @@ import requests
 from abc import ABC, abstractmethod
 import json
 import logging
+from google import genai
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,66 @@ class OllamaProvider(BaseLLMProvider):
             yield f"Error: {str(e)}"
 
 
+class GeminiProvider(BaseLLMProvider):
+    def __init__(self, model: str, **kwargs):
+        super().__init__(model)
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is not set")
+
+        self.client = genai.Client(api_key=api_key)
+        self.temperature = kwargs.get("temperature", 0.7)
+
+    def _prepare_prompt(self, prompt: str, context: Optional[str] = None) -> str:
+        """Combine context and prompt if context is provided"""
+        if context:
+            return f"{context}\n\n{prompt}"
+        return prompt
+
+    def generate(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Optional[str]:
+        """Generate a response using Gemini model"""
+
+        def _generate():
+            final_prompt = self._prepare_prompt(prompt, context)
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=final_prompt,
+                generation_config={
+                    "temperature": kwargs.get("temperature", self.temperature),
+                },
+            )
+            return response.text
+
+        return self._retry_with_exponential_backoff(_generate)
+
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        """Generate a streaming response using Gemini model"""
+
+        def _generate_stream():
+            final_prompt = self._prepare_prompt(prompt, context)
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=final_prompt,
+                generation_config={
+                    "temperature": kwargs.get("temperature", self.temperature),
+                },
+                stream=True,
+            )
+            return response
+
+        try:
+            stream = self._retry_with_exponential_backoff(_generate_stream)
+            for chunk in stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            yield f"Error during streaming: {str(e)}"
+
+
 class LLMInterface:
     def __init__(self, provider: str, model: str, **kwargs):
         self.provider = self._get_provider(provider.lower(), model, **kwargs)
@@ -185,6 +246,8 @@ class LLMInterface:
             return OpenAIProvider(model, **kwargs)
         elif provider == "ollama":
             return OllamaProvider(model, **kwargs)
+        elif provider == "gemini":
+            return GeminiProvider(model, **kwargs)
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
