@@ -195,7 +195,7 @@ class LLMInterface:
             return self.provider.generate(prompt, context, **kwargs)
         except Exception as e:
             print(f"LLM generation failed: {e}")
-            return None
+            raise e
 
     def evaluate_condition(
         self, prompt: str, context: Optional[str] = None
