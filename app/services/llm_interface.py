@@ -178,63 +178,62 @@ class OllamaProvider(BaseLLMProvider):
 
 
 class GeminiProvider(BaseLLMProvider):
+    """
+    Provider for Google's Gemini API.
+    """
+
     def __init__(self, model: str, **kwargs):
-        super().__init__(model)
-        api_key = os.getenv("GEMINI_API_KEY")
+        super().__init__(model, **kwargs)
+        api_key = os.getenv("GOOGLE_API_KEY")
+        
         if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
-
-        self.client = genai.Client(api_key=api_key)
-        self.temperature = kwargs.get("temperature", 0.7)
-
-    def _prepare_prompt(self, prompt: str, context: Optional[str] = None) -> str:
-        """Combine context and prompt if context is provided"""
-        if context:
-            return f"{context}\n\n{prompt}"
-        return prompt
+            raise ValueError(
+                "Google API key not set. Please set the GOOGLE_API_KEY environment variable."
+            )
+            
+        self.client = genai.Client(
+            api_key=api_key
+        )
 
     def generate(
         self, prompt: str, context: Optional[str] = None, **kwargs
     ) -> Optional[str]:
-        """Generate a response using Gemini model"""
-
-        def _generate():
-            final_prompt = self._prepare_prompt(prompt, context)
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=final_prompt,
-                generation_config={
-                    "temperature": kwargs.get("temperature", self.temperature),
-                },
-            )
-            return response.text
-
-        return self._retry_with_exponential_backoff(_generate)
+        full_prompt = f"{context}\n{prompt}" if context else prompt
+        response = self._retry_with_exponential_backoff(
+            self.client.models.generate_content,
+            model=self.model,
+            contents=full_prompt,
+            **kwargs
+        )
+        return response.text.strip()
 
     def generate_stream(
         self, prompt: str, context: Optional[str] = None, **kwargs
     ) -> Generator[str, None, None]:
-        """Generate a streaming response using Gemini model"""
-
-        def _generate_stream():
-            final_prompt = self._prepare_prompt(prompt, context)
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=final_prompt,
-                generation_config={
-                    "temperature": kwargs.get("temperature", self.temperature),
-                },
-                stream=True,
-            )
-            return response
-
+        """
+        Generate streaming response from Gemini API.
+        """
+        full_prompt = f"{context}\n{prompt}" if context else prompt
         try:
-            stream = self._retry_with_exponential_backoff(_generate_stream)
-            for chunk in stream:
-                if chunk.text:
-                    yield chunk.text
+            response = self._retry_with_exponential_backoff(
+                self.client.models.generate_content_stream,
+                model=self.model,
+                contents=full_prompt,
+                **kwargs
+            )
+
+            for resp in response:
+                if not resp.candidates:
+                    continue
+
+                for candidate in resp.candidates:
+                    for part in candidate.content.parts:
+                        if part.text:
+                            yield part.text
+
         except Exception as e:
-            yield f"Error during streaming: {str(e)}"
+            logger.error(f"Error during Gemini streaming: {e}")
+            yield f"Error: {str(e)}"
 
 
 class LLMInterface:
