@@ -22,7 +22,7 @@ from app.instructions import global_tools_hub
 logger = logging.getLogger(__name__)
 
 
-class PlanGenerationError(ValueError):
+class PlanUnavailableError(ValueError):
     """Custom error raised when plan generation or parsing fails."""
 
     pass
@@ -63,7 +63,7 @@ def generate_plan(
         logger.error(
             "Failed to parse the generated plan: %s for goal: %s", plan_response, goal
         )
-        raise PlanGenerationError(plan_response)
+        raise PlanUnavailableError(plan_response)
 
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):

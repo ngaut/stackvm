@@ -34,7 +34,7 @@ from .streaming_protocol import StreamingProtocol
 from .task import TaskService
 from .task_queue import TaskQueue
 from .label_classifier import get_label_path
-from .plan import PlanGenerationError
+from .plan import PlanUnavailableError
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 
@@ -712,7 +712,7 @@ def stream_execute_vm():
             task.task_orm.logs = "Execution was interrupted by the client."
             task.save()
             raise
-        except PlanGenerationError as e:
+        except PlanUnavailableError as e:
             yield protocol.send_text_part(str(e))
             yield protocol.send_finish_message(response=str(e))
             task.task_orm.status = "completed"
