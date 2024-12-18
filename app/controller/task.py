@@ -200,7 +200,8 @@ class Task:
                 self.task_orm.status = "failed"
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 self.save()
-                raise ValueError(self.task_orm.logs)
+                # raise the same error again
+                raise e
 
     def re_execute(
         self,
