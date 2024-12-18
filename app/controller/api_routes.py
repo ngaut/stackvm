@@ -715,7 +715,7 @@ def stream_execute_vm():
         except PlanGenerationError as e:
             yield protocol.send_text_part(str(e))
             yield protocol.send_finish_message(response=str(e))
-            task.task_orm.status = "success"
+            task.task_orm.status = "completed"
             task.task_orm.logs = str(e)
             task.save()
         except Exception as e:
