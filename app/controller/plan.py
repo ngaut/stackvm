@@ -22,6 +22,12 @@ from app.instructions import global_tools_hub
 logger = logging.getLogger(__name__)
 
 
+class PlanGenerationError(ValueError):
+    """Custom error raised when plan generation or parsing fails."""
+
+    pass
+
+
 def generate_plan(
     llm_interface: LLMInterface,
     goal,
@@ -45,15 +51,19 @@ def generate_plan(
 
     if not plan_response:
         logger.error("LLM failed to generate a response: %s", plan_response)
-        return []
+        raise ValueError(
+            "LLM failed to generate a response for your question. Please try again later."
+        )
 
     plan = parse_plan(plan_response)
 
     if plan:
         return plan
     else:
-        logger.error("Failed to parse the generated plan: %s for goal: %s", plan_response, goal)
-        return []
+        logger.error(
+            "Failed to parse the generated plan: %s for goal: %s", plan_response, goal
+        )
+        raise PlanGenerationError(plan_response)
 
 
 def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):

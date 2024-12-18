@@ -185,15 +185,13 @@ class GeminiProvider(BaseLLMProvider):
     def __init__(self, model: str, **kwargs):
         super().__init__(model, **kwargs)
         api_key = os.getenv("GOOGLE_API_KEY")
-        
+
         if not api_key:
             raise ValueError(
                 "Google API key not set. Please set the GOOGLE_API_KEY environment variable."
             )
-            
-        self.client = genai.Client(
-            api_key=api_key
-        )
+
+        self.client = genai.Client(api_key=api_key)
 
     def generate(
         self, prompt: str, context: Optional[str] = None, **kwargs
@@ -203,7 +201,7 @@ class GeminiProvider(BaseLLMProvider):
             self.client.models.generate_content,
             model=self.model,
             contents=full_prompt,
-            **kwargs
+            **kwargs,
         )
         return response.text.strip()
 
@@ -219,7 +217,7 @@ class GeminiProvider(BaseLLMProvider):
                 self.client.models.generate_content_stream,
                 model=self.model,
                 contents=full_prompt,
-                **kwargs
+                **kwargs,
             )
 
             for resp in response:
