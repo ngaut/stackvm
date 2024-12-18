@@ -52,7 +52,7 @@ def generate_plan(
     if plan:
         return plan
     else:
-        logger.error("Failed to parse the generated plan: %s", plan_response)
+        logger.error("Failed to parse the generated plan: %s for goal: %s", plan_response, goal)
         return []
 
 
