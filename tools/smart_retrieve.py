@@ -292,15 +292,17 @@ def smart_retrieve(
             meta_graph,
         )
 
-        logger.info("evaluation result", analysis)
+        logger.debug("evaluation result", analysis)
 
         for id in analysis.get("useful_entity_ids", []):
-            exploration_graph.add_entity(entities[id])
-            del entities[id]
+            if id in entities:
+                exploration_graph.add_entity(entities[id])
+                del entities[id]
 
         for id in analysis.get("useful_relationship_ids", []):
-            exploration_graph.add_relationship(relationships[id])
-            del relationships[id]
+            if id in relationships:
+                exploration_graph.add_relationship(relationships[id])
+                del relationships[id]
 
         if analysis.get("is_sufficient", []):
             logger.info("Sufficient information retrieved.")
