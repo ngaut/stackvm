@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from app.utils import extract_json
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import LLMInterface
-
+from app.instructions.tools import tool
 
 class KnowledgeGraphClient:
     def __init__(self, base_url: str, kb_id: int):
@@ -236,7 +236,7 @@ def evaluation_retrieval_results(
 
     return analysis
 
-
+@tool
 def smart_retrieve(
     query: str,
     max_iterations: int = 5,
