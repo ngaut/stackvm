@@ -36,7 +36,6 @@ session = requests.Session()
 session.mount("https://", adapter)
 session.mount("http://", adapter)
 
-
 @tool
 def retrieve_knowledge_graph(query):
     """
@@ -106,7 +105,6 @@ def get_chunk_content(chunk):
 
     logger.warning("Chunk is malformed or missing 'content' field.")
     return None
-
 
 @tool
 def vector_search(query, top_k=10):

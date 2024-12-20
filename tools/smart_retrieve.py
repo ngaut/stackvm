@@ -2,6 +2,9 @@ import logging
 import requests
 import json
 from typing import List, Optional, Dict, Any
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.utils import extract_json
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -10,10 +13,26 @@ from app.instructions.tools import tool
 
 logger = logging.getLogger(__name__)
 
+# Define retry strategy
+retry_strategy = Retry(
+    total=5,  # Total number of retry attempts
+    backoff_factor=1,  # Exponential backoff factor
+    status_forcelist=[429, 500, 502, 503, 504],  # HTTP status codes to retry on
+    allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
+    raise_on_status=False,
+)
+
+
 class KnowledgeGraphClient:
     def __init__(self, base_url: str, kb_id: int):
         self.base_url = base_url.rstrip("/")
         self.kb_id = kb_id
+
+        # Create session with retry strategy
+        self.session = requests.Session()
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     def retrieve_knowledge(
         self, query: str, top_k: int = 10, similarity_threshold: float = 0.5
@@ -28,9 +47,21 @@ class KnowledgeGraphClient:
             "similarity_threshold": similarity_threshold,
         }
 
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.session.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RetryError as e:
+            logger.error("Max retries exceeded for retrieve_knowledge: %s", str(e))
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error("Request to retrieve_knowledge failed: %s", str(e))
+            raise
+        except ValueError as e:
+            logger.error(
+                "Invalid JSON response received from retrieve_knowledge: %s", str(e)
+            )
+            raise
 
     def retrieve_neighbors(
         self,
@@ -52,9 +83,21 @@ class KnowledgeGraphClient:
             "similarity_threshold": similarity_threshold,
         }
 
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.session.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RetryError as e:
+            logger.error("Max retries exceeded for retrieve_neighbors: %s", str(e))
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error("Request to retrieve_neighbors failed: %s", str(e))
+            raise
+        except ValueError as e:
+            logger.error(
+                "Invalid JSON response received from retrieve_neighbors: %s", str(e)
+            )
+            raise
 
     def retrieve_chunks(self, relationships_ids: List[int]):
         """
@@ -65,9 +108,21 @@ class KnowledgeGraphClient:
         )
         payload = {"relationships_ids": relationships_ids}
 
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.session.post(url, json=payload, timeout=60)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RetryError as e:
+            logger.error("Max retries exceeded for retrieve_chunks: %s", str(e))
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error("Request to retrieve_chunks failed: %s", str(e))
+            raise
+        except ValueError as e:
+            logger.error(
+                "Invalid JSON response received from retrieve_chunks: %s", str(e)
+            )
+            raise
 
 
 knowledge_client = KnowledgeGraphClient("https://tidb.ai/api/v1", 30001)
@@ -178,7 +233,11 @@ class ExplorationGraph:
         self.chunks = knowledge_client.retrieve_chunks(relationships_ids)
 
     def to_dict(self):
-        return {"entities": self.entities, "relationships": self.relationships, "chunks": self.chunks}
+        return {
+            "entities": self.entities,
+            "relationships": self.relationships,
+            "chunks": self.chunks,
+        }
 
 
 def evaluation_retrieval_results(
@@ -246,7 +305,23 @@ def evaluation_retrieval_results(
 
     return analysis
 
-@tool
+
+def _process_action(action, knowledge_client):
+    """
+    Process a single action and return its results
+    """
+    try:
+        if action.get("tool") == "retrieve_knowledge":
+            return knowledge_client.retrieve_knowledge(action.get("query"), top_k=10)
+        elif action.get("tool") == "retrieve_neighbors":
+            return knowledge_client.retrieve_neighbors(
+                action.get("entities_ids"), action.get("query")
+            )
+    except Exception as e:
+        logger.error(f"Error processing action {action}: {e}")
+        return {"entities": [], "relationships": []}
+
+
 def smart_retrieve(
     query: str,
     max_iterations: int = 5,
@@ -272,17 +347,36 @@ def smart_retrieve(
     # Step 2: Initial Retrieval
     entities = {}
     relationships = {}
-    for query in meta_graph.initial_queries:
-        logger.info(f"Initial query: {query}")
-        retrieval_results = knowledge_client.retrieve_knowledge(query, top_k=10)
-        for entity in retrieval_results.get("entities", []):
-            entities[entity["id"]] = entity
-        for relationship in retrieval_results.get("relationships", []):
-            relationships[relationship["id"]] = relationship
+
+    # Prepare all query tasks
+    tasks = meta_graph.initial_queries
+
+    # Use ThreadPoolExecutor to execute retrieve_knowledge queries concurrently
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        # Create a mapping of Future objects to their corresponding queries
+        future_to_query = {
+            executor.submit(knowledge_client.retrieve_knowledge, q, top_k=10): q
+            for q in tasks
+        }
+
+        # Process completed futures as they finish
+        for future in as_completed(future_to_query):
+            query = future_to_query[future]
+            try:
+                retrieval_results = future.result()
+            except Exception as e:
+                logger.error(f"Error retrieving knowledge for query {query}: {e}")
+                continue
+
+            # Merge entities and relationships from results
+            for entity in retrieval_results.get("entities", []):
+                entities[entity["id"]] = entity
+            for relationship in retrieval_results.get("relationships", []):
+                relationships[relationship["id"]] = relationship
 
     # Iterative Search Process
     for iteration in range(1, max_iterations + 1):
-        logger.info(f"\n--- Iteration {iteration} ---")
+        logger.info(f"--- Iteration {iteration}: {query} ---")
 
         # Step 3: evaluate the retrieval results
         analysis = evaluation_retrieval_results(
@@ -305,26 +399,69 @@ def smart_retrieve(
                 del relationships[id]
 
         if analysis.get("is_sufficient", []):
-            logger.info("Sufficient information retrieved.")
+            logger.info(f"Sufficient information retrieved for query: {query}")
             break
 
-        for action in analysis.get("next_actions", []):
-            if action.get("tool") == "retrieve_knowledge":
-                retrieval_results = knowledge_client.retrieve_knowledge(
-                    action.get("query"), top_k=10
-                )
-                for entity in retrieval_results.get("entities", []):
-                    entities[entity["id"]] = entity
-                for relationship in retrieval_results.get("relationships", []):
-                    relationships[relationship["id"]] = relationship
-            elif action.get("tool") == "retrieve_neighbors":
-                retrieval_results = knowledge_client.retrieve_neighbors(
-                    action.get("entities_ids"), action.get("query")
-                )
-                for relationship in retrieval_results.get("relationships", []):
-                    relationships[relationship["id"]] = relationship
+        # Process next actions concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Create a mapping of Future objects to their corresponding actions
+            future_to_action = {
+                executor.submit(_process_action, action, knowledge_client): action
+                for action in analysis.get("next_actions", [])
+            }
+
+            # Process completed futures as they finish
+            for future in as_completed(future_to_action):
+                action = future_to_action[future]
+                try:
+                    retrieval_results = future.result()
+                    # Merge entities and relationships from results
+                    for entity in retrieval_results.get("entities", []):
+                        entities[entity["id"]] = entity
+                    for relationship in retrieval_results.get("relationships", []):
+                        relationships[relationship["id"]] = relationship
+                except Exception as e:
+                    logger.error(f"Error processing action {action}: {e}")
+                    continue
 
     # Step 4: retrieve the relevant chunks
     exploration_graph.retrieve_chunks()
 
-    return exploration_graph
+    return exploration_graph.to_dict()
+
+def vector_search(query, top_k=10):
+    """
+    Retrieves the most relevant TiDB Document data chunks similarity to the query.
+
+    Arguments:
+    - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
+
+    Best practices:
+    - Do not insert the raw results from vector_search directly into the final_answer. The vector search tool returns arrays or multiple document fragments that may not be immediately suitable for a coherent final response. Instead, first use an LLM generation step to summarize, refine, and unify the language of these fragments. Once processed into a concise and well-structured text in the target language, then integrate this refined output into the final_answer.
+    """
+
+    return smart_retrieve(query)
+
+
+def retrieve_knowledge_graph(query):
+    """
+    Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
+
+    Arguments:
+    - `query`: The query string. Can be a direct string or a variable reference.
+
+    Output:
+    - Returns a single value representing the retrieved knowledge graph data.
+
+
+    Best practices:
+    - Focus on Structured Knowledge: Use the retrieve_knowledge_graph tool to retrieve structured and relational knowledge that is relevant to the query. This tool excels in identifying fine-grained knowledge points and understanding their connections.
+    - Combine with LLM for Refinement:
+        - Knowledge Graph Search may return extensive data, including numerous nodes and complex relationships.
+        - Always follow up with an LLM generation tool to refine and summarize the results. This ensures the output is concise, precise, and tailored to the user's question.
+
+    Strict Restriction:
+    - Avoid User-Specific Queries: Do not use this tool to retrieve data that is specific to a user's environment, such as configurations, current versions, or private data. This tool is designed to handle general, shared knowledge within the graph.
+    """
+
+    return smart_retrieve(query)
