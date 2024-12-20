@@ -1,3 +1,4 @@
+import logging
 import requests
 import json
 from typing import List, Optional, Dict, Any
@@ -6,6 +7,8 @@ from app.utils import extract_json
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import LLMInterface
 from app.instructions.tools import tool
+
+logger = logging.getLogger(__name__)
 
 class KnowledgeGraphClient:
     def __init__(self, base_url: str, kb_id: int):
@@ -53,7 +56,7 @@ class KnowledgeGraphClient:
         response.raise_for_status()
         return response.json()
 
-    def retrieve_chunks(self, relationships_ids: List[int]) -> Dict[str, Any]:
+    def retrieve_chunks(self, relationships_ids: List[int]):
         """
         Retrieve chunks associated with given relationship IDs.
         """
@@ -160,6 +163,7 @@ class ExplorationGraph:
     def __init__(self):
         self.entities = {}
         self.relationships = []
+        self.chunks = []
 
     def add_entity(self, entity):
         self.entities[entity["id"]] = entity
@@ -167,8 +171,14 @@ class ExplorationGraph:
     def add_relationship(self, relationship):
         self.relationships.append(relationship)
 
+    def retrieve_chunks(self):
+        relationships_ids = []
+        for relationship in self.relationships:
+            relationships_ids.append(relationship["id"])
+        self.chunks = knowledge_client.retrieve_chunks(relationships_ids)
+
     def to_dict(self):
-        return {"entities": self.entities, "relationships": self.relationships}
+        return {"entities": self.entities, "relationships": self.relationships, "chunks": self.chunks}
 
 
 def evaluation_retrieval_results(
@@ -254,7 +264,7 @@ def smart_retrieve(
     """
 
     # Step 1: Receive User Query
-    print(f"Starting search with query: {query}")
+    logger.info(f"Starting search with query: {query}")
     # Initialize Meta-Graph and Exploration Graph
     meta_graph = MetaGraph(llm_client, query)
     exploration_graph = ExplorationGraph()
@@ -263,7 +273,7 @@ def smart_retrieve(
     entities = {}
     relationships = {}
     for query in meta_graph.initial_queries:
-        print(f"Initial query: {query}")
+        logger.info(f"Initial query: {query}")
         retrieval_results = knowledge_client.retrieve_knowledge(query, top_k=10)
         for entity in retrieval_results.get("entities", []):
             entities[entity["id"]] = entity
@@ -272,7 +282,7 @@ def smart_retrieve(
 
     # Iterative Search Process
     for iteration in range(1, max_iterations + 1):
-        print(f"\n--- Iteration {iteration} ---")
+        logger.info(f"\n--- Iteration {iteration} ---")
 
         # Step 3: evaluate the retrieval results
         analysis = evaluation_retrieval_results(
@@ -282,7 +292,7 @@ def smart_retrieve(
             meta_graph,
         )
 
-        print("evaluation result", analysis)
+        logger.info("evaluation result", analysis)
 
         for id in analysis.get("useful_entity_ids", []):
             exploration_graph.add_entity(entities[id])
@@ -293,8 +303,8 @@ def smart_retrieve(
             del relationships[id]
 
         if analysis.get("is_sufficient", []):
-            print("Sufficient information retrieved.")
-            return exploration_graph.to_dict()
+            logger.info("Sufficient information retrieved.")
+            break
 
         for action in analysis.get("next_actions", []):
             if action.get("tool") == "retrieve_knowledge":
@@ -312,5 +322,7 @@ def smart_retrieve(
                 for relationship in retrieval_results.get("relationships", []):
                     relationships[relationship["id"]] = relationship
 
-    # Step 5: Return Result
+    # Step 4: retrieve the relevant chunks
+    exploration_graph.retrieve_chunks()
+
     return exploration_graph
