@@ -243,6 +243,31 @@ class ExplorationGraph:
             "chunks": self.chunks,
         }
 
+    def to_dict_public(self):
+        # remove the id field
+        entities = [
+            {
+                "name": entity["name"],
+                "description": entity["description"],
+            }
+            for entity in self.entities.values()
+        ]
+
+        relationships = [
+            {
+                "source_entity": rel["source_entity"]["name"],
+                "target_entity": rel["target_entity"]["name"],
+                "relationship": rel["relationship"],
+            }
+            for rel in self.relationships.values()
+        ]
+
+        return {
+            "entities": entities,
+            "relationships": relationships,
+            "chunks": self.chunks,
+        }
+
 
 def evaluation_retrieval_results(
     llm_client,
@@ -351,7 +376,9 @@ def smart_retrieve(
     # Initialize Meta-Graph and Exploration Graph
     meta_graph = MetaGraph(llm_client, query)
     exploration_graph = ExplorationGraph()
-    logger.debug(f"Meta-Graph generation completed in {time.time() - start_time:.2f} seconds.")
+    logger.debug(
+        f"Meta-Graph generation completed in {time.time() - start_time:.2f} seconds."
+    )
 
     # Step 2: Initial Retrieval
     entities = {}
@@ -375,7 +402,9 @@ def smart_retrieve(
             try:
                 retrieval_results = future.result()
             except Exception as e:
-                logger.error("Error retrieving knowledge for query %s: %s", initial_query, e)
+                logger.error(
+                    "Error retrieving knowledge for query %s: %s", initial_query, e
+                )
                 continue
 
             # Merge entities and relationships from results
@@ -384,7 +413,9 @@ def smart_retrieve(
             for relationship in retrieval_results.get("relationships", []):
                 relationships[relationship["id"]] = relationship
 
-    logger.info(f"Initial retrieval completed in {time.time() - start_time:.2f} seconds.")
+    logger.info(
+        f"Initial retrieval completed in {time.time() - start_time:.2f} seconds."
+    )
 
     # Iterative Search Process
     for iteration in range(1, max_iterations + 1):
@@ -439,12 +470,15 @@ def smart_retrieve(
                 except Exception as e:
                     logger.error("Error processing action %s: %s", action, e)
                     continue
-        logger.info(f"Iteration {iteration} completed in {time.time() - start_time:.2f} seconds.")
+        logger.info(
+            f"Iteration {iteration} completed in {time.time() - start_time:.2f} seconds."
+        )
 
     # Step 4: retrieve the relevant chunks
     exploration_graph.retrieve_chunks()
 
-    return exploration_graph.to_dict()
+    return exploration_graph.to_dict_public()
+
 
 @tool
 def vector_search(query, top_k=10):
@@ -459,6 +493,7 @@ def vector_search(query, top_k=10):
     """
 
     return smart_retrieve(query)
+
 
 @tool
 def retrieve_knowledge_graph(query):
