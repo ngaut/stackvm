@@ -2,6 +2,7 @@ import logging
 import requests
 import time
 import json
+import os
 from typing import List, Optional, Dict, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -130,8 +131,12 @@ class KnowledgeGraphClient:
 
 
 knowledge_client = KnowledgeGraphClient("https://tidb.ai/api/v1", 30001)
-llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
-
+if os.getenv("GOOGLE_API_KEY", None):
+    llm_client = LLMInterface(
+        "gemini", "gemini-2.0-flash-exp"
+    )
+else:
+    llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 class MetaGraph:
     def __init__(self, llm_client, query):
