@@ -105,6 +105,7 @@ def get_chunk_content(chunk):
     logger.warning("Chunk is malformed or missing 'content' field.")
     return None
 
+@tool
 def vector_search(query, top_k=10):
     """
     Retrieves the most relevant TiDB Document data chunks based on embedding similarity to the query.

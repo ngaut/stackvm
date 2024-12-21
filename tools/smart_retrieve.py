@@ -481,20 +481,6 @@ def smart_retrieve(
 
 
 @tool
-def vector_search(query, top_k=10):
-    """
-    Retrieves the most relevant TiDB Document data chunks similarity to the query.
-
-    Arguments:
-    - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
-
-    Best practices:
-    - Do not insert the raw results from vector_search directly into the final_answer. The vector search tool returns arrays or multiple document fragments that may not be immediately suitable for a coherent final response. Instead, first use an LLM generation step to summarize, refine, and unify the language of these fragments. Once processed into a concise and well-structured text in the target language, then integrate this refined output into the final_answer.
-    """
-
-    return smart_retrieve(query)
-
-@tool
 def retrieve_knowledge_graph(query):
     """
     Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
