@@ -36,8 +36,6 @@ session = requests.Session()
 session.mount("https://", adapter)
 session.mount("http://", adapter)
 
-
-@tool
 def retrieve_knowledge_graph(query):
     """
     Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
@@ -107,8 +105,6 @@ def get_chunk_content(chunk):
     logger.warning("Chunk is malformed or missing 'content' field.")
     return None
 
-
-@tool
 def vector_search(query, top_k=10):
     """
     Retrieves the most relevant TiDB Document data chunks based on embedding similarity to the query.
