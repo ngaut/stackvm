@@ -1,5 +1,6 @@
 import logging
 import requests
+import time
 import json
 from typing import List, Optional, Dict, Any
 from requests.adapters import HTTPAdapter
@@ -46,6 +47,7 @@ class KnowledgeGraphClient:
             "top_k": top_k,
             "similarity_threshold": similarity_threshold,
         }
+        logger.info("retrieve_knowledge with argument: %s", query)
 
         try:
             response = self.session.post(url, json=payload, timeout=60)
@@ -66,7 +68,7 @@ class KnowledgeGraphClient:
     def retrieve_neighbors(
         self,
         entities_ids: List[int],
-        query: Optional[str] = None,
+        query: str,
         max_depth: int = 1,
         max_neighbors: int = 10,
         similarity_threshold: float = 0.5,
@@ -82,6 +84,8 @@ class KnowledgeGraphClient:
             "max_neighbors": max_neighbors,
             "similarity_threshold": similarity_threshold,
         }
+
+        logger.info("retrieve_neighbors with arguments: %s, %s", entities_ids, query)
 
         try:
             response = self.session.post(url, json=payload, timeout=60)
@@ -217,31 +221,32 @@ class MetaGraph:
 class ExplorationGraph:
     def __init__(self):
         self.entities = {}
-        self.relationships = []
+        self.relationships = {}
         self.chunks = []
 
     def add_entity(self, entity):
         self.entities[entity["id"]] = entity
 
     def add_relationship(self, relationship):
-        self.relationships.append(relationship)
+        self.relationships[relationship["id"]] = relationship
 
     def retrieve_chunks(self):
-        relationships_ids = []
-        for relationship in self.relationships:
-            relationships_ids.append(relationship["id"])
+        relationships_ids = [rel["id"] for rel in self.relationships.values()]
+        if not relationships_ids:
+            return
         self.chunks = knowledge_client.retrieve_chunks(relationships_ids)
 
     def to_dict(self):
         return {
-            "entities": self.entities,
-            "relationships": self.relationships,
+            "entities": [entity for entity in self.entities.values()],
+            "relationships": [rel for rel in self.relationships.values()],
             "chunks": self.chunks,
         }
 
 
 def evaluation_retrieval_results(
     llm_client,
+    query,
     retrieval_results: dict,
     exploration_graph: ExplorationGraph,
     meta_graph: MetaGraph,
@@ -255,6 +260,7 @@ def evaluation_retrieval_results(
         exploration_graph: The current exploration graph.
         meta_graph: The meta graph representation of the query and the search strategy.
     """
+
     prompt = f"""
     Analyze the following search results for their usefulness in answering the query.
 
@@ -264,37 +270,38 @@ def evaluation_retrieval_results(
     Current exploration graph:
     {json.dumps(exploration_graph.to_dict(), indent=2)}
 
-    Retrieved Entities:
+    New Retrieved Entities:
     {json.dumps(retrieval_results.get('entities', []), indent=2)}
     
-    Retrieved Relationships:
+    New Retrieved Relationships:
     {json.dumps(retrieval_results.get('relationships', []), indent=2)}
-
-    Available tools:
-    - retrieve_knowledge(query) -> dict: Retrieve knowledge from the knowledge base.
-    - retrieve_neighbors(entities_ids: List[int], query) -> dict: Retrieve neighbors of the given entities.
-
     
-    Your task is to
+    Query to answer: "{query}"
+
+    Let's think in Step-by-step, use meta-graph and query to performance the following tasks:
     1. Filter out the entities and relationships that are not helpful in answering the query
-    2. Identify the entities and relationships (are not already in the exploration graph) that are (and only)useful in answering the query, which should be added to the exploration graph.
-    3. Determine if there are missing information to give an correct answer to the query. If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
+    2. Identify the useful (and only useful) entities and relationships in answering the query, which are not already in the exploration graph and should be added to the exploration graph.
+    3. Determine if there are missing information that lead to unable to give an correct answer to the query. If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
     4. If not, generate next actions to collect the missing information based on the meta-graph, the exploration graph, and the available tools.
-    
+
+    Choosing a Tool for Next Actions:
+	- For new information not in the graph, use retrieve_knowledge.
+	- For expanding based on existing entities, use retrieve_neighbors.
+
     Respond in JSON format as follows:
     {{
-        "useful_entity_ids": [id1, id2, ...],
-        "useful_relationship_ids": [id1, id2, ...],
-        "is_sufficient": true/false,
+        "useful_entity_ids": [id1, id2, ...], # Choose from New Retrieved Entities which are useful and not already in the exploration graph
+        "useful_relationship_ids": [id1, id2, ...], # Choose from New Retrieved Relationships which are useful and not already in the exploration graph
+        "is_sufficient": true/false, # whether the retrieved information is sufficient to answer the query
         "next_actions": [
             {{
                 "tool": "retrieve_knowledge",
-                "query": "string, the query to retrieve knowledge"
+                "query": "string, A query to retrieve new information not in the graph.."
             }}
             {{
                 "tool": "retrieve_neighbors",
-                "entities_ids": [id1, id2, ...],
-                "query": "string, the query to retrieve neighbors"
+                "entities_ids": [id1, id2, ...], # A list of entity IDs already in the exploration graph.
+                "query": "string, the query to narrow down which neighbors to retrieve."
             }}
         ]
     }}
@@ -318,7 +325,7 @@ def _process_action(action, knowledge_client):
                 action.get("entities_ids"), action.get("query")
             )
     except Exception as e:
-        logger.error(f"Error processing action {action}: {e}")
+        logger.error("Error processing action %s: %s", action, e, exc_info=True)
         return {"entities": [], "relationships": []}
 
 
@@ -339,10 +346,12 @@ def smart_retrieve(
     """
 
     # Step 1: Receive User Query
-    logger.info(f"Starting search with query: {query}")
+    logger.info("Starting search with query: %s", query)
+    start_time = time.time()
     # Initialize Meta-Graph and Exploration Graph
     meta_graph = MetaGraph(llm_client, query)
     exploration_graph = ExplorationGraph()
+    logger.debug(f"Meta-Graph generation completed in {time.time() - start_time:.2f} seconds.")
 
     # Step 2: Initial Retrieval
     entities = {}
@@ -351,6 +360,7 @@ def smart_retrieve(
     # Prepare all query tasks
     tasks = meta_graph.initial_queries
 
+    start_time = time.time()
     # Use ThreadPoolExecutor to execute retrieve_knowledge queries concurrently
     with ThreadPoolExecutor(max_workers=5) as executor:
         # Create a mapping of Future objects to their corresponding queries
@@ -361,11 +371,11 @@ def smart_retrieve(
 
         # Process completed futures as they finish
         for future in as_completed(future_to_query):
-            query = future_to_query[future]
+            initial_query = future_to_query[future]
             try:
                 retrieval_results = future.result()
             except Exception as e:
-                logger.error(f"Error retrieving knowledge for query {query}: {e}")
+                logger.error("Error retrieving knowledge for query %s: %s", initial_query, e)
                 continue
 
             # Merge entities and relationships from results
@@ -374,19 +384,24 @@ def smart_retrieve(
             for relationship in retrieval_results.get("relationships", []):
                 relationships[relationship["id"]] = relationship
 
+    logger.info(f"Initial retrieval completed in {time.time() - start_time:.2f} seconds.")
+
     # Iterative Search Process
     for iteration in range(1, max_iterations + 1):
         logger.info(f"--- Iteration {iteration}: {query} ---")
 
         # Step 3: evaluate the retrieval results
+        start_time = time.time()
         analysis = evaluation_retrieval_results(
             llm_client,
+            query,
             {"entities": entities, "relationships": relationships},
             exploration_graph,
             meta_graph,
         )
+        logger.info(f"Analysis completed in {time.time() - start_time:.2f} seconds.")
 
-        logger.debug("evaluation result", analysis)
+        logger.debug("evaluation result: %s", analysis)
 
         for id in analysis.get("useful_entity_ids", []):
             if id in entities:
@@ -399,9 +414,10 @@ def smart_retrieve(
                 del relationships[id]
 
         if analysis.get("is_sufficient", []):
-            logger.info(f"Sufficient information retrieved for query: {query}")
+            logger.info("Sufficient information retrieved for query: %s", query)
             break
 
+        start_time = time.time()
         # Process next actions concurrently
         with ThreadPoolExecutor(max_workers=5) as executor:
             # Create a mapping of Future objects to their corresponding actions
@@ -421,8 +437,9 @@ def smart_retrieve(
                     for relationship in retrieval_results.get("relationships", []):
                         relationships[relationship["id"]] = relationship
                 except Exception as e:
-                    logger.error(f"Error processing action {action}: {e}")
+                    logger.error("Error processing action %s: %s", action, e)
                     continue
+        logger.info(f"Iteration {iteration} completed in {time.time() - start_time:.2f} seconds.")
 
     # Step 4: retrieve the relevant chunks
     exploration_graph.retrieve_chunks()
