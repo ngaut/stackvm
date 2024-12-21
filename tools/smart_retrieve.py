@@ -494,7 +494,6 @@ def vector_search(query, top_k=10):
 
     return smart_retrieve(query)
 
-
 @tool
 def retrieve_knowledge_graph(query):
     """
