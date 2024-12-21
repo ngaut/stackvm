@@ -446,6 +446,7 @@ def smart_retrieve(
 
     return exploration_graph.to_dict()
 
+@tool
 def vector_search(query, top_k=10):
     """
     Retrieves the most relevant TiDB Document data chunks similarity to the query.
@@ -459,7 +460,7 @@ def vector_search(query, top_k=10):
 
     return smart_retrieve(query)
 
-
+@tool
 def retrieve_knowledge_graph(query):
     """
     Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
