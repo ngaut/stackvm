@@ -257,15 +257,6 @@ Parameters can be either direct values or variable references. To reference a va
   - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
   - Before including content obtained from vector_search in the final_answer, ensure that you have processed it through an LLM generation tool. Use the LLM to summarize, translate (if necessary), and combine the search results into a cohesive, single-language narrative. Avoid directly placing any raw vector search output (such as arrays or multiple fragmented chunks) into the final answer. This approach guarantees that the final answer is coherent, consistent, and well-structured.
 
-- **Best Practices for LLM Generation with References**:
-
-  -	When to Include References: Only for text responses, include source_uri links if (and only if) specific source data retrieved from the vector search results is referenced in the final answer.
-    - While summarizing results, ensure that citations (source_uri) from the relevant vector search documents are carried over to the summary.
-    - Map each claim or insight in the final answer to its corresponding source_uri, ensuring traceability.
-  - Include Citations from Sub-summaries: When combining multiple summaries, extract citations from the provided context (e.g., ${architecture_summary}, ${scalability_summary}) and map them to the claims in the final answer.
-	- Formatting References: Use clear formats like [Reference Title](Reference Link) to enable direct indexing.
-	- Relevance and Clarity: Include only critical references that directly support the answer. Avoid overloading responses.
-
 ## 8. Common Errors
 
 **Case 1: Querying Specific Runtime/Environment Information**
@@ -285,8 +276,27 @@ Parameters can be either direct values or variable references. To reference a va
 }
 ```
 
+```json
+{
+  "parameters": {
+    "output_vars": [
+      "slow_query_log_explanation",
+      "sample_slow_query_log"
+    ],
+    "tool_name": "llm_generate",
+    "tool_params": {
+      "context": null,
+      "prompt": "Please analyze the sql query: `SELECT * FROM INFORMATION_SCHEMA.SLOW_QUERY ORDER BY start_time DESC LIMIT 10;`. Explain the slow query and its relevant details(at least contain 'query', 'start_time', 'duration', 'plan_digest').\n\nPlease ensure that the generated text uses English."
+    }
+  },
+  "seq_no": 2,
+  "type": "calling"
+}
+```
+
 **Error Explanation**:
 
+- **Not allowed to execute SQL**：Please do not use any tools, such as llm_generate, to attempt to obtain SQL execution results.
 - **Do Not Assume Specific Environment Information**: Do not make assumptions about (or generate) specific details of the environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed specific environment information.
 - **Avoid Obtain Specific Data with General Tools**: General tools like `retrieve_knowledge_graph`, `vector_search` and `llm_generate` can only access public documentation and general knowledge. They cannot access:
   - Current system configuration
@@ -294,3 +304,4 @@ Parameters can be either direct values or variable references. To reference a va
   - Cluster status
   - Any private or runtime information
   Such specific environment information can only be obtained through specialized tools explicitly designed for that purpose, or should be provided by the user as part of their query.
+

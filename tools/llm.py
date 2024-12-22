@@ -9,9 +9,7 @@ from app.services import LLMInterface
 logger = logging.getLogger(__name__)
 
 
-llm_client = LLMInterface(
-    LLM_PROVIDER, FAST_LLM_MODEL
-)
+llm_client = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
 
 
 @tool
@@ -62,7 +60,14 @@ def llm_generate(
     if response_format:
         prompt += f"\n\n{response_format}"
     elif context is not None:
-        prompt += "\nThe graph entity and relationship is internal information, do not include it in the response. And If (and only if) you reference specific information from the context to construct your answer, include the corresponding reference source_uri link(s) clearly. Ensure the references are formatted properly to enable direct indexing to the source for further details."
+        prompt += """\n\nSome additional hints:
+1. **Internal Data Usage**: Graph entities and relationships are internal data and should not be directly included in your response. You can use the information from graph entities and relationships to generate your answers, but do not mention them explicitly (e.g., avoid phrases like "entity xx" or "relationship yy").
+2. **Referencing Sources**:
+   - **Condition**: Only reference specific information from the provided context if a source URL is available.
+   - **Action**: When referencing, include the corresponding `source_uri` link(s) clearly in your answer.
+   - **Avoid**: Do not create or include any fabricated `source_uri` links.
+   - **Formatting**: Ensure that all reference links are properly formatted to enable direct indexing to the original sources for further details.
+"""
 
     if stream_queue:
         final_answer = ""
