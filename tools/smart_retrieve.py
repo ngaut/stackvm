@@ -131,12 +131,14 @@ class KnowledgeGraphClient:
 
 
 knowledge_client = KnowledgeGraphClient("https://tidb.ai/api/v1", 30001)
+llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 if os.getenv("GOOGLE_API_KEY", None):
-    llm_client = LLMInterface(
-        "gemini", "gemini-2.0-flash-exp"
-    )
+    eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash-exp")
+    logger.info("Using Gemini 2.0 Flash Evaluation LLM")
 else:
-    llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+    eval_llm_client = llm_client
+    logger.info(f"Using {LLM_MODEL} Evaluation LLM")
+
 
 class MetaGraph:
     def __init__(self, llm_client, query):
@@ -277,6 +279,7 @@ class ExplorationGraph:
 def evaluation_retrieval_results(
     llm_client,
     query,
+    actions_history: list,
     retrieval_results: dict,
     exploration_graph: ExplorationGraph,
     meta_graph: MetaGraph,
@@ -300,33 +303,46 @@ def evaluation_retrieval_results(
     Current exploration graph:
     {json.dumps(exploration_graph.to_dict(), indent=2)}
 
-    New Retrieved Entities:
-    {json.dumps(retrieval_results.get('entities', []), indent=2)}
+    Actions History:
+    {actions_history}
+
+    New Retrieved Information:
+
+    - New Retrieved Entities: {json.dumps(retrieval_results.get('entities', []), indent=2)}
     
-    New Retrieved Relationships:
-    {json.dumps(retrieval_results.get('relationships', []), indent=2)}
+    - New Retrieved Relationships: {json.dumps(retrieval_results.get('relationships', []), indent=2)}
     
     Query to answer: "{query}"
 
     Let's think in Step-by-step, use meta-graph and query to performance the following tasks:
-    1. Filter out the entities and relationships that are not helpful in answering the query
-    2. Identify the useful (and only useful) entities and relationships in answering the query, which are not already in the exploration graph and should be added to the exploration graph.
-    3. Determine if there are missing information that lead to unable to give an correct answer to the query. If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
-    4. If not, generate next actions to collect the missing information based on the meta-graph, the exploration graph, and the available tools.
+    1. Filter out the entities and relationships that are not helpful in answering the query.
+    2. Identify the useful (and only useful) entities and relationships in answering the query:
+      - Only include entities and relationships that are relevant to answering the query
+      - Skip any entities or relationships that are already present in the exploration graph
+      - Focus on new, unique and helpful information that adds value to the exploration graph
 
-    Choosing a Tool for Next Actions:
-	- For new information not in the graph, use retrieve_knowledge.
-	- For expanding based on existing entities, use retrieve_neighbors.
+    3. Determine if there are missing information that prevents giving a correct answer to the query:
+      - Compare the meta-graph's entities and relationships with what's currently in the exploration graph.
+        - Check if all key points from the query are covered in the exploration graph.
+        - Verify if the relationships between entities in the exploration graph match what's needed in the meta-graph.
+      - If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
+      - If any information are missing:
+        * Identify which entities or relationships from meta-graph are not yet in exploration graph
+        * Generate next actions to collect the missing information using the available tools. Choosing a Tool for Next Actions:
+          - For new information not in the graph, use retrieve_knowledge.
+          - For expanding based on existing entities, use retrieve_neighbors.
+          - Consider using different tools or query formulations than what was already tried (in Actions History).
 
     Respond in JSON format as follows:
     {{
         "useful_entity_ids": [id1, id2, ...], # Choose from New Retrieved Entities which are useful and not already in the exploration graph
         "useful_relationship_ids": [id1, id2, ...], # Choose from New Retrieved Relationships which are useful and not already in the exploration graph
         "is_sufficient": true/false, # whether the retrieved information is sufficient to answer the query
+        "missing_information": [miss key point description, miss key point description],
         "next_actions": [
             {{
                 "tool": "retrieve_knowledge",
-                "query": "string, A query to retrieve new information not in the graph.."
+                "query": "string, the query to retrieve new information not in the graph.."
             }}
             {{
                 "tool": "retrieve_neighbors",
@@ -388,6 +404,7 @@ def smart_retrieve(
     # Step 2: Initial Retrieval
     entities = {}
     relationships = {}
+    actions_history = meta_graph.initial_queries or []
 
     # Prepare all query tasks
     tasks = meta_graph.initial_queries
@@ -429,8 +446,9 @@ def smart_retrieve(
         # Step 3: evaluate the retrieval results
         start_time = time.time()
         analysis = evaluation_retrieval_results(
-            llm_client,
+            eval_llm_client,
             query,
+            actions_history,
             {"entities": entities, "relationships": relationships},
             exploration_graph,
             meta_graph,
@@ -478,6 +496,8 @@ def smart_retrieve(
         logger.info(
             f"Iteration {iteration} completed in {time.time() - start_time:.2f} seconds."
         )
+
+        actions_history.extend(analysis.get("next_actions", []))
 
     # Step 4: retrieve the relevant chunks
     exploration_graph.retrieve_chunks()
