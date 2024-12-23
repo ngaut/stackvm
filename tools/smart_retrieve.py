@@ -328,12 +328,10 @@ def evaluation_retrieval_results(
       - If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
       - If any information are missing:
         * Identify which entities or relationships from meta-graph are not yet in exploration graph
-        * Generate next actions to collect the missing information using the available tools. 
-        * Consider using different tools or query formulations than what was already tried.
-
-    Choosing a Tool for Next Actions:
-	- For finding new information not in the graph, use retrieve_knowledge.
-	- For expanding based on existing entities, use retrieve_neighbors.
+        * Generate next actions to collect the missing information using the available tools. Choosing a Tool for Next Actions:
+          - For new information not in the graph, use retrieve_knowledge.
+          - For expanding based on existing entities, use retrieve_neighbors.
+          - Consider using different tools or query formulations than what was already tried (in Actions History).
 
     Respond in JSON format as follows:
     {{
@@ -448,7 +446,7 @@ def smart_retrieve(
         # Step 3: evaluate the retrieval results
         start_time = time.time()
         analysis = evaluation_retrieval_results(
-            llm_client,
+            eval_llm_client,
             query,
             actions_history,
             {"entities": entities, "relationships": relationships},
