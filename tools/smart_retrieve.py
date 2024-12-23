@@ -131,14 +131,14 @@ class KnowledgeGraphClient:
 
 
 knowledge_client = KnowledgeGraphClient("https://tidb.ai/api/v1", 30001)
+llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 if os.getenv("GOOGLE_API_KEY", None):
-    llm_client = LLMInterface(
-        "gemini", "gemini-2.0-flash-exp"
-    )
-    logger.info("Using Gemini LLM")
+    eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash-exp")
+    logger.info("Using Gemini 2.0 Flash Evaluation LLM")
 else:
-    llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
-    logger.info("Using OpenAI LLM")
+    eval_llm_client = llm_client
+    logger.info(f"Using {LLM_MODEL} Evaluation LLM")
+
 
 class MetaGraph:
     def __init__(self, llm_client, query):
@@ -223,6 +223,7 @@ class MetaGraph:
             "relationships": self.relationships,
             "initial_queries": self.initial_queries,
         }
+
 
 class ExplorationGraph:
     def __init__(self):
@@ -314,8 +315,12 @@ def evaluation_retrieval_results(
     Query to answer: "{query}"
 
     Let's think in Step-by-step, use meta-graph and query to performance the following tasks:
-    1. Filter out the entities and relationships that are not helpful in answering the query
-    2. Identify the useful (and only useful) entities and relationships in answering the query, which are not already in the exploration graph and should be added to the exploration graph.
+    1. Filter out the entities and relationships that are not helpful in answering the query.
+    2. Identify the useful (and only useful) entities and relationships in answering the query:
+      - Only include entities and relationships that are relevant to answering the query
+      - Skip any entities or relationships that are already present in the exploration graph
+      - Focus on new, unique and helpful information that adds value to the exploration graph
+
     3. Determine if there are missing information that prevents giving a correct answer to the query:
       - Compare the meta-graph's entities and relationships with what's currently in the exploration graph.
         - Check if all key points from the query are covered in the exploration graph.
@@ -323,7 +328,8 @@ def evaluation_retrieval_results(
       - If the retrieved information are already sufficient to answer the query, it should contain enough information to answer each key question in the query.
       - If any information are missing:
         * Identify which entities or relationships from meta-graph are not yet in exploration graph
-        * Generate next actions to collect the missing information using the available tools
+        * Generate next actions to collect the missing information using the available tools. 
+        * Consider using different tools or query formulations than what was already tried.
 
     Choosing a Tool for Next Actions:
 	- For finding new information not in the graph, use retrieve_knowledge.
