@@ -248,6 +248,38 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 
+- **Avoid variable dependencies within a single "assign" instruction**：Since the order of variable assignments within an "assign" instruction is not defined, do not rely on one variable being assigned before another within the same instruction. Instead, split assignments across multiple instructions if one depends on another. For example, this is incorrect:
+
+```json
+{
+  "seq_no": 3,
+  "type": "assign",
+  "parameters": {
+    "y": "${x}",
+    "x": 10
+  }
+}
+```
+
+"y" might end up being undefined because we cannot guarantee that "x" will be set first. The correct approach is to split them:
+
+```json
+{
+  "seq_no": 3,
+  "type": "assign",
+  "parameters": {
+    "x": 10
+  }
+},
+{
+  "seq_no": 4,
+  "type": "assign",
+  "parameters": {
+    "y": "${x}"
+  }
+}
+```
+
 - **Best Practices for Utilizing Knowledge Graph Search**:
   - When a knowledge graph is available, use the Knowledge Graph Search tool to retrieve relevant knowledge points and their relationships. Since the search may return extensive data, focus on identifying the most relevant information.
   - After retrieving the data, use an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s question.
