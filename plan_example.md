@@ -7,49 +7,7 @@
     "seq_no": 0,
     "type": "reasoning",
     "parameters": {
-      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:
-
-      1. **Overall Strategy**:
-         We'll follow these steps:
-         1. Determine the latest stable version of TiDB
-         2. Gather version-specific information
-         3. Collect general TiDB information (if needed)
-         4. Gather performance optimization techniques
-         5. Collect e-commerce-specific optimizations
-         6. Synthesize gathered information into actionable recommendations
-
-      2. **Key Decision Points and Rationale**:
-         a. **Using both knowledge graph and vector search**: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.
-         b. **Conditional logic for version determination**: This helps us handle cases where the exact version might not be clear from the knowledge graph data.
-
-      3. **Assumptions**:
-         - The latest stable version of TiDB is the most relevant for current optimization practices.
-         - E-commerce applications have specific performance requirements that may differ from general use cases.
-
-      4. Compliance Checks:
-       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)
-       - ✓ All responses will maintain consistent language (English)
-       - ✓ Final recommendations will be stored in final_answer
-       - ✓ All variable references use correct ${var} syntax
-
-      5. **Alternative Approaches Considered**:
-         - We could have used only vector search, but this might miss important structured relationships in the data.
-         - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.
-
-      6. **Expected Outcomes**:
-         - **Steps 1-2**: Identification of the latest TiDB version
-         - **Steps 3-6**: Gathering of version-specific and general TiDB information
-         - **Steps 7-8**: Collection of performance techniques and e-commerce-specific optimizations
-         - **Steps 9-10**: Synthesis of gathered information into actionable recommendations
-
-      7. **Information Combination**:
-         The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.
-
-      8. **Limitations**:
-         - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.
-         - If no specific version is found, our recommendations may be more general and less tailored.
-
-      This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
+      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:\n\n      1. **Overall Strategy**:\n         We'll follow these steps:\n         1. Determine the latest stable version of TiDB\n         2. Gather version-specific information\n         3. Collect general TiDB information (if needed)\n         4. Gather performance optimization techniques\n         5. Collect e-commerce-specific optimizations\n         6. Synthesize gathered information into actionable recommendations\n\n      2. **Key Decision Points and Rationale**:\n         a. **Using both knowledge graph and vector search**: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.\n         b. **Conditional logic for version determination**: This helps us handle cases where the exact version might not be clear from the knowledge graph data.\n\n      3. **Assumptions**:\n         - The latest stable version of TiDB is the most relevant for current optimization practices.\n         - E-commerce applications have specific performance requirements that may differ from general use cases.\n\n      4. Compliance Checks:\n       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)\n       - ✓ All responses will maintain consistent language (English)\n       - ✓ Final recommendations will be stored in final_answer\n       - ✓ All variable references use correct ${var} syntax\n\n      5. **Alternative Approaches Considered**:\n         - We could have used only vector search, but this might miss important structured relationships in the data.\n         - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.\n\n      6. **Expected Outcomes**:\n         - **Steps 1-2**: Identification of the latest TiDB version\n         - **Steps 3-6**: Gathering of version-specific and general TiDB information\n         - **Steps 7-8**: Collection of performance techniques and e-commerce-specific optimizations\n         - **Steps 9-10**: Synthesis of gathered information into actionable recommendations\n\n      7. **Information Combination**:\n         The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.\n\n      8. **Limitations**:\n         - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.\n         - If no specific version is found, our recommendations may be more general and less tailored.\n\n      This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
       "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
     }
   },
