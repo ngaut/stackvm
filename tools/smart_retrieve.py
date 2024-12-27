@@ -101,7 +101,17 @@ class KnowledgeGraphClient:
             logger.error("Max retries exceeded for retrieve_neighbors: %s", str(e))
             raise
         except requests.exceptions.RequestException as e:
-            logger.error("Request to retrieve_neighbors failed: %s", str(e))
+            if e.response is not None:
+                logger.error(
+                    "Request to retrieve_neighbors failed with status code %s, response content: %s",
+                    e.response.status_code,
+                    e.response.text
+                )
+            else:
+                logger.error(
+                    "Request to retrieve_neighbors encountered an error: %s. No response object available.",
+                    str(e)
+                )
             raise
         except ValueError as e:
             logger.error(
@@ -126,7 +136,17 @@ class KnowledgeGraphClient:
             logger.error("Max retries exceeded for retrieve_chunks: %s", str(e))
             raise
         except requests.exceptions.RequestException as e:
-            logger.error("Request to retrieve_chunks failed: %s", str(e))
+            if e.response is not None:
+                logger.error(
+                    "Request to retrieve_chunks failed with status code %s, response content: %s",
+                    e.response.status_code,
+                    e.response.text
+                )
+            else:
+                logger.error(
+                    "Request to retrieve_chunks encountered an error: %s. No response object available.",
+                    str(e)
+                )
             raise
         except ValueError as e:
             logger.error(
