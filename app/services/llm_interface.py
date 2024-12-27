@@ -64,6 +64,7 @@ class OpenAIProvider(BaseLLMProvider):
     def __init__(self, model: str, **kwargs):
         super().__init__(model, **kwargs)
         openai.api_key = os.getenv("OPENAI_API_KEY")
+        openai.base_url = os.getenv("OPENAI_BASE_URL")
         if not openai.api_key:
             raise ValueError(
                 "OpenAI API key not set. Please set the OPENAI_API_KEY environment variable."

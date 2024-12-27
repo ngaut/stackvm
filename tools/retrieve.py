@@ -9,11 +9,17 @@ from app.instructions.tools import tool
 
 logger = logging.getLogger(__name__)
 
-API_KEY = os.environ.get("TIDB_AI_API_KEY")
+API_KEY = os.environ.get("AUTOFLOW_API_KEY")
 if not API_KEY:
-    logger.error("TIDB_AI_API_KEY not found in environment variables")
+    logger.error("AUTOFLOW_API_KEY not found in environment variables")
 
 KNOWLEDGE_ENGINE = os.environ.get("KNOWLEDGE_ENGINE", "default")
+
+AUTOFLOW_BASE_URL = os.environ.get("AUTOFLOW_BASE_URL", "https://tidb.ai")
+
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4")
+
+KB_ID = os.environ.get("KB_ID", 30001)
 
 MAX_TOP_K = 10
 MAX_CHUNK_TOKENS = 10240
@@ -72,7 +78,7 @@ def retrieve_knowledge_graph(query):
     """
 
     # hardcode to improve
-    url = "https://tidb.ai/api/v1/admin/knowledge_bases/30001/graph/search"
+    url = f"{AUTOFLOW_BASE_URL}/api/v1/admin/knowledge_bases/{KB_ID}/graph/search"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
@@ -144,13 +150,14 @@ def vector_search(query, top_k=10):
     # Initialize the tokenizer for the specified model at module level
     try:
         encoding = tiktoken.encoding_for_model(
-            "gpt-4"
+            LLM_MODEL
+            # "gpt-4"
         )  # Automatically selects the appropriate encoding
     except Exception as e:
         logger.error("Failed to initialize the token encoder: %s", str(e))
         encoding = tiktoken.get_encoding("cl100k_base")
 
-    url = "https://tidb.ai/api/v1/admin/embedding_retrieve"
+    url = f"{AUTOFLOW_BASE_URL}/api/v1/admin/embedding_retrieve"
     params = {"question": query, "chat_engine": KNOWLEDGE_ENGINE, "top_k": top_k}
     headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
     try:
