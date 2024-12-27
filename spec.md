@@ -158,28 +158,8 @@ Below is an example where the calling type is configured to use the `llm_generat
   "seq_no": 0,
   "type": "reasoning",
   "parameters": {
-    "chain_of_thoughts": "To provide recommendations for the query, we'll follow this approach:
-
-    1. Overall Strategy:
-       - Step 1: Gather initial information
-       - Step 2: Process and analyze data
-       - Step 3: Generate final recommendations
-
-    2. Key Decision Points:
-       - Using multiple data sources for comprehensive coverage
-       - Implementing error handling for edge cases
-
-    3. Limitations:
-       - Dependent on data freshness
-       - May require refinement based on specific use cases
-
-    4. Compliance Checks:
-       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)
-       - ✓ All responses will maintain consistent language (English)
-       - ✓ Final recommendations will be stored in final_answer
-       - ✓ All variable references use correct ${var} syntax
-    ...",
-    "dependency_analysis": "Step 2 depends on Step 1\nStep 3 depends on Step 2",
+    "chain_of_thoughts": "To provide recommendations for the query, we'll follow this approach:\n\n1. Overall Strategy:\n   - Step 1: Gather initial information\n   - Step 2: Process and analyze data\n   - Step 3: Generate final recommendations\n\n2. Key Decision Points:\n   - Using multiple data sources for comprehensive coverage\n   - Implementing error handling for edge cases\n\n3. Limitations:\n   - Dependent on data freshness\n   - May require refinement based on specific use cases\n\n4. Compliance Checks:\n   - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)\n   - ✓ All responses will maintain consistent language (English)\n   - ✓ Final recommendations will be stored in final_answer\n   - ✓ All variable references use correct ${var} syntax\n...",
+    "dependency_analysis": "Step 2 depends on Step 1\nStep 2 depends on Step 2"
   }
 }
 ```
