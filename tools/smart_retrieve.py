@@ -16,7 +16,7 @@ from app.instructions.tools import tool
 logger = logging.getLogger(__name__)
 
 
-TIDB_BASE_URL = os.environ.get("TIDB_BASE_URL", "https://tidb.ai")
+AUTOFLOW_BASE_URL = os.environ.get("AUTOFLOW_BASE_URL", "https://tidb.ai")
 
 KB_ID = os.environ.get("KB_ID", 30001)
 
@@ -155,7 +155,7 @@ class KnowledgeGraphClient:
             raise
 
 
-knowledge_client = KnowledgeGraphClient(f"{TIDB_BASE_URL}/api/v1", KB_ID)
+knowledge_client = KnowledgeGraphClient(f"{AUTOFLOW_BASE_URL}/api/v1", KB_ID)
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 if os.getenv("GOOGLE_API_KEY", None):
     eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash-exp")
