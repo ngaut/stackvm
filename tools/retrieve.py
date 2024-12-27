@@ -158,10 +158,18 @@ def vector_search(query, top_k=10):
         encoding = tiktoken.get_encoding("cl100k_base")
 
     url = f"{AUTOFLOW_BASE_URL}/api/v1/admin/embedding_retrieve"
-    params = {"question": query, "chat_engine": KNOWLEDGE_ENGINE, "top_k": top_k}
-    headers = {"accept": "application/json", "Authorization": f"Bearer {API_KEY}"}
+    json_payload = {
+        "query": query,
+        "chat_engine": KNOWLEDGE_ENGINE,
+        "top_k": top_k
+    }
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
     try:
-        response = session.get(url, headers=headers, params=params, timeout=60)
+        response = session.post(url, headers=headers, json=json_payload, timeout=60)
         response.raise_for_status()  # Raises HTTPError for bad responses
         data = response.json()
 
