@@ -63,7 +63,7 @@ def llm_generate(
         prompt += """\n\nSome additional hints:
 1. **Internal Data Usage**: Graph entities and relationships are internal data and should not be directly included in your response. You can use the information from graph entities and relationships to generate your answers, but do not mention them explicitly (e.g., avoid phrases like "entity xx" or "relationship yy").
 2. **Referencing Sources**:
-   - **Condition**: Only reference specific information from the provided context if a source URL is available.
+   - **Condition**: Only reference specific information if a source url is available.
    - **Action**: When referencing, include the corresponding `source_uri` link(s) clearly in your answer.
    - **Avoid**: Do not create or include any fabricated `source_uri` links.
    - **Formatting**: Ensure that all reference links are properly formatted to enable direct indexing to the original sources for further details.
