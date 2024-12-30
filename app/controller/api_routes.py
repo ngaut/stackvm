@@ -177,6 +177,7 @@ def update_task(task_id):
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
+    from_scratch = data.get("from_scratch", False)
 
     if not all([commit_hash, suggestion]):
         return log_and_return_error("Missing required parameters", "error", 400)
@@ -196,6 +197,7 @@ def update_task(task_id):
                 "new_branch_name": branch_name,
                 "commit_hash": commit_hash,
                 "suggestion": suggestion,
+                "from_scratch": from_scratch,
             },
             task.update,
             datetime.utcnow(),
