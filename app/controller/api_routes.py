@@ -121,7 +121,7 @@ def get_execution_detail(task_id, commit_hash):
             )
 
 
-@api_blueprint.route("/tasks/<task_id>/branch/<branch_name>/answer_detail")
+@api_blueprint.route("/tasks/<task_id>/branches/<branch_name>/answer_detail")
 def get_answer_detail(task_id, branch_name):
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)
