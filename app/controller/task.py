@@ -80,6 +80,9 @@ class Task:
 
         return self.branch_manager.get_commits(branch_name)
 
+    def get_answer_detail(self, branch_name: Optional[str] = "main"):
+        return self.branch_manager.get_latest_commit(branch_name)
+
     def get_state_diff(self, commit_hash: str):
         return self.branch_manager.get_state_diff(commit_hash)
 

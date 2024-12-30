@@ -121,6 +121,32 @@ def get_execution_detail(task_id, commit_hash):
             )
 
 
+@api_blueprint.route("/tasks/<task_id>/branch/<branch_name>/answer_detail")
+def get_answer_detail(task_id, branch_name):
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+        try:
+            vm_states = task.get_answer_detail(branch_name)
+            if vm_states is None or len(vm_states) != 1:
+                return log_and_return_error(
+                    f"Final answer detail not found for branch {branch_name} for task {task_id}: {vm_states}",
+                    "warning",
+                    404,
+                )
+            return jsonify(vm_states[0])
+        except Exception as e:
+            return log_and_return_error(
+                f"Unexpected error fetching final answer detail not found for branch {branch_name} for task {task_id}: {str(e)}",
+                "error",
+                500,
+            )
+
+
 @api_blueprint.route("/tasks/<task_id>/commits/<commit_hash>/diff")
 def code_diff(task_id, commit_hash):
     with SessionLocal() as session:

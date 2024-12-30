@@ -49,6 +49,10 @@ class BranchManager(ABC):
         """Get all commits from the specified branch."""
 
     @abstractmethod
+    def get_latest_commit(self, branch_name: Optional[str] = "main") -> Dict[str, Any]:
+        """Get the latest commit for specified branch"""
+
+    @abstractmethod
     def get_commit(self, commit_hash: str) -> Any:
         """Get the commit object based on the commit hash."""
 
@@ -223,6 +227,18 @@ class GitManager(BranchManager):
                 exc_info=True,
             )
             raise e
+
+    def get_latest_commit(self, branch_name: Optional[str] = "main") -> Dict[str, Any]:
+        """Get the latest commit in the branch."""
+        try:
+            latest_commit = next(self.repo.iter_commits(branch_name, max_count=1))
+            return self.get_commit(latest_commit.hexsha)
+        except StopIteration:
+            logger.warning(f"No commits found in branch '{branch_name}'.")
+            raise ValueError(f"No commits found in branch '{branch_name}'.")
+        except GitCommandError as e:
+            logger.error(f"Error accessing branch '{branch_name}': {e}")
+            raise GitCommandError(f"Error accessing branch '{branch_name}': {e}")
 
     def get_commit(self, commit_hash: str) -> Any:
         try:
