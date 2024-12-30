@@ -261,13 +261,19 @@ Parameters can be either direct values or variable references. To reference a va
 ```
 
 - **Best Practices for Utilizing Knowledge Graph Search**:
-  - When a knowledge graph is available, use the Knowledge Graph Search tool to retrieve relevant knowledge points and their relationships. Since the search may return extensive data, focus on identifying the most relevant information.
-  - After retrieving the data, use an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s question.
+  - Retrieve Structured Data: Use the Knowledge Graph Search tool to obtain relevant structured knowledge data and their interrelationships.
+  - Refine and Summarize: After retrieval, employ an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s query.
 
 - **Best Practices for Utilizing Vector Search**:
-  - To optimize its use, combine multiple Vector Search calls (with different queries) with an LLM generation tool to enhance the depth and clarity of the responses. Start by employing the Vector Search to gather extensive and context-rich document fragments related to the query. Then, feed these detailed snippets into the LLM generation tool to synthesize and generate comprehensive answers.
-  - When performing multiple Vector Search operations, limit them to batches of three. After every three `vector_search` calls, use an LLM generation tool to summarize the aggregated results.  This approach helps prevent exceeding the LLM's token window limit, reducing the likelihood of errors related to token overflow.
-  - Before including content obtained from vector_search in the final_answer, ensure that you have processed it through an LLM generation tool. Use the LLM to summarize, translate (if necessary), and combine the search results into a cohesive, single-language narrative. Avoid directly placing any raw vector search output (such as arrays or multiple fragmented chunks) into the final answer. This approach guarantees that the final answer is coherent, consistent, and well-structured.
+  - Combine Multiple Searches: Enhance response depth and clarity by combining multiple Vector Search calls with different queries. Start by using Vector Search to gather extensive, context-rich document fragments related to the query.
+  - Synthesize with LLM: Feed the gathered snippets into an LLM generation tool to synthesize and generate comprehensive answers.
+  - Batch Processing: Limit multiple Vector Search operations to batches of three. After every three vector_search calls, use an LLM generation tool to summarize the aggregated results. This approach prevents exceeding the LLM’s token window limit and reduces the likelihood of token overflow errors.
+
+- **Best Practices for Information Retrieval - Combining Knowledge Graph Search and Vector Search**:
+  - Dual Retrieval: When retrieving information, utilize both Knowledge Graph Search and Vector Search simultaneously. This combination enhances the richness of the information by leveraging the structured data from the knowledge graph and the detailed insights from vector search.
+  - Unified Summarization: After retrieving data from both tools, use an LLM generation tool to summarize the knowledge related to the query. Avoid directly using the loose data returned by the two tools; instead, ensure all retrieved information is processed through the LLM generation tool to create a coherent and well-structured final answer.
+  - Tool Integration: Ensure that raw data retrieved from both Knowledge Graph Search and Vector Search is exclusively processed by the LLM generation tool. Do not pass this data to other tools, as doing so may result in an unreadable final answer or prevent other tools from effectively processing the data. This practice maintains the coherence, integrity, and quality of the final response.
+  - Maintain Coherence: By processing all retrieved data through the LLM generation tool, you ensure that the final answer is a cohesive, single-language narrative. This avoids the inclusion of raw or fragmented data that could compromise the readability and consistency of the response.
 
 ## 8. Common Errors
 
