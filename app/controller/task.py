@@ -272,16 +272,19 @@ class Task:
                         return {
                             "completed": True,
                             "final_answer": final_answer,
+                            "branch_name": branch_name,
                         }
                     else:
                         return {
                             "completed": True,
                             "final_answer": None,
+                            "branch_name": branch_name,
                         }
                 else:
                     return {
                         "completed": False,
                         "final_answer": None,
+                        "branch_name": branch_name,
                     }
 
             except Exception as e:
