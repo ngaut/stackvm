@@ -179,8 +179,10 @@ def update_task(task_id):
     suggestion = data.get("suggestion")
     from_scratch = data.get("from_scratch", False)
 
-    if not all([commit_hash, suggestion]):
-        return log_and_return_error("Missing required parameters", "error", 400)
+    if not all([suggestion]):
+        return log_and_return_error(
+            "Missing required parameters: suggestion", "error", 400
+        )
 
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)

@@ -232,6 +232,17 @@ class MySQLBranchManager(BranchManager):
         """Get the current commit hash."""
         return self._current_commit_hash
 
+    def get_commit_hashes(self):
+        """Retrieve all commit hashes of the current branch."""
+        with self.get_session() as session:
+            commits = (
+                session.query(Commit)
+                .filter(Commit.task_id == self.task_id)
+                .order_by(Commit.committed_at.desc())
+                .all()
+            )
+            return [commit.commit_hash for commit in commits]
+
     def get_parent_commit_hash(self, commit_hash: str) -> Optional[str]:
         """Get the parent commit hash."""
         with self.get_session() as session:
