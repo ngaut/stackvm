@@ -80,6 +80,9 @@ class Task:
 
         return self.branch_manager.get_commits(branch_name)
 
+    def get_answer_detail(self, branch_name: Optional[str] = "main"):
+        return self.branch_manager.get_latest_commit(branch_name)
+
     def get_state_diff(self, commit_hash: str):
         return self.branch_manager.get_state_diff(commit_hash)
 
@@ -319,10 +322,34 @@ class Task:
         return None
 
     def update(
-        self, new_branch_name: str, commit_hash: str, suggestion: Optional[str] = None
+        self,
+        new_branch_name: str,
+        commit_hash: Optional[str] = None,
+        suggestion: Optional[str] = None,
+        from_scratch: Optional[bool] = False,
     ) -> Dict[str, Any]:
         with self._lock:
             try:
+                if from_scratch:
+                    hashes = self.branch_manager.get_commit_hashes()
+                    if len(hashes) <= 1:
+                        raise ValueError(
+                            "Please choose the existing branch with plan update from scratch"
+                        )
+
+                    earliest_commit_hash = hashes[-1]
+                    logger.info(
+                        "update plan from scratch, hash %s", earliest_commit_hash
+                    )
+                    commit_hash = earliest_commit_hash
+
+                if commit_hash is None:
+                    error_message = (
+                        "commit_hash must be provided if not updating from scratch"
+                    )
+                    logger.error(error_message)
+                    raise ValueError(error_message)
+
                 if not self.branch_manager.checkout_branch_from_commit(
                     new_branch_name, commit_hash
                 ):

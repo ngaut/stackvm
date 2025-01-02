@@ -232,6 +232,17 @@ class MySQLBranchManager(BranchManager):
         """Get the current commit hash."""
         return self._current_commit_hash
 
+    def get_commit_hashes(self):
+        """Retrieve all commit hashes of the current branch."""
+        with self.get_session() as session:
+            commits = (
+                session.query(Commit)
+                .filter(Commit.task_id == self.task_id)
+                .order_by(Commit.committed_at.desc())
+                .all()
+            )
+            return [commit.commit_hash for commit in commits]
+
     def get_parent_commit_hash(self, commit_hash: str) -> Optional[str]:
         """Get the parent commit hash."""
         with self.get_session() as session:
@@ -273,6 +284,37 @@ class MySQLBranchManager(BranchManager):
                 current_hash = commit.parent_hash
 
             return commits
+
+    def get_latest_commit(self, branch_name: Optional[str] = "main") -> Dict[str, Any]:
+        """Get all commits in the branch's history."""
+        with self.get_session() as session:
+            branch = self._get_branch(session, branch_name)
+            if not branch:
+                logger.error(f"Branch '{branch_name}' not found.")
+                raise ValueError(f"Branch '{branch_name}' not found.")
+
+            latest_hash = branch.head_commit_hash
+            commit = self._get_commit(session, latest_hash)
+            if not commit:
+                logger.error(
+                    f"Commit with hash '{latest_hash}' not found in branch '{branch_name}'."
+                )
+                raise ValueError(
+                    f"Commit with hash '{latest_hash}' not found in branch '{branch_name}'."
+                )
+
+            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+
+            return {
+                "time": commit.committed_at.isoformat(),
+                "title": title,
+                "details": details,
+                "commit_hash": commit.commit_hash,
+                "seq_no": seq_no,
+                "vm_state": commit.vm_state,
+                "commit_type": commit_type,
+                "message": commit.message,
+            }
 
     def get_commit(self, commit_hash: str) -> Optional[Dict[str, Any]]:
         """Get a specific commit."""

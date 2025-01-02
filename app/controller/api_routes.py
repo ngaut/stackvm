@@ -121,6 +121,32 @@ def get_execution_detail(task_id, commit_hash):
             )
 
 
+@api_blueprint.route("/tasks/<task_id>/branches/<branch_name>/answer_detail")
+def get_answer_detail(task_id, branch_name):
+    with SessionLocal() as session:
+        task = ts.get_task(session, task_id)
+        if not task:
+            return log_and_return_error(
+                f"Task with ID {task_id} not found.", "error", 404
+            )
+
+        try:
+            vm_state = task.get_answer_detail(branch_name)
+            if vm_state is None:
+                return log_and_return_error(
+                    f"Final answer detail not found for branch {branch_name} for task {task_id}: {vm_state}",
+                    "warning",
+                    404,
+                )
+            return jsonify(vm_state)
+        except Exception as e:
+            return log_and_return_error(
+                f"Unexpected error fetching final answer detail not found for branch {branch_name} for task {task_id}: {str(e)}",
+                "error",
+                500,
+            )
+
+
 @api_blueprint.route("/tasks/<task_id>/commits/<commit_hash>/diff")
 def code_diff(task_id, commit_hash):
     with SessionLocal() as session:
@@ -151,9 +177,12 @@ def update_task(task_id):
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
+    from_scratch = data.get("from_scratch", False)
 
-    if not all([commit_hash, suggestion]):
-        return log_and_return_error("Missing required parameters", "error", 400)
+    if not all([suggestion]):
+        return log_and_return_error(
+            "Missing required parameters: suggestion", "error", 400
+        )
 
     with SessionLocal() as session:
         task = ts.get_task(session, task_id)
@@ -170,6 +199,7 @@ def update_task(task_id):
                 "new_branch_name": branch_name,
                 "commit_hash": commit_hash,
                 "suggestion": suggestion,
+                "from_scratch": from_scratch,
             },
             task.update,
             datetime.utcnow(),
