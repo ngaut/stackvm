@@ -105,12 +105,12 @@ class KnowledgeGraphClient:
                 logger.error(
                     "Request to retrieve_neighbors failed with status code %s, response content: %s",
                     e.response.status_code,
-                    e.response.text
+                    e.response.text,
                 )
             else:
                 logger.error(
                     "Request to retrieve_neighbors encountered an error: %s. No response object available.",
-                    str(e)
+                    str(e),
                 )
             raise
         except ValueError as e:
@@ -140,12 +140,12 @@ class KnowledgeGraphClient:
                 logger.error(
                     "Request to retrieve_chunks failed with status code %s, response content: %s",
                     e.response.status_code,
-                    e.response.text
+                    e.response.text,
                 )
             else:
                 logger.error(
                     "Request to retrieve_chunks encountered an error: %s. No response object available.",
-                    str(e)
+                    str(e),
                 )
             raise
         except ValueError as e:
@@ -195,6 +195,7 @@ class MetaGraph:
         4. Then, Generate 2-4 search queries to collect the information used to answer the Query.
 
         Please analyze this query and return a meta-graph representation in the following JSON format:
+        ```json
         {{
             "entities": [
                 {{
@@ -213,6 +214,7 @@ class MetaGraph:
                 "string, describe the initial query to search relevant information to answer the query",
             ]
         }}
+        ```
 
         Query to analyze: "{query}"
         
@@ -359,6 +361,7 @@ def evaluation_retrieval_results(
           - Consider using different tools or query formulations than what was already tried (in Actions History).
 
     Respond in JSON format as follows:
+    ```json
     {{
         "useful_entity_ids": [id1, id2, ...], # Choose from New Retrieved Entities which are useful and not already in the exploration graph
         "useful_relationship_ids": [id1, id2, ...], # Choose from New Retrieved Relationships which are useful and not already in the exploration graph
@@ -376,6 +379,7 @@ def evaluation_retrieval_results(
             }}
         ]
     }}
+    ```
     """
     response = llm_client.generate(prompt)
     res_str = extract_json(response)
