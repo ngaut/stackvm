@@ -270,25 +270,33 @@ class PlanOptimizationService:
                 )
 
                 for tool_call in response.choices[0].message.tool_calls:
-                    if tool_call.function.name == "get_task_answer":
-                        args = json.loads(tool_call.function.arguments)
-                        tool_call_result = get_task_branch_answer_detail(**args)
-                        self._message_history = self._message_history[
-                            -10:
-                        ]  # Keep only the last 10 messages
-                    elif tool_call.function.name == "execute_task_using_new_plan":
-                        args = json.loads(tool_call.function.arguments)
-                        tool_call_result = re_execute_task(**args)
-                    else:
-                        raise ValueError(
-                            f"Unknown tool call: {tool_call.function.name}"
-                        )
+                    try:
+                        if tool_call.function.name == "get_task_answer":
+                            args = json.loads(tool_call.function.arguments)
+                            tool_call_result = get_task_branch_answer_detail(**args)
+                            self._message_history = self._message_history[
+                                -10:
+                            ]  # Keep only the last 10 messages
+                        elif tool_call.function.name == "execute_task_using_new_plan":
+                            args = json.loads(tool_call.function.arguments)
+                            tool_call_result = re_execute_task(**args)
+                        else:
+                            raise ValueError(
+                                f"Unknown tool call: {tool_call.function.name}"
+                            )
 
-                    tool_call_result_message = {
-                        "role": "tool",
-                        "content": json.dumps(tool_call_result),
-                        "tool_call_id": tool_call.id,
-                    }
+                        tool_call_result_message = {
+                            "role": "tool",
+                            "content": json.dumps(tool_call_result),
+                            "tool_call_id": tool_call.id,
+                        }
+                    except Exception as e:
+                        logger.error("Error processing tool call: %s", e, exc_info=True)
+                        tool_call_result_message = {
+                            "role": "tool",
+                            "content": f"An error occurred while processing the request: {e}",
+                            "tool_call_id": tool_call.id,
+                        }
 
                     self._message_history.append(tool_call_result_message)
                     yield ChatEvent(
