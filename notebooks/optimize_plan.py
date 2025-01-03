@@ -270,7 +270,7 @@ class PlanOptimizationService:
         while True:
             logger.debug("LLM request %s", self._message_history)
             response = fc_llm.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o",
                 messages=(self._system_message + self._message_history),
                 tools=self.tools,
             )
