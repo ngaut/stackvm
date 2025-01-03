@@ -286,9 +286,7 @@ class InstructionHandlers:
         chain_of_thoughts = params.get("chain_of_thoughts")
         dependency_analysis = params.get("dependency_analysis")
 
-        if not isinstance(chain_of_thoughts, str) or not isinstance(
-            dependency_analysis, str
-        ):
+        if not isinstance(chain_of_thoughts, str):
             return False, {
                 "error_message": "Invalid parameters for 'reasoning'.",
                 "instruction": "reasoning",

@@ -324,7 +324,15 @@ def re_execute_task(task_id):
         result = task.re_execute(commit_hash, plan)
         if result.get("completed"):
             if result.get("final_answer"):
-                return jsonify(result.get("final_answer")), 200
+                return (
+                    jsonify(
+                        {
+                            "final_answer": result.get("final_answer"),
+                            "branch_name": result.get("branch_name"),
+                        }
+                    ),
+                    200,
+                )
             else:
                 return (
                     jsonify(
