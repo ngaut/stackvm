@@ -23,7 +23,7 @@ assert OPENAI_API_KEY is not None, "OPENAI_API_KEY environment variable is not s
 fc_llm = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 
-def get_task_branch_answer_detail(task_id: str, branch_name: str) -> dict:
+def get_task_answer(task_id: str, branch_name: str) -> dict:
     """
     Retrieves the answer detail for a specific task and branch using the API.
 
@@ -63,7 +63,7 @@ def get_task_branch_answer_detail(task_id: str, branch_name: str) -> dict:
         raise e
 
 
-def re_execute_task(task_id: str, new_plan: List[Dict[str, Any]]) -> dict:
+def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) -> dict:
     """
     Updates a task with a new suggestion and sets the task to be re-run from scratch.
     """
@@ -79,9 +79,7 @@ def re_execute_task(task_id: str, new_plan: List[Dict[str, Any]]) -> dict:
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-
         return response.json()
-
     except requests.exceptions.RequestException as e:
         if response.status_code == 400:
             raise ValueError("Missing required parameters")
@@ -91,6 +89,50 @@ def re_execute_task(task_id: str, new_plan: List[Dict[str, Any]]) -> dict:
             raise ValueError("Failed to re_execute task")
         else:
             raise e
+
+
+def evaulate_task_answer(goal: str, final_answer: str, plan: str):
+    evluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the plan sufficiently aligned with the goal. If issues are present (e.g., the answer does not fully meet the goal or contains irrelevant information), you must:
+1. Analyze the Plan to identify weaknesses or misalignments with the Goal.
+2. Provide detailed suggestions to adjust or rewrite the Plan to improve the answer quality.
+
+Your output must include:
+1. Answer Quality Assessment: Clearly state whether the final answer resolves the goal. If not, explain why and identify any irrelevant or missing elements.
+2. Plan Analysis: Examine the steps in the plan, identify where they failed or could be improved, and explain why adjustments are necessary.
+3. Plan Adjustment Suggestions: Provide a revised or improved version of the plan to address the identified shortcomings.
+
+Here are the inputs:
+
+## Goal
+{goal}
+
+## Answer
+{final_answer}
+
+## plan
+{plan}
+
+Your Output Format:
+You must return a JSON object with the following keys:
+- accept: Boolean value (true or false) indicating whether the final answer effectively resolves the goal.
+- answer_quality_assessment_explaination: A detailed explanation justifying why the final answer does or does not meet the goal, highlighting key points or missing elements.
+- plan_adjustment_suggestion: If answer is not accepted, please provide a comprehensive analysis of the plan and recommendations for how to adjust or improve it to better achieve the goal.
+
+Example Output:
+{{
+  "accept": False/True,
+  "answer_quality_assessment_explaination": "...",
+  "plan_adjustment_suggestion": {...}
+}}
+"""
+    response = fc_llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": evluation_prompt},
+        ],
+        temperature=0,
+    )
+    return response.choices[0].message.content.strip()
 
 
 class EventType(str, enum.Enum):
@@ -112,41 +154,29 @@ class ChatEvent:
         return f"{self.event_type.value}:{body}\n".encode(charset)
 
 
-class MessageRole(str, enum.Enum):
-    SYSTEM = "system"
-    USER = "user"
-    ASSISTANT = "assistant"
-    TOOL = "tool"
-
-
-class ChatMessage(BaseModel):
-    role: MessageRole
-    content: str
-    additional_kwargs: dict[str, Any] = {}
-
-
-class get_task_answer(BaseModel):
+class evaulate_task_answer_object(BaseModel):
     """
-    Retrieves the answer tail for a specific task and branch.
+    Evaluates the final answer and its plan for a specific task.
 
     Args:
         task_id: The ID of the task.
-        branch_name: The name of the branch.
+        branch_name: The name of the branch, default to 'main'.
 
     Returns a JSON object with keys.
-        goal: The goal of the task.
-        plan: The plan for the task.
-        goal_completed: Whether the goal is completed.
-        final_answer: The final answer for the task.
+        accept: False/True,
+        answer_quality_assessment_explaination: ...,
+        plan_adjustment_suggestion: ...
     """
 
     task_id: str = Field(description=("The ID of the task."))
     branch_name: str = Field(
-        description=("The specific of the branch, default to main.")
+        description=(
+            "The name of the branch. The default is `main` if not specified by the user."
+        )
     )
 
 
-class execute_task_using_new_plan(BaseModel):
+class execute_task_using_new_plan_object(BaseModel):
     """
     Retrieves the answer tail for a specific task and branch.
 
@@ -169,60 +199,56 @@ system_instruction = """Your primary mission is to evaluate whether a task's fin
 Your workflow is as follows:
 
 1. **Gather Task Information**
-   - Ask the user for the `task_id` and `branch_main` of the task they wish to evaluate.
+   - Ask the user for the `task_id` and `branch_nameplea` of the task they wish to evaluate.
 
 2. **Retrieve and Analyze Task Answer**
-   - Use the `get_task_answer` tool to fetch the task details
-   - Focus on two key elements:
-     - The original goal: What problem needs to be solved?
-     - The final answer: Does it actually solve this problem?
-     - The plan: What parts of the plan need to be modified to improve the final answer?
+   - Use the `evaulate_task_answer_object` tool to perform a systematic evaluation for a task with following functionalities:
+     - Whether the final answer effectively resolves the goal
+     - The quality of the current plan
+     - Potential improvements needed
 
-3. **Evaluate Solution Effectiveness**
-   - Your primary evaluation should answer: "Does the final answer solve the problem stated in the goal?"
-   - Consider:
-     - Completeness: Does it address all aspects of the goal?
-     - Correctness: Is the solution accurate and valid?
-     - Relevance: Does it directly address the goal without unnecessary elements?
-   
-   Your evaluation should result in one of two outcomes:
-   - **If the Solution is Effective**: 
-     - Confirm that the final answer solves the goal
-     - No plan modifications needed
-   
-   - **If the Solution is Ineffective**:
-     - Clearly explain why the final answer fails to solve the goal
-     - Identify specific missing elements or incorrect solutions
-     - Suggest focused plan modifications that directly target these gaps
+3. **Review Evaluation Results**
+   - Based on the evaluation tool's output:
+     - If accepted (accept: true):
+       - Confirm to the user that the solution is effective
+       - No further action needed
+
+     - If not accepted (accept: false):
+       - Share the detailed assessment explanation with the user
+       - Review the suggested plan adjustments from the evaluation
 
 4. **Plan Modification and User Confirmation**
    - If the solution is ineffective:
-     - Create a new plan that specifically targets the identified gaps
+     - Present the suggested plan adjustments from the evaluation
      - Present the new plan to the user and wait for their confirmation
      - Only proceed with execution after receiving explicit user approval
      - If the user rejects the plan, ask for their feedback and create a revised plan
-   - The new plan requirements:
-     - The new plan should be with modifications to address the identified gaps.
-     - The new plan should be a JSON object with the same structure as the original plan.
-     - The new plan should start with a reasoning step at seq_no 0 to explain the whole new plan.
+   - Requirements for the New Plan:
+        - Modify only the necessary parts of the original plan.
+        - Incorporate the suggestions from the evaluation feedback.
+        - Ensure the revised plan is coherent and aligned with the goal.
+        - **Information Retrieval Enhancement:** When performing information retrieval, use both retrieve_knowledge_graph and vector_search to ensure the richness of retrieved information. Note that knowledge graph search is a powerful retrieval function.
+        - **Selective Plan Modification:** If parts of the original answer meet the expected outcomes, identify and retain the corresponding information retrieval steps from the original plan. This approach ensures that only necessary modifications are made, preventing unpredictable performance fluctuations in the revised plan.
+        - Format the new plan as a JSON object with the same structure as the original
+        - Ensure the new plan starts with a reasoning step at seq_no 0, and reasoning instruction can only be used in the first step of the plan.
 
 5. **Execute and Verify (Only After User Confirmation)**
+   - Before executing the new plan, ensure the user has approved the changes
    - Use `execute_task_using_new_plan` to implement the approved plan
-   - Evaluate the new final answer with the same focus on solution effectiveness
 
 Remember:
-- Always prioritize practical problem-solving over plan complexity
-- Focus on whether the final answer works, not just whether it looks good
+- Always use the evaluation tool for systematic assessment
 - Never execute a new plan without explicit user confirmation
 - Be ready to revise the plan based on user feedback
+- The new plan must maintain the required JSON structure and include a reasoning step
 """
 
 
 class PlanOptimizationService:
     def __init__(self):
         self.tools = [
-            openai.pydantic_function_tool(get_task_answer),
-            openai.pydantic_function_tool(execute_task_using_new_plan),
+            openai.pydantic_function_tool(execute_task_using_new_plan_object),
+            openai.pydantic_function_tool(evaulate_task_answer_object),
         ]
         self._system_message = [{"role": "system", "content": system_instruction}]
         self._message_history = []  # Store all conversation history
@@ -271,15 +297,29 @@ class PlanOptimizationService:
 
                 for tool_call in response.choices[0].message.tool_calls:
                     try:
-                        if tool_call.function.name == "get_task_answer":
+                        if (
+                            tool_call.function.name
+                            == "execute_task_using_new_plan_object"
+                        ):
                             args = json.loads(tool_call.function.arguments)
-                            tool_call_result = get_task_branch_answer_detail(**args)
+                            tool_call_result = execute_task_using_new_plan(**args)
+                        elif tool_call.function.name == "evaulate_task_answer_object":
+                            args = json.loads(tool_call.function.arguments)
+                            answer_detail = get_task_answer(**args)
+                            eval_res = evaulate_task_answer(
+                                answer_detail["goal"],
+                                answer_detail["final_answer"],
+                                answer_detail["plan"],
+                            )
+
+                            # eval_res + answer_detail
+                            tool_call_result = {
+                                "evaluation_result": eval_res,
+                                **answer_detail,
+                            }
                             self._message_history = self._message_history[
                                 -10:
-                            ]  # Keep only the last 10 messages
-                        elif tool_call.function.name == "execute_task_using_new_plan":
-                            args = json.loads(tool_call.function.arguments)
-                            tool_call_result = re_execute_task(**args)
+                            ]  # Keep only the last 10 message
                         else:
                             raise ValueError(
                                 f"Unknown tool call: {tool_call.function.name}"
