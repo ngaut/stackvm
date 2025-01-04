@@ -383,8 +383,11 @@ def evaluation_retrieval_results(
     """
     response = llm_client.generate(prompt)
     res_str = extract_json(response)
-    analysis = json.loads(res_str)
+    if res_str is None:
+        logger.error("Error extracting JSON from LLM response: %s", response)
+        return None
 
+    analysis = json.loads(res_str)
     return analysis
 
 
@@ -485,6 +488,9 @@ def smart_retrieve(
         logger.info(f"Analysis completed in {time.time() - start_time:.2f} seconds.")
 
         logger.debug("evaluation result: %s", analysis)
+
+        if analysis is None:
+            continue
 
         for id in analysis.get("useful_entity_ids", []):
             if id in entities:
