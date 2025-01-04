@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps
 
 from app.utils import extract_json
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -28,6 +29,32 @@ retry_strategy = Retry(
     allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
     raise_on_status=False,
 )
+
+
+def with_retry(max_retries=3, backoff_factor=2):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_retries - 1:  # Last attempt
+                        logger.error(
+                            f"Max retries exceeded for {func.__name__}: {str(e)}"
+                        )
+                        raise
+
+                    wait_time = backoff_factor**attempt
+                    logger.warning(
+                        f"{func.__name__} failed, retrying in {wait_time}s. Error: {str(e)}"
+                    )
+                    time.sleep(wait_time)
+            return None
+
+        return wrapper
+
+    return decorator
 
 
 class KnowledgeGraphClient:
@@ -173,6 +200,7 @@ class MetaGraph:
         self.initial_queries = []
         self._generate_meta_graph(query)
 
+    @with_retry()
     def _generate_meta_graph(self, query: str):
         """
         Generates a Meta-Graph based on user query using LLM.
@@ -303,6 +331,7 @@ class ExplorationGraph:
         }
 
 
+@with_retry()
 def evaluation_retrieval_results(
     llm_client,
     query,
