@@ -4,13 +4,13 @@ from typing import Optional, Tuple, Dict
 
 def extract_json(plan_response: str) -> str:
     """Extract JSON from the plan response.
-    
+
     Args:
         plan_response (str): The response string that may contain JSON.
-        
+
     Returns:
         str: The extracted JSON string.
-        
+
     Raises:
         ValueError: If no valid JSON content is found.
     """
@@ -19,7 +19,7 @@ def extract_json(plan_response: str) -> str:
     match = json_code_block_pattern.search(plan_response)
     if match:
         return match.group(1).strip()
-    
+
     # Then try to match JSON block with only opening markdown fence
     start_pattern = re.compile(r"```json\s*([\s\S]*)", re.DOTALL)
     match = start_pattern.search(plan_response)
@@ -27,12 +27,12 @@ def extract_json(plan_response: str) -> str:
         content = match.group(1).strip()
         if content:
             return content
-    
+
     # Finally try to parse the content as raw JSON
     content = plan_response.strip()
     if not content:
         raise ValueError("Empty content")
-        
+
     # Determine JSON type by first character and extract accordingly
     if content.startswith("{"):
         json_str = find_first_json_object(content)
@@ -40,10 +40,10 @@ def extract_json(plan_response: str) -> str:
         json_str = find_first_json_array(content)
     else:
         raise ValueError("Content must start with '{' or '['")
-        
+
     if json_str:
         return json_str
-    
+
     raise ValueError("No valid JSON content found in the response.")
 
 
