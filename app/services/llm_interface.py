@@ -234,25 +234,28 @@ class GeminiProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Error during Gemini streaming: {e}")
             yield f"Error: {str(e)}"
-        
+
+
 class BedrockProvider(BaseLLMProvider):
 
     @staticmethod
     def get_credentials() -> dict:
-        required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY']
+        required_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
         missing_vars = [var for var in required_vars if not os.getenv(var)]
-        
-        if missing_vars:
-            raise ValueError(f"Missing required AWS environment variables: {', '.join(missing_vars)}")
 
-        region = os.getenv('AWS_DEFAULT_REGION', 'us-west-2')
-            
+        if missing_vars:
+            raise ValueError(
+                f"Missing required AWS environment variables: {', '.join(missing_vars)}"
+            )
+
+        region = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
+
         return {
-            'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
-            'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
-            'region_name': region
+            "aws_access_key_id": os.getenv("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+            "region_name": region,
         }
-    
+
     @staticmethod
     def is_configured() -> bool:
         try:
@@ -260,7 +263,7 @@ class BedrockProvider(BaseLLMProvider):
             return True
         except ValueError:
             return False
-        
+
     def __init__(self, model: str, **kwargs):
         super().__init__(model)
 
@@ -269,17 +272,17 @@ class BedrockProvider(BaseLLMProvider):
                 "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and "
                 "AWS_SECRET_ACCESS_KEY environment variables."
             )
-        
+
         credentials = self.get_credentials()
-        self.client = boto3.client('bedrock-runtime', **credentials)
-        
+        self.client = boto3.client("bedrock-runtime", **credentials)
+
         # TODO: support more models
         self.model_map = {
             "claude-3-sonnet": "anthropic.claude-3-sonnet-20240229-v1:0",
             "claude-3-5-sonnet": "anthropic.claude-3-5-sonnet-20240620-v1:0",
             "claude-3-5-sonnet-v2": "anthropic.claude-3-5-sonnet-20241022-v2:0",
         }
-        
+
         self.model = self.model_map.get(model.lower(), model)
 
     def generate(
@@ -289,7 +292,7 @@ class BedrockProvider(BaseLLMProvider):
         messages = [
             {"role": "user", "content": [{"type": "text", "text": full_prompt}]}
         ]
-                
+
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 1024,
@@ -297,14 +300,11 @@ class BedrockProvider(BaseLLMProvider):
         }
 
         response = self._retry_with_exponential_backoff(
-            self.client.invoke_model,
-            modelId=self.model,
-            body=json.dumps(request_body)
+            self.client.invoke_model, modelId=self.model, body=json.dumps(request_body)
         )
-        
+
         response_body = json.loads(response["body"].read())
         return response_body["content"][0]["text"]
-
 
     def generate_stream(
         self, prompt: str, context: Optional[str] = None, **kwargs
@@ -313,20 +313,20 @@ class BedrockProvider(BaseLLMProvider):
         messages = [
             {"role": "user", "content": [{"type": "text", "text": full_prompt}]}
         ]
-                
+
         try:
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1024,
-                "messages": messages
+                "messages": messages,
             }
 
             streaming_response = self._retry_with_exponential_backoff(
                 self.client.invoke_model_with_response_stream,
                 modelId=self.model,
-                body=json.dumps(request_body)
+                body=json.dumps(request_body),
             )
-            
+
             for event in streaming_response["body"]:
                 chunk = json.loads(event["chunk"]["bytes"])
                 if chunk["type"] == "content_block_delta":
@@ -335,7 +335,8 @@ class BedrockProvider(BaseLLMProvider):
         except Exception as e:
             logger.error(f"Error during Bedrock streaming: {e}")
             yield f"Error: {str(e)}"
-        
+
+
 class LLMInterface:
     def __init__(self, provider: str, model: str, **kwargs):
         self.provider = self._get_provider(provider.lower(), model, **kwargs)

@@ -29,12 +29,21 @@ class InstructionHandlers:
         if not output_vars:
             return True, {}  # No output_vars to set
 
+        output_vars_record = {}
+
+        if isinstance(output_vars, str):
+            output_vars = [output_vars]
+
         self.vm.logger.debug(f"output_vars: {output_vars}")
         instruction_output_str = self.vm._preview_value(instruction_output)
         self.vm.logger.debug(f"instruction_output: {instruction_output_str}")
-        output_vars_record = {}
 
         try:
+            # Handle single output var case
+            if len(output_vars) == 1:
+                output_vars_record[output_vars[0]] = instruction_output
+                return True, output_vars_record
+
             # Attempt to parse instruction_output as JSON if it's a string
             parsed_output = None
             if isinstance(instruction_output, str):
@@ -48,28 +57,17 @@ class InstructionHandlers:
                             "instruction_output is a string but not a valid JSON."
                         )
 
-            if isinstance(output_vars, str):
-                output_vars = [output_vars]
+            if not parsed_output or not isinstance(parsed_output, dict):
+                raise ValueError(
+                    f"Could not parse output as JSON dictionary: {instruction_output}"
+                )
 
             for var_name in output_vars:
-                if (
-                    parsed_output
-                    and isinstance(parsed_output, dict)
-                    and var_name in parsed_output
-                ):
-                    var_value = parsed_output.get(var_name)
-                else:
-                    # Fallback to treating instruction_output as a single value
-                    if len(output_vars) == 1:
-                        var_value = (
-                            parsed_output if parsed_output else instruction_output
-                        )
-                    else:
-                        raise ValueError(
-                            f"Not found variable {var_name} in parsed_output {parsed_output}."
-                        )
-                # self.vm.set_variable(var_name, var_value)
-                output_vars_record[var_name] = var_value
+                if var_name not in parsed_output:
+                    raise ValueError(
+                        f"Variable {var_name} not found in parsed output {parsed_output}."
+                    )
+                output_vars_record[var_name] = parsed_output.get(var_name)
 
             return True, output_vars_record
         except Exception as e:
