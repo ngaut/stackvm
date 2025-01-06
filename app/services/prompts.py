@@ -333,15 +333,15 @@ Good Classification:
 Task: "How does TiCDC handle Resolved TS?"
 Correct Path: [
     {{
-        "name": "Basic Knowledge",
+        "label": "Basic Knowledge",
         "description": "Fundamental concepts and knowledge about database features and components"
     }},
     {{
-        "name": "Feature Support",
+        "label": "Feature Support",
         "description": "Specific database features and their functionalities"
     }},
     {{
-        "name": "TiCDC Resolved TS",
+        "label": "TiCDC Resolved TS",
         "description": "Understanding and implementation of Resolved Timestamp in TiCDC"
     }}
 ]
@@ -352,11 +352,11 @@ Bad Classification:
 Task: "How does TiCDC handle Resolved TS?"
 Wrong Path: [
     {{
-        "name": "Complex Task Planning",
+        "label": "Complex Task Planning",
         "description": "Planning and coordination of complex technical tasks"
     }},
     {{
-        "name": "Research & Analysis",
+        "label": "Research & Analysis",
         "description": "In-depth research and technical analysis of problems"
     }}
 ]
@@ -373,11 +373,11 @@ Return the label path as a JSON array of objects containing both label names and
 ```json
 [
     {{
-        "name": "Label 1",
+        "label": "Label 1",
         "description": "Description of Label 1"
     }},
     {{
-        "name": "Label 2",
+        "label": "Label 2",
         "description": "Description of Label 2"
     }}
 ]

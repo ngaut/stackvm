@@ -65,7 +65,7 @@ class LabelTree:
             self.label_map = {
                 label.id: {
                     "id": label.id,
-                    "name": label.name,
+                    "label": label.name,
                     "description": label.description,
                     "best_practices": label.best_practices,
                     "parent_id": label.parent_id,
@@ -128,12 +128,12 @@ class LabelTree:
         if current_depth >= len(path) or not self.tree:
             return None
 
-        current_label = path[current_depth]["name"]
+        current_label = path[current_depth]["label"]
 
         # Find the matching node at the current tree level
         matching_node = None
         for node in self.tree:
-            if node["name"] == current_label:
+            if node["label"] == current_label:
                 matching_node = copy.deepcopy(node)
                 break
 
@@ -161,10 +161,10 @@ class LabelTree:
         """
         # Iterate over label_path in reverse order to find the nearest label with best practices
         for label_dict in reversed(label_path):
-            label_name = label_dict["name"]
+            label_name = label_dict["label"]
             # Find the label in label_map by name
             label = next(
-                (lbl for lbl in self.label_map.values() if lbl["name"] == label_name),
+                (lbl for lbl in self.label_map.values() if lbl["label"] == label_name),
                 None,
             )
             if label and label["best_practices"]:
@@ -224,7 +224,7 @@ class LabelTree:
             results = []
 
             # Add current node's label name to the path
-            path = current_path + [label["name"]]
+            path = current_path + [label["label"]]
             # Extract tasks from current node
             for task in label.get("tasks", []):
                 results.append(
@@ -258,7 +258,7 @@ class LabelTree:
 
         def copy_tree_recursive(label: Dict[str, Any]) -> Dict[str, Any]:
             return {
-                "name": label.get("name", "Unnamed Label"),
+                "label": label.get("label", "Unnamed Label"),
                 "description": label.get("description", ""),
                 "tasks": [task.get("goal", "") for task in label.get("tasks", [])],
                 "children": [
@@ -310,7 +310,7 @@ class LabelClassifier:
             raise ValueError(f"Invalid label path format. {label_path}")
 
         if len(label_path) > 0 and isinstance(label_path[-1], str):
-            label_path = [{"name": item} for item in label_path]
+            label_path = [{"label": item} for item in label_path]
 
         # find the most similar example in the label tree
         matching_node = self.label_tree.find_longest_matching_label(label_path)
