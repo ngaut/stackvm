@@ -19,37 +19,6 @@ from app.utils import extract_json
 from app.models.task import Task
 
 
-def get_labels_tree() -> List[Dict]:
-    """
-    Retrieves and structures the labels into a hierarchical tree format.
-
-    Returns:
-        List[Dict]: A list representing the hierarchical labels tree.
-    """
-    with SessionLocal() as session:
-        labels = session.query(Label).all()
-        label_map = {
-            label.id: {
-                "name": label.name,
-                "description": label.description,
-                "children": [],
-            }
-            for label in labels
-        }
-
-        root_labels = []
-
-        for label in labels:
-            if label.parent_id:
-                parent = label_map.get(label.parent_id)
-                if parent:
-                    parent["children"].append(label_map[label.id])
-            else:
-                root_labels.append(label_map[label.id])
-
-    return root_labels
-
-
 def get_label_path(label: Label) -> List[str]:
     """
     Retrieves the label path from the given label up to the root label.
@@ -69,301 +38,237 @@ def get_label_path(label: Label) -> List[str]:
     return path
 
 
-def find_longest_matching_node(
-    tree: List[Dict], path: List[Dict], current_depth: int = 0
-) -> Dict:
+class LabelTree:
     """
-    Finds the longest matching node in the tree for the given path.
-    """
-    if current_depth >= len(path) or not tree:
-        return None
-
-    current_label = path[current_depth]
-
-    # find the matching node at the root level
-    matching_node = None
-    for node in tree:
-        if node["name"] == current_label["label"]:
-            matching_node = copy.deepcopy(node)
-            break
-
-    if not matching_node:
-        return None
-
-    # if there are more levels in the path, search for the next level in the children
-    if current_depth < len(path) - 1 and matching_node.get("children"):
-        child_match = find_longest_matching_node(
-            matching_node["children"], path, current_depth + 1
-        )
-        return child_match if child_match else matching_node
-
-    return matching_node
-
-
-def get_nearest_best_practices(label_path: List[Dict]) -> str:
-    """
-    Finds the nearest best practices along the label path.
-
-    Args:
-        label_path (List[str]): A list of label names from root to the given label.
-
-    Returns:
-        List[BestPractice]: A list of best practices associated with the nearest label.
-    """
-    with SessionLocal() as session:
-        # Fetch all labels in the label_path with their best practices in a single query
-        labels = (
-            session.query(Label)
-            .filter(Label.name.in_([label["label"] for label in label_path]))
-            .all()
-        )
-
-        # Create a mapping from label name to label object
-        label_map = {label.name: label for label in labels}
-
-        # Iterate over label_path in reverse order to find the nearest label with best practices
-        for label_name in reversed(label_path):
-            label = label_map.get(label_name["label"])
-            if label and label.best_practices:
-                return label.best_practices
-
-        # If no best practices found, return an empty list
-        return None
-
-
-def get_all_tasks_under_node(node: Dict) -> List[str]:
-    """
-    Recursively retrieves all tasks under the given node
-    """
-    tasks = []
-    tasks.extend(node.get("tasks", []))
-
-    # recursively get tasks from children
-    for child in node.get("children", []):
-        tasks.extend(get_all_tasks_under_node(child))
-
-    return tasks
-
-
-def find_most_similar_task(task: str, candidates: List[Dict]) -> Optional[str]:
-    """
-    Finds the most similar task in the list of candidates
+    Manages and manipulates a hierarchical tree of labels and associated tasks.
+    Provides functionalities to retrieve, modify, and query label data efficiently.
     """
 
-    candidate = candidates[0]
-    for c in candidates:
-        if c["goal"] == task:
-            candidate = c
-            break
+    def __init__(self):
+        """
+        Initializes the LabelTree instance by setting up the label map and constructing the tree.
+        """
+        self.label_map: Dict[int, Dict] = {}
+        self.tree: List[Dict] = []
+        self.build_label_map()
+        self.construct_tree()
+        self.fill_tasks()
+        self.light_tree = self.get_light_tree()
+        self.task_list = self.get_task_list()
 
-    # find the task best plan
-    with SessionLocal() as session:
-        task = session.query(Task).filter(Task.id == candidate.get("id")).first()
-        if not task or task.best_plan is None:
-            return None
-
-        return {
-            "goal": task.goal,
-            "best_plan": task.best_plan,
-            "response_format": task.meta.get("response_format") if task.meta else None,
-        }
-
-
-def remove_label_id_from_tree(tree: List[Dict]):
-    for label in tree:
-        label.pop("id", None)
-        label.pop("parent_id", None)
-        if len(label["children"]) > 0:
-            remove_label_id_from_tree(label["children"])
-    return tree
-
-
-def remove_task_id_from_tree(tree: List[Dict]):
-    tree_json = json.dumps(tree, ensure_ascii=False)
-    new_tree = json.loads(tree_json)
-
-    def remove_task_id_recursive(node: Dict[str, Any]):
-        if "tasks" in node:
-            tasks = []
-            for task in node["tasks"]:
-                tasks.append(task["goal"])
-            node["tasks"] = tasks
-        if len(node["children"]) > 0:
-            for child in node["children"]:
-                remove_task_id_recursive(child)
-
-    for label in new_tree:
-        remove_task_id_recursive(label)
-
-    return new_tree
-
-
-def remove_task_from_tree(tree: List[Dict]):
-    tree_json = json.dumps(tree, ensure_ascii=False)
-    new_tree = json.loads(tree_json)
-
-    def remove_task_recursive(node: Dict[str, Any]):
-        node.pop("tasks", None)
-        if len(node["children"]) > 0:
-            for child in node["children"]:
-                remove_task_recursive(child)
-
-    for label in new_tree:
-        remove_task_recursive(label)
-
-    return new_tree
-
-
-def extract_task_from_label_tree(tree: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Extracts all tasks from the label tree, including the complete label path for each task.
-
-    Args:
-        tree (List[Dict]): A hierarchical tree structure of labels with tasks
-
-    Returns:
-        List[Dict]: A list of dictionaries containing task goals and their label paths
-        Example:
-        [
-            {
-                "task_goal": "How to configure replication?",
-                "label_path": ["Operation Guide", "Replication", "Configuration"]
-            }
-        ]
-    """
-
-    def extract_tasks_recursive(
-        node: Dict[str, Any], current_path: List[str]
-    ) -> List[Dict[str, Any]]:
-        results = []
-
-        # Add current node's label name to the path
-        path = current_path + [node["name"]]
-        # Extract tasks from current node
-        for task in node.get("tasks", []):
-            results.append(
-                {
-                    "task_goal": task["goal"],
-                    "labels": path.copy(),  # Create a copy of the path for each task
+    def build_label_map(self) -> None:
+        """
+        Constructs the label_map from the database.
+        """
+        with SessionLocal() as session:
+            labels = session.query(Label).all()
+            self.label_map = {
+                label.id: {
+                    "id": label.id,
+                    "label": label.name,
+                    "description": label.description,
+                    "best_practices": label.best_practices,
+                    "parent_id": label.parent_id,
+                    "children": [],
+                    "tasks": [],
                 }
-            )
-
-        # Recursively process children
-        for child in node.get("children", []):
-            results.extend(extract_tasks_recursive(child, path))
-
-        return results
-
-    # Process all root nodes
-    all_tasks = []
-    for root_node in tree:
-        all_tasks.extend(extract_tasks_recursive(root_node, []))
-
-    return all_tasks
-
-
-def get_labels_tree_with_task_goals() -> List[Dict]:
-    """
-    Retrieves and structures the labels into a hierarchical tree format with task goals assigned
-    to the respective leaf labels, using a single optimized SQL query.
-
-    Returns:
-        List[Dict]: A list representing the hierarchical labels tree with task goals.
-    """
-    with SessionLocal() as session:
-        # Subquery to get up to 3 tasks per label using window function
-        task_subquery = (
-            session.query(
-                Task.id.label("task_id"),
-                Task.goal.label("task_goal"),
-                Task.label_id.label("task_label_id"),
-                func.row_number()
-                .over(
-                    partition_by=Task.label_id,
-                    order_by=Task.updated_at.desc(),
-                )
-                .label("rn"),
-            )
-            .filter(Task.label_id.isnot(None))
-            .subquery()
-        )
-
-        # Main query: join labels with the limited tasks
-        labels_with_tasks = (
-            session.query(
-                Label.id.label("label_id"),
-                Label.name.label("label_name"),
-                Label.description.label("label_description"),
-                Label.parent_id.label("label_parent_id"),
-                task_subquery.c.task_id,
-                task_subquery.c.task_goal,
-            )
-            .outerjoin(
-                task_subquery,
-                (Label.id == task_subquery.c.task_label_id) & (task_subquery.c.rn <= 2),
-            )
-            .order_by(Label.id)
-            .all()
-        )
-
-    # Build a mapping from label ID to label details
-    label_map = {}
-    for row in labels_with_tasks:
-        label_id = row.label_id
-        if label_id not in label_map:
-            label_map[label_id] = {
-                "id": label_id,
-                "name": row.label_name,
-                "description": row.label_description,
-                "parent_id": row.label_parent_id,
-                "children": [],
-                "tasks": [],
+                for label in labels
             }
-        # Add task if present
-        if row.task_id:
-            label_map[label_id]["tasks"].append(
-                {"id": row.task_id, "goal": row.task_goal}
+
+    def construct_tree(self) -> None:
+        """
+        Builds the hierarchical tree structure using the label_map.
+        """
+        for label in self.label_map.values():
+            parent_id = label.get("parent_id")
+            if parent_id:
+                parent = self.label_map.get(parent_id)
+                if parent:
+                    parent["children"].append(label)
+            else:
+                self.tree.append(label)
+
+    def fill_tasks(self) -> None:
+        with SessionLocal() as session:
+            tasks = (
+                session.query(Task)
+                .filter(Task.best_plan.isnot(None), Task.label_id.isnot(None))
+                .all()
             )
 
-    # Build the hierarchical tree
-    root_labels = []
-    for label in label_map.values():
-        parent_id = label_map[label["id"]].get("parent_id", None)
-        if parent_id:
-            parent = label_map.get(parent_id)
-            if parent:
-                parent["children"].append(label)
-        else:
-            root_labels.append(label)
+            for task in tasks:
+                label = self.label_map.get(task.label_id)
+                if label is None:
+                    continue
 
-    return remove_label_id_from_tree(root_labels)
+                label["tasks"].append(
+                    {
+                        "id": task.id,
+                        "goal": task.goal,
+                        "best_plan": task.best_plan,
+                        "response_format": (
+                            task.meta.get("response_format") if task.meta else None
+                        ),
+                    }
+                )
 
+    def find_longest_matching_label(
+        self, path: List[Dict], current_depth: int = 0
+    ) -> Optional[Dict]:
+        """
+        Finds the longest matching node in the tree for the given path.
 
-def get_task_plans(task_ids: list) -> List[Dict]:
-    """
-    Retrieves all tasks with their best plans.
-    """
-    with SessionLocal() as session:
-        # Subquery to get up to 3 tasks per label using window function
+        Args:
+            path (List[Dict]): A list of dictionaries with label information.
+            current_depth (int): The current depth in the path.
 
-        results = (
-            session.query(
-                Task.id.label("task_id"),
-                Task.goal.label("task_goal"),
-                Task.best_plan.label("best_plan"),
+        Returns:
+            Optional[Dict]: The matching node or None if no match is found.
+        """
+
+        def _find_longest_matching_label_recursive(root_labels, path, depth):
+            if depth >= len(path) or not self.tree:
+                return None
+
+            current_label = path[depth]["label"]
+
+            # Find the matching node at the current tree level
+            matching_node = None
+            for node in root_labels:
+                if node["label"] == current_label:
+                    matching_node = copy.deepcopy(node)
+                    break
+
+            if not matching_node:
+                return None
+
+            # If there are more levels in the path, search within the children
+            if current_depth < len(path) - 1 and matching_node.get("children"):
+                child_match = _find_longest_matching_label_recursive(
+                    matching_node["children"], path, depth + 1
+                )
+                return child_match if child_match else matching_node
+
+        return _find_longest_matching_label_recursive(self.tree, path, current_depth)
+
+    def get_nearest_best_practices(self, label_path: List[Dict]) -> Optional[str]:
+        """
+        Finds the nearest best practices along the label path.
+
+        Args:
+            label_path (List[Dict]): A list of label dictionaries from root to the given label.
+
+        Returns:
+            Optional[str]: The best practices string associated with the nearest label, or None.
+        """
+        # Iterate over label_path in reverse order to find the nearest label with best practices
+        for label_dict in reversed(label_path):
+            label_name = label_dict["label"]
+            # Find the label in label_map by name
+            label = next(
+                (lbl for lbl in self.label_map.values() if lbl["label"] == label_name),
+                None,
             )
-            .filter(Task.best_plan.isnot(None), Task.id.in_(task_ids))
-            .all()
-        )
+            if label and label["best_practices"]:
+                return label["best_practices"]
 
-    task_plans = {}
-    for row in results:
-        task_plans[row.task_id] = {
-            "goal": row.task_goal,
-            "best_plan": row.best_plan,
-        }
+        return None
 
-    return task_plans
+    def get_all_tasks_under_label(self, label: Dict) -> List[str]:
+        """
+        Recursively retrieves all tasks under the given node
+        """
+        tasks = []
+        tasks.extend(label.get("tasks", []))
+
+        # recursively get tasks from children
+        for child in label.get("children", []):
+            tasks.extend(self.get_all_tasks_under_label(child))
+
+        return tasks
+
+    def find_most_similar_task(
+        self, goal: str, candidates: List[Dict]
+    ) -> Optional[str]:
+        """
+        Finds the most similar task in the list of candidates
+        """
+
+        candidate = candidates[0]
+        for c in candidates:
+            if c["goal"] == goal:
+                candidate = c
+                break
+
+        return candidate
+
+    def get_task_list(self) -> List[Dict[str, Any]]:
+        """
+        Extracts all tasks from the label tree, including the complete label path for each task.
+
+        Args:
+            tree (List[Dict]): A hierarchical tree structure of labels with tasks
+
+        Returns:
+            List[Dict]: A list of dictionaries containing task goals and their label paths
+            Example:
+            [
+                {
+                    "task_goal": "How to configure replication?",
+                    "label_path": ["Operation Guide", "Replication", "Configuration"]
+                }
+            ]
+        """
+
+        def extract_tasks_recursive(
+            label: Dict[str, Any], current_path: List[str]
+        ) -> List[Dict[str, Any]]:
+            results = []
+
+            # Add current node's label name to the path
+            path = current_path + [label["label"]]
+            # Extract tasks from current node
+            for task in label.get("tasks", []):
+                results.append(
+                    {
+                        "task_goal": task["goal"],
+                        "labels": path.copy(),  # Create a copy of the path for each task
+                    }
+                )
+
+            # Recursively process children
+            for child in label.get("children", []):
+                results.extend(extract_tasks_recursive(child, path))
+
+            return results
+
+        # Process all root nodes
+        all_tasks = []
+        for root_node in self.tree:
+            all_tasks.extend(extract_tasks_recursive(root_node, []))
+
+        return all_tasks
+
+    def get_light_tree(self) -> List[Dict[str, Any]]:
+        """
+        Generates a simplified version of the label tree.
+
+        Returns:
+            List[Dict[str, Any]]: A list representing the hierarchical labels tree in a clean format,
+            where each label includes its name, description, list of task goals, and child labels.
+        """
+
+        def copy_tree_recursive(label: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "label": label.get("label", "Unnamed Label"),
+                "description": label.get("description", ""),
+                "tasks": [task.get("goal", "") for task in label.get("tasks", [])],
+                "children": [
+                    copy_tree_recursive(child) for child in label.get("children", [])
+                ],
+            }
+
+        return [copy_tree_recursive(root_label) for root_label in self.tree]
 
 
 class LabelClassifier:
@@ -373,6 +278,7 @@ class LabelClassifier:
 
     def __init__(self):
         self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
+        self.label_tree = LabelTree()
 
     def generate_label_path(
         self, task_goal: str
@@ -387,11 +293,8 @@ class LabelClassifier:
             List[str]: A list of label names from root to leaf.
         """
         # Generate enhanced classification prompt
-        labels_tree_with_task = get_labels_tree_with_task_goals()
-        tasks = extract_task_from_label_tree(labels_tree_with_task)
-
         prompt = get_label_classification_prompt_wo_description(
-            task_goal, remove_task_id_from_tree(labels_tree_with_task), tasks
+            task_goal, self.label_tree.light_tree, self.label_tree.task_list
         )
 
         # Call LLM to get classification
@@ -412,18 +315,22 @@ class LabelClassifier:
             label_path = [{"label": item} for item in label_path]
 
         # find the most similar example in the label tree
-        matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
+        matching_node = self.label_tree.find_longest_matching_label(label_path)
         if not matching_node:
             return label_path, None, None
 
         # get all tasks under the matching node
-        tasks = get_all_tasks_under_node(matching_node)
+        tasks = self.label_tree.get_all_tasks_under_label(matching_node)
         if len(tasks) == 0:
             return label_path, None, None
 
-        best_practices = get_nearest_best_practices(label_path)
+        best_practices = self.label_tree.get_nearest_best_practices(label_path)
 
-        return label_path, find_most_similar_task(task_goal, tasks), best_practices
+        return (
+            label_path,
+            self.label_tree.find_most_similar_task(task_goal, tasks),
+            best_practices,
+        )
 
     def generate_label_description(self, task_goal: str) -> List[str]:
         """
@@ -435,12 +342,8 @@ class LabelClassifier:
         Returns:
             List[str]: A list of label names from root to leaf.
         """
-        # Generate enhanced classification prompt
-        labels_tree_with_task = get_labels_tree_with_task_goals()
 
-        prompt = get_label_classification_prompt(
-            task_goal, remove_task_id_from_tree(labels_tree_with_task)
-        )
+        prompt = get_label_classification_prompt(task_goal, self.label_tree.light_tree)
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
