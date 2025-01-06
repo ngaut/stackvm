@@ -53,6 +53,8 @@ class LabelTree:
         self.build_label_map()
         self.construct_tree()
         self.fill_tasks()
+        self.light_tree = self.get_light_tree()
+        self.task_list = self.get_task_list()
 
     def build_label_map(self) -> None:
         """
@@ -265,3 +267,147 @@ class LabelTree:
             }
 
         return [copy_tree_recursive(root_label) for root_label in self.tree]
+
+
+class LabelClassifier:
+    """
+    Service responsible for generating and validating label paths based on task goals.
+    """
+
+    def __init__(self):
+        self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
+        self.label_tree = LabelTree()
+
+    def generate_label_path(
+        self, task_goal: str
+    ) -> Tuple[List[str], Optional[Dict], Optional[str]]:
+        """
+        Generates a label path for the given task goal.
+
+        Args:
+            task_goal (str): The goal of the task.
+
+        Returns:
+            List[str]: A list of label names from root to leaf.
+        """
+        # Generate enhanced classification prompt
+        prompt = get_label_classification_prompt_wo_description(
+            task_goal, self.label_tree.light_tree, self.label_tree.task_list
+        )
+
+        # Call LLM to get classification
+        response = self.llm_interface.generate(prompt)
+
+        # Parse the LLM response to extract label path
+        label_path_str = extract_json(response)
+
+        try:
+            label_path = json.loads(label_path_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse label path JSON: {e}. Data {response}")
+
+        if not label_path or not isinstance(label_path, list):
+            raise ValueError(f"Invalid label path format. {label_path}")
+
+        if len(label_path) > 0 and isinstance(label_path[-1], str):
+            label_path = [{"name": item} for item in label_path]
+
+        # find the most similar example in the label tree
+        matching_node = self.label_tree.find_longest_matching_label(label_path)
+        if not matching_node:
+            return label_path, None, None
+
+        # get all tasks under the matching node
+        tasks = self.label_tree.get_all_tasks_under_label(matching_node)
+        if len(tasks) == 0:
+            return label_path, None, None
+
+        best_practices = self.label_tree.get_nearest_best_practices(label_path)
+
+        return (
+            label_path,
+            self.label_tree.find_most_similar_task(task_goal, tasks),
+            best_practices,
+        )
+
+    def generate_label_description(self, task_goal: str) -> List[str]:
+        """
+        Generates a label path for the given task goal.
+
+        Args:
+            task_goal (str): The goal of the task.
+
+        Returns:
+            List[str]: A list of label names from root to leaf.
+        """
+
+        prompt = get_label_classification_prompt(task_goal, self.label_tree.light_tree)
+
+        # Call LLM to get classification
+        response = self.llm_interface.generate(prompt)
+        # Parse the LLM response to extract label path
+        label_path_str = extract_json(response)
+
+        try:
+            label_path = json.loads(label_path_str)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse label path JSON: {e}")
+
+        return label_path
+
+    def insert_label_path(self, task_id: str, label_path: List[Dict]) -> None:
+        """
+        Validates the label path and creates any missing labels using SQLAlchemy ORM.
+        Finally, updates the task's label_id.
+
+        Args:
+            task_id (str): The ID of the task to update.
+            label_path (List[str]): The label path to validate and create.
+        """
+        parent = None
+        final_label = None
+
+        with SessionLocal() as session:
+            try:
+                for current_label in label_path:
+                    # Query if the label exists with the current parent_id
+                    label_name = current_label.get("label", None)
+                    label_description = current_label.get("description", None)
+                    if not label_name or not label_description:
+                        raise ValueError("Label name and description are required.")
+
+                    label = (
+                        session.query(Label)
+                        .filter_by(name=label_name, parent=parent)
+                        .first()
+                    )
+
+                    if not label:
+                        # Create a new Label instance
+                        label = Label(
+                            id=str(uuid.uuid4()),
+                            name=label_name,
+                            parent=parent,
+                            description=label_description,
+                        )
+                        session.add(label)
+                        session.flush()  # Flush to assign an ID if needed
+
+                    # Update the parent for the next label in the path
+                    parent = label
+                    final_label = label  # Keep track of the final label
+
+                # Retrieve the task and update its label_id
+                task = session.query(Task).filter_by(id=task_id).first()
+                if not task:
+                    raise ValueError(f"Task with id {task_id} does not exist.")
+
+                task.label = final_label  # Assuming relationship is set up
+                session.commit()
+
+            except IntegrityError as e:
+                session.rollback()
+                raise ValueError(f"Failed to create or retrieve labels: {e}")
+            except Exception as e:
+                session.rollback()
+                raise e
