@@ -112,9 +112,7 @@ class LabelTree:
                     }
                 )
 
-    def find_longest_matching_label(
-        self, path: List[Dict], current_depth: int = 0
-    ) -> Optional[Dict]:
+    def find_longest_matching_label(self, path: List[Dict]) -> Optional[Dict]:
         """
         Finds the longest matching node in the tree for the given path.
 
@@ -143,13 +141,15 @@ class LabelTree:
                 return None
 
             # If there are more levels in the path, search within the children
-            if current_depth < len(path) - 1 and matching_node.get("children"):
+            if depth < len(path) - 1 and matching_node.get("children"):
                 child_match = _find_longest_matching_label_recursive(
                     matching_node["children"], path, depth + 1
                 )
                 return child_match if child_match else matching_node
 
-        return _find_longest_matching_label_recursive(self.tree, path, current_depth)
+            return matching_node
+
+        return _find_longest_matching_label_recursive(self.tree, path, 0)
 
     def get_nearest_best_practices(self, label_path: List[Dict]) -> Optional[str]:
         """
