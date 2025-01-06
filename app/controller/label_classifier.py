@@ -409,7 +409,7 @@ class LabelClassifier:
             raise ValueError(f"Invalid label path format. {label_path}")
 
         if len(label_path) > 0 and isinstance(label_path[-1], str):
-            label_path = [{"label": item} for item in label_path]
+            label_path = [{"name": item} for item in label_path]
 
         # find the most similar example in the label tree
         matching_node = find_longest_matching_node(labels_tree_with_task, label_path)
