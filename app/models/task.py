@@ -10,11 +10,11 @@ from .label import Label
 
 # Define Python Enums for task status and evaluation status
 class TaskStatus(PyEnum):
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    DELETED = "deleted"
+    pending = "pending"
+    in_progress = "in_progress"
+    completed = "completed"
+    failed = "failed"
+    deleted = "deleted"
 
 
 class EvaluationStatus(PyEnum):
@@ -31,7 +31,7 @@ class Task(Base):
     goal = Column(Text, nullable=False)
     status = Column(
         SQLAlchemyEnum(TaskStatus, name="task_status"),
-        default=TaskStatus.PENDING,
+        default=TaskStatus.pending,
         server_default='pending',
     )
     repo_path = Column(String(255), nullable=False)
