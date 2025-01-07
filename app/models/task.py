@@ -1,10 +1,26 @@
 import uuid
-from sqlalchemy import Column, String, Text, Enum, DateTime, JSON, ForeignKey
+from enum import Enum as PyEnum
+from sqlalchemy import Column, String, Text, Enum, DateTime, JSON, ForeignKey, Boolean
 from datetime import datetime
 from app.database import Base
 from sqlalchemy.orm import relationship
+from sqlalchemy import Enum as SQLAlchemyEnum
 from .label import Label
 
+
+# Define Python Enums for task status and evaluation status
+class TaskStatus(PyEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    DELETED = "deleted"
+
+
+class EvaluationStatus(PyEnum):
+    NOT_EVALUATED = "NOT_EVALUATED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -14,15 +30,9 @@ class Task(Base):
     )
     goal = Column(Text, nullable=False)
     status = Column(
-        Enum(
-            "pending",
-            "in_progress",
-            "completed",
-            "failed",
-            "deleted",
-            name="task_status",
-        ),
-        default="pending",
+        SQLAlchemyEnum(TaskStatus, name="task_status"),
+        default=TaskStatus.PENDING,
+        server_default='pending',
     )
     repo_path = Column(String(255), nullable=False)
     logs = Column(Text, nullable=True)
@@ -32,6 +42,16 @@ class Task(Base):
     meta = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    evaluation_status = Column(
+        SQLAlchemyEnum(EvaluationStatus, name="evaluation_status"),
+        default=EvaluationStatus.NOT_EVALUATED,
+        server_default='NOT_EVALUATED',
+        comment="The evaluation status of the task by the LLM.",
+    )
+    evaluation_reason = Column(
+        Text, nullable=True, comment="Reason for rejection if the task is not approved."
+    )
 
     label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
     label = relationship("Label")
