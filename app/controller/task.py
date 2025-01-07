@@ -139,7 +139,7 @@ class Task:
                 )
                 if label_path and len(label_path) > 0:
                     if self.task_orm.meta:
-                        self.task_orm["label_path"] = label_path
+                        self.task_orm.meta["label_path"] = label_path
                     else:
                         self.task_orm.meta = {"label_path": label_path}
                 example_goal = example.get("goal", None) if example else None
