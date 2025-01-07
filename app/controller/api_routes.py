@@ -400,7 +400,7 @@ def get_tasks():
                 {
                     "id": task.id,
                     "goal": task.goal,
-                    "status": task.status,
+                    "status": task.status.value,
                     "created_at": task.created_at,
                     "updated_at": task.updated_at,
                     "logs": task.logs,
@@ -413,6 +413,8 @@ def get_tasks():
                     "project_id": task.project_id,
                     "best_plan": task.best_plan,
                     "metadata": task.meta,
+                    "evaluation_status": task.evaluation_status.value,
+                    "evaluation_reason": task.evaluation_reason,
                 }
                 for task in tasks
             ]
