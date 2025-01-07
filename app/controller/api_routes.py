@@ -412,6 +412,7 @@ def get_tasks():
                     "tenant_id": task.tenant_id,
                     "project_id": task.project_id,
                     "best_plan": task.best_plan,
+                    "metadata": task.meta,
                 }
                 for task in tasks
             ]
