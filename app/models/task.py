@@ -22,6 +22,7 @@ class EvaluationStatus(PyEnum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -32,7 +33,7 @@ class Task(Base):
     status = Column(
         SQLAlchemyEnum(TaskStatus, name="task_status"),
         default=TaskStatus.pending,
-        server_default='pending',
+        server_default="pending",
     )
     repo_path = Column(String(255), nullable=False)
     logs = Column(Text, nullable=True)
@@ -46,7 +47,7 @@ class Task(Base):
     evaluation_status = Column(
         SQLAlchemyEnum(EvaluationStatus, name="evaluation_status"),
         default=EvaluationStatus.NOT_EVALUATED,
-        server_default='NOT_EVALUATED',
+        server_default="NOT_EVALUATED",
         comment="The evaluation status of the task by the LLM.",
     )
     evaluation_reason = Column(

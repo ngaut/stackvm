@@ -648,6 +648,40 @@ class TaskService:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
             raise e
 
+    def list_evaluation_pending_tasks(
+        self, session: Session, start_time: datetime, end_time: datetime
+    ) -> List[TaskORM]:
+        """
+        Retrieve tasks that are pending evaluation within a specific time range.
+
+        Args:
+            session (Session): The database session to use for the query.
+            start_time (datetime): The start of the time range.
+            end_time (datetime): The end of the time range.
+
+        Returns:
+            List[TaskORM]: A list of tasks that are pending evaluation within the time range.
+        """
+        try:
+            pending_tasks = (
+                session.query(TaskORM)
+                .filter(
+                    TaskORM.evaluation_status == EvaluationStatus.NOT_EVALUATED,
+                    TaskORM.created_at >= start_time,
+                    TaskORM.created_at <= end_time,
+                )
+                .all()
+            )
+            logger.info(
+                f"Retrieved {len(pending_tasks)} pending evaluation tasks between {start_time} and {end_time}."
+            )
+            return pending_tasks
+        except Exception as e:
+            logger.error(
+                f"Failed to retrieve pending evaluation tasks: {str(e)}", exc_info=True
+            )
+            raise e
+
     def list_tasks(self, session, limit=10, offset=0):
         """
         List tasks with pagination support.
