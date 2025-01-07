@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
-from app.models import Task as TaskORM
+from app.models import Task as TaskORM, TaskStatus, EvaluationStatus
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
     LLMInterface,
@@ -35,7 +35,7 @@ simple_semantic_cache = initialize_cache()
 class Task:
     def __init__(self, task_orm: TaskORM, llm_interface: LLMInterface):
         self.task_orm = task_orm
-        if task_orm.status == "deleted":
+        if task_orm.status == TaskStatus.DELETED:
             raise ValueError(f"Task {task_orm.id} is deleted.")
 
         if task_orm.repo_path != "":
@@ -87,8 +87,13 @@ class Task:
         return self.branch_manager.get_state_diff(commit_hash)
 
     def mark_as_completed(self):
-        self.task_orm.status = "completed"
+        self.task_orm.status = TaskStatus.COMPLETED
         self.task_orm.logs = "Plan execution completed."
+        self.save()
+
+    def mark_evaluation(self, eval_status: EvaluationStatus, eval_reason: str):
+        self.task_orm.evaluation_status = eval_status
+        self.task_orm.evaluation_reason = eval_reason
         self.save()
 
     def create_vm(self):
@@ -205,7 +210,7 @@ class Task:
                 logger.info("Generated Plan:%s", json.dumps(plan, indent=2))
                 self._run(vm)
             except Exception as e:
-                self.task_orm.status = "failed"
+                self.task_orm.status = TaskStatus.FAILED
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 self.save()
                 # raise the same error again
@@ -293,7 +298,7 @@ class Task:
                     }
 
             except Exception as e:
-                self.task_orm.status = "failed"
+                self.task_orm.status = TaskStatus.FAILED
                 self.task_orm.logs = f"Failed to run task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 self.save()
                 raise ValueError(self.task_orm.logs)
@@ -383,7 +388,7 @@ class Task:
                     "current_branch": vm.branch_manager.get_current_branch(),
                 }
             except Exception as e:
-                self.task_orm.status = "failed"
+                self.task_orm.status = TaskStatus.FAILED
                 self.task_orm.logs = f"Failed to update task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 logger.error(self.task_orm.logs, exc_info=True)
                 self.save()
@@ -450,7 +455,9 @@ class Task:
                         break
 
                 self.task_orm.status = (
-                    "completed" if vm.state.get("goal_completed") else "failed"
+                    TaskStatus.COMPLETED
+                    if vm.state.get("goal_completed")
+                    else TaskStatus.FAILED
                 )
                 self.save()
 
@@ -460,7 +467,7 @@ class Task:
                     "current_branch": self.branch_manager.get_current_branch(),
                 }
             except Exception as e:
-                self.task_orm.status = "failed"
+                self.task_orm.status = TaskStatus.FAILED
                 self.task_orm.logs = f"Failed to update task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 logger.error(self.task_orm.logs, exc_info=True)
                 self.save()
@@ -549,7 +556,7 @@ class Task:
                     "latest_commit_hash": vm.branch_manager.get_current_commit_hash(),
                 }
             except Exception as e:
-                self.task_orm.status = "failed"
+                self.task_orm.status = TaskStatus.FAILED
                 self.task_orm.logs = f"Failed to optimize step {seq_no} for task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
                 logger.error(self.task_orm.logs, exc_info=True)
                 self.save()
@@ -618,13 +625,13 @@ class TaskService:
         try:
             task_orm = (
                 session.query(TaskORM)
-                .filter(TaskORM.id == task_id, TaskORM.status != "deleted")
+                .filter(TaskORM.id == task_id, TaskORM.status != TaskStatus.DELETED)
                 .first()
             )
             if task_orm:
                 logger.info(f"Retrieved task with ID {task_id} from database.")
                 if task_orm.repo_path != "" and not os.path.exists(task_orm.repo_path):
-                    task_orm.status = "deleted"
+                    task_orm.status = TaskStatus.DELETED
                     session.add(task_orm)
                     session.commit()
                     logger.warning(f"Task with ID {task_id} is deleted.")
@@ -652,7 +659,7 @@ class TaskService:
         """
         return (
             session.query(TaskORM)
-            .filter(TaskORM.status != "deleted")
+            .filter(TaskORM.status != TaskStatus.DELETED)
             .order_by(TaskORM.updated_at.desc())
             .offset(offset)
             .limit(limit)

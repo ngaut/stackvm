@@ -29,6 +29,7 @@ from app.config.settings import (
     TASK_QUEUE_WORKERS,
 )
 from app.utils import parse_goal_response_format
+from app.models import TaskStatus
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService
@@ -690,7 +691,7 @@ def stream_execute_vm():
                     )
                     yield protocol.send_error(error_message)
                     yield protocol.send_finish_message("error")
-                    task.task_orm.status = "failed"
+                    task.task_orm.status = TaskStatus.FAILED
                     task.task_orm.logs = f"Error during VM execution: {error_message}"
                     task.save()
                     return
@@ -705,7 +706,7 @@ def stream_execute_vm():
                     )
                     yield protocol.send_error(error)
                     yield protocol.send_finish_message("error")
-                    task.task_orm.status = "failed"
+                    task.task_orm.status = TaskStatus.FAILED
                     task.task_orm.logs = f"Error during VM execution: {error}"
                     task.save()
                     return
@@ -746,21 +747,21 @@ def stream_execute_vm():
             yield protocol.send_finish_message(response=final_answer)
         except GeneratorExit:
             current_app.logger.info(f"Client disconnected ({task.id}). Cleaning up.")
-            task.task_orm.status = "failed"
+            task.task_orm.status = TaskStatus.FAILED
             task.task_orm.logs = "Execution was interrupted by the client."
             task.save()
             raise
         except PlanUnavailableError as e:
             yield protocol.send_text_part(str(e))
             yield protocol.send_finish_message(response=str(e))
-            task.task_orm.status = "completed"
+            task.task_orm.status = TaskStatus.COMPLETED
             task.task_orm.logs = str(e)
             task.save()
         except Exception as e:
             error_message = f"Error during VM execution ({task.id}): {str(e)}"
             current_app.logger.error(error_message, exc_info=True)
             yield protocol.send_error(error_message)
-            task.task_orm.status = "failed"
+            task.task_orm.status = TaskStatus.FAILED
             task.task_orm.logs = f"Error during VM execution: {error_message}"
             task.save()
 
