@@ -137,9 +137,12 @@ class Task:
                 label_path, example, best_pratices = classifier.generate_label_path(
                     self.task_orm.goal
                 )
-                if label_path and len(label_path) > 0:
+                if label_path:
                     if self.task_orm.meta:
-                        self.task_orm.meta["label_path"] = label_path
+                        self.task_orm.meta = {
+                            **self.task_orm.meta,
+                            "label_path": label_path,
+                        }
                     else:
                         self.task_orm.meta = {"label_path": label_path}
                 example_goal = example.get("goal", None) if example else None
