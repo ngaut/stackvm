@@ -40,7 +40,11 @@ def get_task_answer(task_id: str, branch_name: str) -> dict:
         response = requests.get(url)
         response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
         detail = response.json()
-        state = detail.get("vm_state")
+        state = (
+            detail.get("vm_state").get("vm_state")
+            if detail.get("vm_state") is not None
+            else None
+        )
         if state is not None:
             plan = state.get("current_plan", None)
             goal_completed = state.get("goal_completed", False)
@@ -54,6 +58,7 @@ def get_task_answer(task_id: str, branch_name: str) -> dict:
                 "plan": plan,
                 "goal_completed": goal_completed,
                 "final_answer": final_answer,
+                "metadata": detail.get("metadata"),
             }
     except requests.exceptions.RequestException as e:
         logger.error(f"Error during request: {e}", exc_info=True)
@@ -91,7 +96,7 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
             raise e
 
 
-def evaulate_task_answer(goal: str, final_answer: str, plan: str):
+def evaulate_task_answer(goal: str, metadata: dict, final_answer: str, plan: str):
     evluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the plan sufficiently aligned with the goal. If issues are present (e.g., the answer does not fully meet the goal or contains irrelevant information), you must:
 1. Analyze the Plan to identify weaknesses or misalignments with the Goal.
 2. Provide detailed suggestions to adjust or rewrite the Plan to improve the answer quality.
@@ -105,6 +110,9 @@ Here are the inputs:
 
 ## Goal
 {goal}
+
+The supplementary information for Goal:
+{metadata.get('response_format')}
 
 ## Answer
 {final_answer}
@@ -125,6 +133,7 @@ Example Output:
   "plan_adjustment_suggestion": {...}
 }}
 """
+
     response = fc_llm.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -308,6 +317,7 @@ class PlanOptimizationService:
                             answer_detail = get_task_answer(**args)
                             eval_res = evaulate_task_answer(
                                 answer_detail["goal"],
+                                answer_detail["metadata"],
                                 answer_detail["final_answer"],
                                 answer_detail["plan"],
                             )

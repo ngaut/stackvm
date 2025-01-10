@@ -648,32 +648,45 @@ class TaskService:
             logger.error(f"Failed to retrieve task {task_id}: {str(e)}", exc_info=True)
             raise e
 
-    def list_evaluation_pending_tasks(
-        self, session: Session, start_time: datetime, end_time: datetime
+    def list_tasks_evaluation(
+        self,
+        session: Session,
+        start_time: datetime,
+        end_time: datetime,
+        evaluation_statuses: Optional[List[EvaluationStatus]] = None,
     ) -> List[TaskORM]:
         """
-        Retrieve tasks that are pending evaluation within a specific time range.
+        Retrieve tasks that are pending evaluation within a specific time range and optional evaluation statuses.
 
         Args:
             session (Session): The database session to use for the query.
             start_time (datetime): The start of the time range.
             end_time (datetime): The end of the time range.
+            evaluation_statuses (Optional[List[EvaluationStatus]]): List of evaluation statuses to filter by.
 
         Returns:
-            List[TaskORM]: A list of tasks that are pending evaluation within the time range.
+            List[TaskORM]: A list of tasks that match the criteria.
         """
         try:
-            pending_tasks = (
-                session.query(TaskORM)
-                .filter(
-                    TaskORM.evaluation_status == EvaluationStatus.NOT_EVALUATED,
-                    TaskORM.created_at >= start_time,
-                    TaskORM.created_at <= end_time,
-                )
-                .all()
+            query = session.query(TaskORM).filter(
+                TaskORM.created_at >= start_time,
+                TaskORM.created_at <= end_time,
             )
+
+            if evaluation_statuses:
+                query = query.filter(TaskORM.evaluation_status.in_(evaluation_statuses))
+            else:
+                # Default to NOT_EVALUATED if no statuses are provided
+                query = query.filter(
+                    TaskORM.evaluation_status == EvaluationStatus.NOT_EVALUATED
+                )
+
+            pending_tasks = query.all()
+
             logger.info(
-                f"Retrieved {len(pending_tasks)} pending evaluation tasks between {start_time} and {end_time}."
+                f"Retrieved {len(pending_tasks)} tasks with evaluation statuses "
+                f"{evaluation_statuses if evaluation_statuses else [EvaluationStatus.NOT_EVALUATED]} "
+                f"between {start_time} and {end_time}."
             )
             return pending_tasks
         except Exception as e:
