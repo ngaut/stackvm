@@ -139,7 +139,21 @@ def get_answer_detail(task_id, branch_name):
                     "warning",
                     404,
                 )
-            return jsonify(vm_state)
+            return jsonify(
+                {
+                    "id": task.task_orm.id,
+                    "goal": task.task_orm.goal,
+                    "status": task.task_orm.status.value,
+                    "created_at": task.task_orm.created_at,
+                    "updated_at": task.task_orm.updated_at,
+                    "logs": task.task_orm.logs,
+                    "best_plan": task.task_orm.best_plan,
+                    "metadata": task.task_orm.meta,
+                    "evaluation_status": task.task_orm.evaluation_status.value,
+                    "evaluation_reason": task.task_orm.evaluation_reason,
+                    "vm_state": vm_state,
+                }
+            )
         except Exception as e:
             return log_and_return_error(
                 f"Unexpected error fetching final answer detail not found for branch {branch_name} for task {task_id}: {str(e)}",
@@ -450,24 +464,61 @@ def record_evaluation(task_id):
         )
 
 
-@api_blueprint.route("/tasks/evaluation_pending")
-def list_evaluation_pending_tasks():
+@api_blueprint.route("/tasks/evaluation")
+def list_tasks_evaluation():
     try:
+        # Extract query parameters
         start_time_str = request.args.get("start_time")
         end_time_str = request.args.get("end_time")
+        evaluation_status_param = request.args.get("evaluation_status")
 
+        # Parse end_time
         if not end_time_str:
             end_time = datetime.utcnow()
         else:
-            end_time = datetime.fromisoformat(end_time_str)
+            try:
+                end_time = datetime.fromisoformat(end_time_str)
+            except ValueError:
+                return log_and_return_error(
+                    "Invalid 'end_time' format. Expected ISO format.", "error", 400
+                )
 
+        # Parse start_time
         if not start_time_str:
             start_time = end_time - timedelta(days=2)
         else:
-            start_time = datetime.fromisoformat(start_time_str)
+            try:
+                start_time = datetime.fromisoformat(start_time_str)
+            except ValueError:
+                return log_and_return_error(
+                    "Invalid 'start_time' format. Expected ISO format.", "error", 400
+                )
+
+        # Parse evaluation_status
+        evaluation_statuses = None
+        if evaluation_status_param:
+            # Split by comma in case of multiple statuses
+            status_strings = [
+                status.strip() for status in evaluation_status_param.split(",")
+            ]
+            evaluation_statuses = []
+            for status_str in status_strings:
+                try:
+                    evaluation_status = EvaluationStatus(status_str.upper())
+                    evaluation_statuses.append(evaluation_status)
+                except ValueError:
+                    valid_statuses = [status.value for status in EvaluationStatus]
+                    return log_and_return_error(
+                        f"Invalid 'evaluation_status' value: '{status_str}'. "
+                        f"Must be one of {valid_statuses}.",
+                        "error",
+                        400,
+                    )
 
         with SessionLocal() as session:
-            tasks_orm = ts.list_evaluation_pending_tasks(session, start_time, end_time)
+            tasks_orm = ts.list_tasks_evaluation(
+                session, start_time, end_time, evaluation_statuses
+            )
             tasks = [
                 {
                     "id": task.id,
@@ -478,6 +529,7 @@ def list_evaluation_pending_tasks():
                     "logs": task.logs,
                     "best_plan": task.best_plan,
                     "metadata": task.meta,
+                    "evaluation_status": task.evaluation_status.value,  # Include evaluation_status if needed
                 }
                 for task in tasks_orm
             ]
@@ -522,6 +574,32 @@ def get_tasks():
             )
     except Exception as e:
         current_app.logger.error(f"Error fetching tasks: {str(e)}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@api_blueprint.route("/tasks/<task_id>")
+def get_task(task_id):
+    try:
+        with SessionLocal() as session:
+            task = ts.get_task(session, task_id)
+            return jsonify(
+                {
+                    "id": task.task_orm.id,
+                    "goal": task.task_orm.goal,
+                    "status": task.task_orm.status.value,
+                    "created_at": task.task_orm.created_at,
+                    "updated_at": task.task_orm.updated_at,
+                    "logs": task.task_orm.logs,
+                    "best_plan": task.task_orm.best_plan,
+                    "metadata": task.task_orm.meta,
+                    "evaluation_status": task.task_orm.evaluation_status.value,
+                    "evaluation_reason": task.task_orm.evaluation_reason,
+                }
+            )
+    except Exception as e:
+        current_app.logger.error(
+            f"Error fetching task({task_id}): {str(e)}", exc_info=True
+        )
         return jsonify({"error": str(e)}), 500
 
 
