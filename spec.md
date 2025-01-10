@@ -276,8 +276,8 @@ Parameters can be either direct values or variable references. To reference a va
   - Maintain Coherence: By processing all retrieved data through the LLM generation tool, you ensure that the final answer is a cohesive, single-language narrative. This avoids the inclusion of raw or fragmented data that could compromise the readability and consistency of the response.
 
 - **Final Answer Alignment**:
-  - **Goal-Centric Generation**: Ensure that the generated `final_answer` directly addresses the question or objective outlined in the goal. The response should be focused and relevant to the user’s initial query.
-  - **Contextual Consistency**: Since the tools in the plan (e.g., `llm_generate`) do not have visibility of the goal, include the goal context when making tool calls if necessary. Maintain the alignment between the goal and all intermediate steps leading to the `final_answer`. This ensures that every instruction and tool interaction contributes towards achieving the desired outcome.
+  - **Goal-Centric Generation**: Ensure that the generated `final_answer` directly addresses the question or objective outlined in the goal. The `final_answer` should be focused and relevant to the goal and avoid general response.
+  - **Contextual Consistency**: Since the tools in the plan (e.g., `llm_generate`) do not aware the goal, include the goal context when making tool calls if necessary. Maintain the alignment between the goal and all intermediate steps leading to the `final_answer`. This ensures that every instruction and tool interaction contributes towards achieving the desired outcome.
   - **Avoid Divergence**: Prevent the generation of information that, while relevant, does not serve to answer the primary goal. All synthesized and summarized data should reinforce the goal-centric `final_answer`.
 
 ## 8. Common Errors
