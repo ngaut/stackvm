@@ -19,6 +19,7 @@ class TaskStatus(PyEnum):
 
 class EvaluationStatus(PyEnum):
     NOT_EVALUATED = "NOT_EVALUATED"
+    WAITINT_FOR_EVALUATION = "WAITTING_FOR_EVALUATION"
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 
@@ -51,6 +52,15 @@ class Task(Base):
         comment="The evaluation status of the task by the LLM.",
     )
     evaluation_reason = Column(
+        Text, nullable=True, comment="Reason for rejection if the task is not approved."
+    )
+    human_evaluation_status = Column(
+        SQLAlchemyEnum(EvaluationStatus, name="human_evaluation_status"),
+        default=EvaluationStatus.NOT_EVALUATED,
+        server_default="NOT_EVALUATED",
+        comment="The evaluation status of the task by the Human.",
+    )
+    human_feedback = Column(
         Text, nullable=True, comment="Reason for rejection if the task is not approved."
     )
 
