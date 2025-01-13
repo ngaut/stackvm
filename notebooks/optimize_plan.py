@@ -174,14 +174,14 @@ Here are the inputs:
 The supplementary information for Goal:
 {metadata.get('response_format')}
 
-## Current Plan:
+## Previous Plan:
 {plan}
 
 ## **Evaluation Feedback**:
 {suggestion}
 
-After evaluating the current plan, it has been rejected due to its inability to effectively address the goal. Please revise the current plan based on the Evaluation Feedback provided above. Utilize the current plan as a foundation and incorporate the evaluation feedback to develop a more effective and efficient execution plan.
-Ensure that the updated plan adheres to the original format to maintain consistency and comply with the Executable Plan Specifications.
+As the evaluating Feedback said, the previous plan has been rejected due to its inability to effectively address the goal. Please revise the previous plan based on the Evaluation Feedback.
+Ensure that the updated plan adheres to the Executable Plan Specifications.
 
 ----
 
@@ -261,10 +261,10 @@ Now, let's think step by step, and revise the plan.
 
 **Output**:
 
-1. **Provide the complete updated plan in JSON format**, ensuring it fully complies with the executable plan specification.
+1. **Provide the complete updated plan in JSON format**, ensuring it fully complies with the executable plan specification. **Within the ```json``` block, do not use any additional triple backticks (` ``` `) to prevent parsing issues.**
 2. **Provide a summary of the changes made to the plan**, including a clear diff comparing the previous plan with the updated plan."""
 
-    response = fc_llm.chat.completions.create(
+    llm_response = fc_llm.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "user", "content": updated_prompt},
@@ -272,7 +272,9 @@ Now, let's think step by step, and revise the plan.
         temperature=0,
     )
 
-    return response.choices[0].message.content.strip()
+    plan = llm_response.choices[0].message.content.strip()
+
+    return plan
 
 
 class EventType(str, enum.Enum):
