@@ -4,6 +4,7 @@ import openai
 import requests
 import json
 import os
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Generator, Any, List, Dict, Optional
 from dataclasses import dataclass
@@ -159,6 +160,120 @@ You must return a JSON object with the following keys:
     return response.choices[0].message.content.strip()
 
 
+def update_plan(goal: str, metadata: dict, plan: str, suggestion: str | Dict):
+    """
+    Get the prompt for updating the plan.
+    """
+    updated_prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+
+Here are the inputs:
+
+## Goal
+{goal}
+
+The supplementary information for Goal:
+{metadata.get('response_format')}
+
+## Current Plan:
+{plan}
+
+## **Evaluation Feedback**:
+{suggestion}
+
+After evaluating the current plan, it has been rejected due to its inability to effectively address the goal. Please revise the current plan based on the Evaluation Feedback provided above. Utilize the current plan as a foundation and incorporate the evaluation feedback to develop a more effective and efficient execution plan.
+Ensure that the updated plan adheres to the original format to maintain consistency and comply with the Executable Plan Specifications.
+
+----
+
+The Executable Plan Specifications:
+
+```
+
+1. Overview
+
+- Functionality: Executes plans composed of sequential instructions, each performing specific operations and interacting with a variable store.
+-	Key Features:
+  - Variable Store: A key-value store for storing and accessing variables by name.
+  - Instruction Execution: Executes instructions in order based on seq_no, with support for conditional jumps.
+
+2. Instruction Format
+
+Each instruction is a JSON object with:
+- seq_no: Unique, auto-increment integer starting from 0.
+- type: Instruction type (assign, jmp, calling, reasoning).
+- parameters: Object containing necessary parameters for the instruction.
+
+3. Supported Instructions
+
+3.1 assign
+- Purpose: Assign values to variables.
+- Parameters: Key-value pairs where keys are variable names and values are direct values or variable references.
+
+3.2 jmp
+- Purpose: Conditional or unconditional jump to a specified seq_no.
+- Parameters:
+  - Conditional Jump:
+    - condition_prompt (optional): Prompt to evaluate condition.
+    - jump_if_true: seq_no to jump if condition is true.
+    - jump_if_false (optional): seq_no to jump if condition is false.
+  - Unconditional Jump:
+    - target_seq: seq_no to jump to.
+
+3.3 calling
+- Purpose: Invoke a tool or function.
+- Parameters:
+  - tool_name: Name of the tool to call.
+	- tool_params: Arguments for the tool, can include variable references.
+	- output_vars (optional): Variables to store the tool's output.
+
+3.4 reasoning
+- Purpose: Provide detailed reasoning and analysis.
+- Parameters:
+  - chain_of_thoughts: Detailed reasoning process.
+  - dependency_analysis: Description of dependencies between steps.
+
+4. Parameters and Variable References
+- Variable Reference Format: Dynamic values based on previous steps, format: ${{variable_name}}
+- Direct Values: Fixed, known values.
+
+5. Plan Structure
+  - Sequential Execution: Instructions execute in order based on seq_no.
+  - Control Flow: Use jmp for conditional jumps and loops.
+
+6. Supported Tools for Calling Instructions
+  - llm_generate: Generates text content based on prompts and context.
+  - vector_search: Performs vector-based searches to retrieve relevant information.
+  - retrieve_knowledge_graph: Retrieves structured data from a knowledge graph.
+
+7. Best Practices
+  -	Sequence Numbering: Ensure seq_no values are unique and sequential.
+  - Variable Naming: Use descriptive names for clarity and maintainability.
+  - Final Answer: The last instruction must assign to the variable final_answer.
+	- Language Consistency:
+    - All instructions contributing to final_answer must be in the same language as the goal.
+    - Ensure variable content matches the target language.
+  - For each query, use both retrieve_knowledge_graph and vector_search to search information, then use llm_generate to summarize the relevant information for the query.
+```
+
+-------------------------------
+
+Now, let's think step by step, and revise the plan.
+
+**Output**:
+
+1. **Provide the complete updated plan in JSON format**, ensuring it fully complies with the executable plan specification.
+2. **Provide a summary of the changes made to the plan**, including a clear diff comparing the previous plan with the updated plan."""
+
+    response = fc_llm.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "user", "content": updated_prompt},
+        ],
+        temperature=0,
+    )
+    return response.choices[0].message.content.strip()
+
+
 class EventType(str, enum.Enum):
     LLM_CONTENT_STREAMING = "LLM_CONTENT_STREAMING"
     TOOL_CALL = "TOOL_CALL"
@@ -223,9 +338,9 @@ system_instruction = """Your primary mission is to evaluate whether a task's fin
 Your workflow is as follows:
 
 1. **Gather Task Information**
-   - Ask the user for the `task_id` and `branch_nameplea` of the task they wish to evaluate.
+   - Ask the user for the `task_id` and `branch_name` of the task they wish to evaluate.
 
-2. **Retrieve and Analyze Task Answer**
+2. **Retrieve and Evaluate Task Answer**
    - Use the `evaulate_task_answer_object` tool to perform a systematic evaluation for a task with following functionalities:
      - Whether the final answer effectively resolves the goal
      - The quality of the current plan
@@ -241,7 +356,7 @@ Your workflow is as follows:
        - Share the detailed assessment explanation with the user
        - Review the suggested plan adjustments from the evaluation
 
-4. **Plan Modification and User Confirmation**
+4. **Review the revised plan and Get  User Confirmation**
    - If the solution is ineffective:
      - Present the suggested plan adjustments from the evaluation
      - Present the new plan to the user and wait for their confirmation
