@@ -53,6 +53,15 @@ class Task(Base):
     evaluation_reason = Column(
         Text, nullable=True, comment="Reason for rejection if the task is not approved."
     )
+    human_evaluation_status = Column(
+        SQLAlchemyEnum(EvaluationStatus, name="evaluation_status"),
+        default=EvaluationStatus.NOT_EVALUATED,
+        server_default="NOT_EVALUATED",
+        comment="The evaluation status of the task by the LLM.",
+    )
+    human_feedback = Column(
+        Text, nullable=True, comment="Reason for rejection if the task is not approved."
+    )
 
     label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
     label = relationship("Label")

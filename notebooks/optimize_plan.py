@@ -4,7 +4,7 @@ import openai
 import requests
 import json
 import os
-from datetime import datetime
+import datetime
 from pydantic import BaseModel, Field
 from typing import Generator, Any, List, Dict, Optional
 from dataclasses import dataclass
@@ -271,6 +271,7 @@ Now, let's think step by step, and revise the plan.
         ],
         temperature=0,
     )
+
     return response.choices[0].message.content.strip()
 
 
