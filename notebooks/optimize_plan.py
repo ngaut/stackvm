@@ -97,14 +97,22 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
 
 
 def evaulate_task_answer(goal: str, metadata: dict, final_answer: str, plan: str):
-    evluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the plan sufficiently aligned with the goal. If issues are present (e.g., the answer does not fully meet the goal or contains irrelevant information), you must:
+    evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the plan sufficiently aligns with the goal. If issues are present (e.g., the answer does not fully meet the goal or contains irrelevant information), you must:
 1. Analyze the Plan to identify weaknesses or misalignments with the Goal.
 2. Provide detailed suggestions to adjust or rewrite the Plan to improve the answer quality.
 
+**Guidelines for Assessing Goal Achievement**:
+- **Direct Problem Resolution**: The agent should provide a clear and actionable solution to the user's specific problem or request.
+- **Clarification of User Intent**: When the user's input is unclear, ambiguous, or lacks sufficient context, the agent should effectively seek clarification to better understand the user's needs.
+    - **Handling Placeholder/Test Inputs**: If the user's input appears to be a placeholder, test message, or non-meaningful string, the agent should recognize this and respond appropriately, either by seeking clarification or acknowledging the nature of the input.
+- **Providing Relevant Information**: The agent should ensure that all provided information is pertinent to the user's goal, avoiding unnecessary or off-topic content.
+- **Maintaining Conversational Flow**: The agent's response should facilitate a smooth and logical continuation of the conversation, guiding the user towards achieving their objective.
+
 Your output must include:
-1. Answer Quality Assessment: Clearly state whether the final answer resolves the goal. If not, explain why and identify any irrelevant or missing elements.
-2. Plan Analysis: Examine the steps in the plan, identify where they failed or could be improved, and explain why adjustments are necessary.
-3. Plan Adjustment Suggestions: Provide a revised or improved version of the plan to address the identified shortcomings.
+
+1. **Answer Quality Assessment**: Clearly state whether the final answer resolves the goal. If not, explain why and identify any irrelevant or missing elements. Reference the relevant guideline(s) from the above list that apply.
+2. **Plan Analysis**: Examine the steps in the plan, identify where they failed or could be improved, and explain why adjustments are necessary. Highlight how the plan aligns or misaligns with the relevant guideline(s).
+3. **Plan Adjustment Suggestions**: Provide a revised or improved version of the plan to address the identified shortcomings. Ensure that the updated plan includes methods for effectively handling various types of goals as outlined in the guidelines.
 
 Here are the inputs:
 
@@ -117,27 +125,34 @@ The supplementary information for Goal:
 ## Answer
 {final_answer}
 
-## plan
+## Plan
 {plan}
 
-Your Output Format:
-You must return a JSON object with the following keys:
-- accept: Boolean value (true or false) indicating whether the final answer effectively resolves the goal.
-- answer_quality_assessment_explaination: A detailed explanation justifying why the final answer does or does not meet the goal, highlighting key points or missing elements.
-- plan_adjustment_suggestion: If answer is not accepted, please provide a comprehensive analysis of the plan and recommendations for how to adjust or improve it to better achieve the goal.
+**Optional Enhancements**:
 
-Example Output:
+- **Goal Classification**: Categorize the goal based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed"). This helps in applying appropriate evaluation criteria.
+- **Contextual Considerations**: Take into account any supplementary information provided (e.g., {metadata.get('response_format')}) that may influence how the goal should be addressed.
+
+**Your Output Format**:
+You must return a JSON object with the following keys:
+- **accept**: Boolean value (true or false) indicating whether the final answer effectively resolves the goal.
+- **answer_quality_assessment_explanation**: A detailed explanation justifying why the final answer does or does not meet the goal, highlighting key points or missing elements. Reference the relevant guidelines.
+- **plan_adjustment_suggestion**: If the answer is not accepted, please provide a comprehensive analysis of the plan and recommendations for how to adjust or improve it to better achieve the goal. Include strategies aligned with the guidelines.
+- **goal_classification**: (Optional) A categorization of the goal type based on the guidelines, such as "Direct Problem Resolution", "Clarification Needed".
+
+**Example Output**:
 {{
   "accept": False/True,
-  "answer_quality_assessment_explaination": "...",
-  "plan_adjustment_suggestion": {...}
+  "answer_quality_assessment_explanation": "...",
+  "plan_adjustment_suggestion": {...},
+  "goal_classification": "Clarification Needed/Direct Problem Resolution"
 }}
 """
 
     response = fc_llm.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "user", "content": evluation_prompt},
+            {"role": "user", "content": evaluation_prompt},
         ],
         temperature=0,
     )
