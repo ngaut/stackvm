@@ -100,23 +100,30 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
 def evaulate_task_answer(goal: str, metadata: dict, final_answer: str, plan: str):
     evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
 
-
-
 ------------------------------------
 KEY POINTS TO CONSIDER IN YOUR EVALUATION:
 1. Deep Analysis of the User's Problem:
-   • Does the Plan demonstrate a sufficient understanding of the user's overall background, constraints, and specific questions?
-   • Has the Plan identified the critical context that shapes the user's goal (e.g., large data volumes, performance constraints, GC usage, version details, etc.)?
+  - Does the Plan demonstrate a sufficient understanding of the user's overall background, constraints, and specific questions?
+  - Has the Plan identified the critical context that shapes the user's goal (e.g., large data volumes, performance constraints, GC usage, version details, etc.)?
 
 2. Instructions Context & Coverage:
-   • For each instruction in the Plan (including steps like searching for relevant data or generating partial solutions), verify whether it explicitly or implicitly incorporates the "specific problem background + user's question."
-   • Do the instructions effectively handle the sub-questions or concerns raised by the user? Are any key points missing or glossed over?
+  - For each instruction in the Plan (including steps like searching for relevant data or generating partial solutions), verify whether it explicitly or implicitly incorporates the "specific problem background + user's question."
+  - Do the instructions effectively handle the sub-questions or concerns raised by the user? Are any key points missing or glossed over?
 
-3. Completeness of the Plan:
+3. Verification of Problem Decomposition and Factual Information Retrieval for TiDB-Related Goals
+  - Problem Decomposition - If the Goal is TiDB-related, verify whether the Plan has effectively broken down the Goal into distinct sub-questions.
+  - Individual Retrieval Methods for Each Sub-Question - For each sub-question, verify wheter the plan has applied the following retrieval methods independently:
+    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
+    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
+  - Ensuring Relevance and Separation:
+    - Confirm that each sub-question is handled separately, ensuring that the retrieval process targets the most relevant data for that specific sub-question.
+    - Ensure that retrieval operations for different sub-questions are not combined, preventing the mixing of data across sub-questions.
+
+4. Completeness of the Plan:
    • Does the Plan address all major aspects of the user's problem or goal?
    • Are there any unanswered questions or issues that the user might still have after following the Plan?
 
-4. Cohesion of Plan Steps:
+5. Cohesion of Plan Steps:
    • Assess whether the Plan's instructions flow logically from one step to the next, and whether they form a coherent end-to-end workflow.
    • Consider whether the Plan's approach to searching for data, filtering out irrelevant information, and eventually generating a final integrated solution is clearly articulated and consistent with the user's context.
 
@@ -132,7 +139,7 @@ YOUR OUTPUT FORMAT:
 You must return a JSON object with the following keys:
 1. "accept": Boolean value (true or false) indicating whether the Final Answer effectively resolves the Goal.
 2. "answer_quality_assessment_explanation": A detailed explanation justifying why the final answer does or does not meet the goal, referencing any guidelines or key points above.
-3. "plan_adjustment_suggestion": If "accept" is false, provide a comprehensive analysis of how the Plan could be improved to fully address the user's context and questions. Propose modifications or additional steps.
+3. "plan_adjustment_suggestion": If "accept" is false, provide a comprehensive analysis of how the Plan could be improved to fully address the user's context and questions. Propose modifications or additional steps in detail.
 4. "goal_classification": (Optional) A categorization of the goal type based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed").
 
 ------------------------------------
@@ -158,7 +165,7 @@ Below are the inputs for your evaluation:
 ## Plan
 {plan}
 
-Now Let's think step by step! Do you best on this evluation task!
+Now Let's think step by step! Do you best on this evaluation task!
 """
 
     response = fc_llm.chat.completions.create(
@@ -205,8 +212,9 @@ Important Requirements for Revising the Plan:
 
 3. Proper Use of Tools for Searching and Information Filtering:
   - Include instructions that create precise queries reflecting the user's unique background + question.
-  - Use “vector_search” or “retrieve_knowledge_graph” to fetch relevant data.
-  - Use “llm_generate” to summarize or integrate the searched information, discarding irrelevant noise.
+  - If the Goal is TiDB-related, the Goal must be broken down in plan, and for each sub-question, used the following retrieval methods:
+    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
+    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
 
 4. Comprehensive Coverage of All User Questions:
   - Confirm that each instruction in the Plan contributes to solving one or more of the user's sub-questions.
@@ -274,7 +282,7 @@ Each instruction is a JSON object with:
   - Sequential Execution: Instructions execute in order based on seq_no.
   - Control Flow: Use jmp for conditional jumps and loops.
 
-6. Supported Tools for Calling Instructions
+6. Supported Tools for Calling Instructions (other tool is unavailble)
   - llm_generate: Generates text content based on prompts and context.
   - vector_search: Performs vector-based searches to retrieve relevant information.
   - retrieve_knowledge_graph: Retrieves structured data from a knowledge graph.
