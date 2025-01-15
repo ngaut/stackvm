@@ -98,56 +98,74 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
 
 
 def evaulate_task_answer(goal: str, metadata: dict, final_answer: str, plan: str):
-    evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the plan sufficiently aligns with the goal. If issues are present (e.g., the answer does not fully meet the goal or contains irrelevant information), you must:
-1. Analyze the Plan to identify weaknesses or misalignments with the Goal.
-2. Provide detailed suggestions to adjust or rewrite the Plan to improve the answer quality.
+    evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
 
-**Guidelines for Assessing Goal Achievement**:
-- **Direct Problem Resolution**: The agent should provide a clear and actionable solution to the user's specific problem or request.
-- **Clarification of User Intent**: When the user's input is unclear, ambiguous, or lacks sufficient context, the agent should effectively seek clarification to better understand the user's needs.
-    - **Handling Placeholder/Test Inputs**: If the user's input appears to be a placeholder, test message, or non-meaningful string, the agent should recognize this and respond appropriately, either by seeking clarification or acknowledging the nature of the input.
-- **Providing Relevant Information**: The agent should ensure that all provided information is pertinent to the user's goal, avoiding unnecessary or off-topic content.
-- **Maintaining Conversational Flow**: The agent's response should facilitate a smooth and logical continuation of the conversation, guiding the user towards achieving their objective.
+------------------------------------
+KEY POINTS TO CONSIDER IN YOUR EVALUATION:
+1. Deep Analysis of the User's Problem:
+  - Does the Plan demonstrate a sufficient understanding of the user's overall background, constraints, and specific questions?
+  - Has the Plan identified the critical context that shapes the user's goal (e.g., large data volumes, performance constraints, GC usage, version details, etc.)?
 
-Your output must include:
+2. Instructions Context & Coverage:
+  - For each instruction in the Plan (including steps like searching for relevant data or generating partial solutions), verify whether it explicitly or implicitly incorporates the "specific problem background + user's question."
+  - Do the instructions effectively handle the sub-questions or concerns raised by the user? Are any key points missing or glossed over?
 
-1. **Answer Quality Assessment**: Clearly state whether the final answer resolves the goal. If not, explain why and identify any irrelevant or missing elements. Reference the relevant guideline(s) from the above list that apply.
-2. **Plan Analysis**: Examine the steps in the plan, identify where they failed or could be improved, and explain why adjustments are necessary. Highlight how the plan aligns or misaligns with the relevant guideline(s).
-3. **Plan Adjustment Suggestions**: Provide a revised or improved version of the plan to address the identified shortcomings. Ensure that the updated plan includes methods for effectively handling various types of goals as outlined in the guidelines.
+3. Verification of Problem Decomposition and Factual Information Retrieval for TiDB-Related Goals
+  - Problem Decomposition - If the Goal is TiDB-related, verify whether the Plan has effectively broken down the Goal into distinct sub-questions.
+  - Individual Retrieval Methods for Each Sub-Question - For each sub-question, verify wheter the plan has applied the following retrieval methods independently:
+    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
+    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
+  - Ensuring Relevance and Separation:
+    - Confirm that each sub-question is handled separately, ensuring that the retrieval process targets the most relevant data for that specific sub-question.
+    - Ensure that retrieval operations for different sub-questions are not combined, preventing the mixing of data across sub-questions.
 
-Here are the inputs:
+4. Completeness of the Plan:
+   • Does the Plan address all major aspects of the user's problem or goal?
+   • Are there any unanswered questions or issues that the user might still have after following the Plan?
+
+5. Cohesion of Plan Steps:
+   • Assess whether the Plan's instructions flow logically from one step to the next, and whether they form a coherent end-to-end workflow.
+   • Consider whether the Plan's approach to searching for data, filtering out irrelevant information, and eventually generating a final integrated solution is clearly articulated and consistent with the user's context.
+
+When providing your evaluation, reference these points and also consider the following general guidelines:
+
+- Direct Problem Resolution: The Plan and Final Answer should yield a clear, actionable solution or next step.
+- Clarification of User Intent: If the Goal is unclear or missing details, verify if the Plan seeks clarification properly.
+- Providing Relevant Information: Ensure the solution or Plan steps remain focused on the user's needs, without extraneous or off-topic content.
+- Maintaining Conversational Flow: The explanation or solution should guide the user logically from their question to the solution, smoothly transitioning between steps.
+
+------------------------------------
+YOUR OUTPUT FORMAT:
+You must return a JSON object with the following keys:
+1. "accept": Boolean value (true or false) indicating whether the Final Answer effectively resolves the Goal.
+2. "answer_quality_assessment_explanation": A detailed explanation justifying why the final answer does or does not meet the goal, referencing any guidelines or key points above.
+3. "plan_adjustment_suggestion": If "accept" is false, provide a comprehensive analysis of how the Plan could be improved to fully address the user's context and questions. Propose modifications or additional steps in detail.
+4. "goal_classification": (Optional) A categorization of the goal type based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed").
+
+------------------------------------
+EXAMPLE OUTPUT:
+{{
+  "accept": false,
+  "answer_quality_assessment_explanation": "...",
+  "plan_adjustment_suggestion": "...",
+  "goal_classification": "Direct Problem Resolution"
+}}
+
+Below are the inputs for your evaluation:
 
 ## Goal
 {goal}
 
-The supplementary information for Goal:
+## Supplementary goal information
 {metadata.get('response_format')}
 
-## Answer
+## Final Answer
 {final_answer}
 
 ## Plan
 {plan}
 
-**Optional Enhancements**:
-
-- **Goal Classification**: Categorize the goal based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed"). This helps in applying appropriate evaluation criteria.
-- **Contextual Considerations**: Take into account any supplementary information provided (e.g., {metadata.get('response_format')}) that may influence how the goal should be addressed.
-
-**Your Output Format**:
-You must return a JSON object with the following keys:
-- **accept**: Boolean value (true or false) indicating whether the final answer effectively resolves the goal.
-- **answer_quality_assessment_explanation**: A detailed explanation justifying why the final answer does or does not meet the goal, highlighting key points or missing elements. Reference the relevant guidelines.
-- **plan_adjustment_suggestion**: If the answer is not accepted, please provide a comprehensive analysis of the plan and recommendations for how to adjust or improve it to better achieve the goal. Include strategies aligned with the guidelines.
-- **goal_classification**: (Optional) A categorization of the goal type based on the guidelines, such as "Direct Problem Resolution", "Clarification Needed".
-
-**Example Output**:
-{{
-  "accept": False/True,
-  "answer_quality_assessment_explanation": "...",
-  "plan_adjustment_suggestion": {...},
-  "goal_classification": "Clarification Needed/Direct Problem Resolution"
-}}
+Now Let's think step by step! Do you best on this evaluation task!
 """
 
     response = fc_llm.chat.completions.create(
@@ -180,12 +198,36 @@ The supplementary information for Goal:
 ## **Evaluation Feedback**:
 {suggestion}
 
-As the evaluating Feedback said, the previous plan has been rejected due to its inability to effectively address the goal. Please revise the previous plan based on the Evaluation Feedback.
-Ensure that the updated plan adheres to the Executable Plan Specifications.
+------------------------------------
 
-----
+Important Requirements for Revising the Plan:
 
-The Executable Plan Specifications:
+1. Deeply Understand the User Context:
+  - Revisit the user's specific problem background, constraints, and sub-questions.
+  - Ensure the Plan explicitly incorporates these elements (e.g., large-scale backup, performance constraints, etc.).
+
+2. Align with the Evaluation Feedback:
+  - Identify all the key issues from the feedback (e.g., missing details, insufficient handling of user constraints, lack of clarity in sub-problems).
+  - Adjust or add instructions to address these issues, ensuring each sub-problem or concern is resolved.
+
+3. Proper Use of Tools for Searching and Information Filtering:
+  - Include instructions that create precise queries reflecting the user's unique background + question.
+  - If the Goal is TiDB-related, the Goal must be broken down in plan, and for each sub-question, used the following retrieval methods:
+    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
+    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
+
+4. Comprehensive Coverage of All User Questions:
+  - Confirm that each instruction in the Plan contributes to solving one or more of the user's sub-questions.
+  - Avoid repeating the same general statements; instead, detail how each step practically helps address the user's goal.
+
+5. Cohesion and Executability:
+  - Check that the sequence of instructions (seq_no) flows logically and forms a coherent, end-to-end solution.
+  - Pay attention to the final assignment to “final_answer”, ensuring it incorporates all relevant information from the prior steps.
+
+------------------------------------
+As the evaluating feedback said, the previous plan has been rejected or found insufficient in fully addressing the goal. Please revise the previous plan based on these guidelines and the evaluation feedback.
+
+Make sure the updated plan adheres to the Executable Plan Specifications:
 
 ```
 
@@ -240,7 +282,7 @@ Each instruction is a JSON object with:
   - Sequential Execution: Instructions execute in order based on seq_no.
   - Control Flow: Use jmp for conditional jumps and loops.
 
-6. Supported Tools for Calling Instructions
+6. Supported Tools for Calling Instructions (other tool is unavailble)
   - llm_generate: Generates text content based on prompts and context.
   - vector_search: Performs vector-based searches to retrieve relevant information.
   - retrieve_knowledge_graph: Retrieves structured data from a knowledge graph.
@@ -258,9 +300,10 @@ Each instruction is a JSON object with:
 -------------------------------
 
 Now, let's think step by step, and revise the plan.
+1. Incorporate the Evaluation Feedback by mapping each identified issue to a concrete fix in your instructions.
+2. Ensure your revised Plan has all instructions needed to search, filter, and integrate relevant data before generating the final, comprehensive answer.
 
 **Output**:
-
 1. **Provide the complete updated plan in JSON format**, ensuring it fully complies with the executable plan specification. **Within the ```json``` block, do not use any additional triple backticks (` ``` `) to prevent parsing issues.**
 2. **Provide a summary of the changes made to the plan**, including a clear diff comparing the previous plan with the updated plan."""
 
