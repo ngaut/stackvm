@@ -130,7 +130,8 @@ KEY POINTS TO CONSIDER IN YOUR EVALUATION:
 When providing your evaluation, reference these points and also consider the following general guidelines:
 
 - Direct Problem Resolution: The Plan and Final Answer should yield a clear, actionable solution or next step.
-- Clarification of User Intent: If the Goal is unclear or missing details, verify if the Plan seeks clarification properly.
+- Clarification of User Intent: If the Goal is unclear or missing details, verify if the Plan seeks clarification properly, clarification is enough for this kind of goa, no other process is needed.
+- Unrelated to TiDB: If the Goal is not TiDB-related, ensure the Plan provides a polite response indicating the capability to assist with TiDB-related queries only.
 - Providing Relevant Information: Ensure the solution or Plan steps remain focused on the user's needs, without extraneous or off-topic content.
 - Maintaining Conversational Flow: The explanation or solution should guide the user logically from their question to the solution, smoothly transitioning between steps.
 
