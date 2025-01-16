@@ -443,7 +443,7 @@ def _process_action(action, knowledge_client):
 
 def smart_retrieve(
     query: str,
-    max_iterations: int = 5,
+    max_iterations: int = 3,
 ):
     """
     Performs an intelligent search using LLM to guide the search process based on the designed search strategy.
