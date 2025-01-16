@@ -300,7 +300,8 @@ class InstructionHandlers:
                 {
                     "chain_of_thoughts": chain_of_thoughts,
                     "dependency_analysis": dependency_analysis,
-                }
+                },
+                ensure_ascii=False
             )
         )
         return True, None

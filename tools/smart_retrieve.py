@@ -416,7 +416,12 @@ def evaluation_retrieval_results(
         logger.error("Error extracting JSON from LLM response: %s", response)
         return None
 
-    analysis = json.loads(res_str)
+    try:
+        analysis = json.loads(res_str)
+    except Exception as e:
+        logger.error("Error processing evaluation result decoding %s:%s, %s", e, res_str, response, exc_info=True)
+        raise e
+
     return analysis
 
 
