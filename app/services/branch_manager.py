@@ -268,7 +268,7 @@ class GitManager(BranchManager):
 
     def commit_changes(self, commit_info: Dict[str, Any]) -> Optional[str]:
         try:
-            commit_message = json.dumps(commit_info)
+            commit_message = json.dumps(commit_info, ensure_ascii=False)
             self.repo.git.add(all=True)
             if self.repo.is_dirty(untracked_files=True):
                 commit = self.repo.index.commit(commit_message)
