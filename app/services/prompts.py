@@ -171,6 +171,8 @@ Goal: {goal}
 
 {plan_example_content}
 
+**Note**: Examples are to provide the ideas and examples for solving similar problems. Please do not use tools that appear in the example but do not appear in Available Tools for `calling` instruction. You can find more suitable tools in Available Tools for `calling` instruction to achieve the goal.
+
 -------------------------------
 
 Now, let's generate the plan.
