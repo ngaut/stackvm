@@ -34,6 +34,7 @@ def generate_plan(
     custom_prompt=None,
     example=None,
     best_practices=None,
+    allowed_tools=None,
 ):
     if not goal:
         logger.error("No goal is set.")
@@ -42,7 +43,7 @@ def generate_plan(
     prompt = custom_prompt or get_generate_plan_prompt(
         goal,
         VM_SPEC_CONTENT,
-        global_tools_hub.get_tools_description(),
+        global_tools_hub.get_tools_description(allowed_tools),
         example or PLAN_EXAMPLE_CONTENT,
         best_practices or "Refer the best practices and example",
     )
@@ -66,15 +67,22 @@ def generate_plan(
         raise PlanUnavailableError(plan_response)
 
 
-def generate_updated_plan(vm: PlanExecutionVM, explanation: str, key_factors: list):
+def generate_updated_plan(
+    vm: PlanExecutionVM, explanation: str, key_factors: list, allowed_tools=None
+):
     prompt = get_plan_update_prompt(
         vm,
         VM_SPEC_CONTENT,
-        global_tools_hub.get_tools_description(),
+        global_tools_hub.get_tools_description(allowed_tools),
         explanation,
         key_factors,
     )
-    new_plan = generate_plan(vm.llm_interface, vm.state["goal"], custom_prompt=prompt)
+    new_plan = generate_plan(
+        vm.llm_interface,
+        vm.state["goal"],
+        custom_prompt=prompt,
+        allowed_tools=allowed_tools,
+    )
     return new_plan
 
 

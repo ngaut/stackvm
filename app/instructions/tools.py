@@ -35,11 +35,24 @@ class ToolsHub:
         """Retrieve the handler for a registered tool."""
         return self.tools.get(tool_name)
 
-    def get_tools_description(self) -> str:
+    def get_tools_description(self, allowed_tools: list[str]) -> str:
         """Get the description of all registered tools."""
-        description = "\n\nBelow are the supported tools for calling instruction.\n\n"
-        for tool_name, docstring in self.tools_docstrings.items():
-            description += f"### {tool_name}\n\n{docstring}\n\n"
+        description = (
+            "\n\nPlease use only the following tools in Calling Instruction:\n\n"
+        )
+
+        if not allowed_tools:
+            for tool_name, docstring in self.tools_docstrings.items():
+                description += f"### {tool_name}\n\n{docstring}\n\n"
+            return description
+
+        for tool_name in allowed_tools:
+            docstring = self.tools_docstrings.get(tool_name)
+            if docstring:
+                description += f"### {tool_name}\n\n{docstring}\n\n"
+            else:
+                logger.warning(f"Allowed tool '{tool_name}' is not registered.")
+
         return description
 
     def load_tools(self, tools_package: str, allowed_tools_list: Optional[list] = None):
