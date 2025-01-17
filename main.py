@@ -1,4 +1,4 @@
-import os
+import json
 import logging
 from flask import Flask, url_for
 import argparse
@@ -6,12 +6,6 @@ from datetime import datetime
 from typing import Optional
 
 from app.controller.api_routes import api_blueprint, main_blueprint
-from app.config.settings import (
-    GIT_REPO_PATH,
-    GENERATED_FILES_DIR,
-    LLM_PROVIDER,
-    LLM_MODEL,
-)
 from app.services import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub, tool
@@ -46,11 +40,36 @@ logger = logging.getLogger(__name__)
 # Register the tool after its definition
 global_tools_hub.load_tools("tools")
 
+
+def parse_response_format(value):
+    if value is None:
+        return {}
+    try:
+        # Attempt to parse the input as a JSON string
+        parsed_value = json.loads(value)
+        if not isinstance(parsed_value, dict):
+            raise argparse.ArgumentTypeError(
+                "Response format must be a JSON string representing a dictionary."
+            )
+        return parsed_value
+    except json.JSONDecodeError:
+        raise argparse.ArgumentTypeError(
+            "Response format must be a valid JSON string representing a dictionary."
+        )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run the VM with a specified goal or start the visualization server."
     )
     parser.add_argument("--goal", help="Set a goal for the VM to achieve")
+    parser.add_argument(
+        "--response_format",
+        help="Specify the response format for the task",
+        default={},
+        type=parse_response_format,
+    )
+
     parser.add_argument(
         "--server", action="store_true", help="Start the visualization server"
     )
@@ -62,8 +81,14 @@ if __name__ == "__main__":
 
     if args.goal:
         ts = TaskService()
-        with SessionLocal() as session: 
-            task = ts.create_task(session, args.goal, datetime.now().strftime("%Y%m%d%H%M%S"))
+
+        with SessionLocal() as session:
+            task = ts.create_task(
+                session,
+                args.goal,
+                datetime.now().strftime("%Y%m%d%H%M%S"),
+                {"response_format": args.response_format},
+            )
         task.execute()
         logger.info("VM execution completed")
     elif args.server:
