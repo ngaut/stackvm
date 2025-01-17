@@ -57,6 +57,23 @@ class Task:
         """Return the repository path of the task."""
         return self.task_orm.repo_path
 
+    def get_allowed_tools(self):
+        response_format = (
+            self.task_orm.meta.get("response_format") if self.task_orm.meta else None
+        )
+        allowed_tools = (
+            response_format.get("allowed_tools") if response_format else None
+        )
+
+        if (
+            allowed_tools is None
+            or not isinstance(allowed_tools, list)
+            or not all(isinstance(tool, str) for tool in allowed_tools)
+        ):
+            allowed_tools = None
+
+        return allowed_tools
+
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
 
@@ -168,12 +185,14 @@ class Task:
             goal = self.task_orm.goal
             if response_format:
                 goal = f"{goal} {response_format}"
+
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
                 self.llm_interface,
                 goal,
                 example=example_str,
                 best_practices=best_pratices,
+                allowed_tools=self.get_allowed_tools(),
             )
 
         return plan
@@ -320,7 +339,10 @@ class Task:
         suggestion: str,
         key_factors: list = [],
     ):
-        updated_plan = generate_updated_plan(vm, suggestion, key_factors)
+
+        updated_plan = generate_updated_plan(
+            vm, suggestion, key_factors, self.get_allowed_tools()
+        )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
         vm.set_plan(updated_plan)
@@ -501,7 +523,7 @@ class Task:
                     vm,
                     seq_no,
                     VM_SPEC_CONTENT,
-                    global_tools_hub.get_tools_description(),
+                    global_tools_hub.get_tools_description(self.get_allowed_tools()),
                     suggestion,
                 )
                 updated_step_response = self.llm_interface.generate(prompt)

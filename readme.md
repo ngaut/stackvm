@@ -66,9 +66,15 @@ python main.py --server
 2. Access the web interface using [stackvm-ui](https://github.com/634750802/stackvm-ui)
 
 3. Run a specific task:
+
+To run the script, use the following command:
+
 ```bash
-python main.py --goal "your goal description"
+python main.py --goal "your goal description" --response_format '{"lang": "Japanese"}'
 ```
+
+- **--goal**: Sets a goal for the VM to achieve.
+- **--response_format**: (Optional) Specifies the response format for the task as a JSON string representing a dictionary. Defaults to an empty dictionary `{}` if not provided.
 
 ## LLM Configuration
 
