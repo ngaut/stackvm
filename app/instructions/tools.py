@@ -42,13 +42,14 @@ class ToolsHub:
             description += f"### {tool_name}\n\n{docstring}\n\n"
         return description
 
-    def load_tools(self, tools_package: str):
+    def load_tools(self, tools_package: str, allowed_tools_list: Optional[list] = None):
         """
         Dynamically load and register all tool functions from the specified package.
 
         Args:
             tools_package (str): The package name containing tool modules.
-            hub: The global_tools_hub instance used to register tools.
+            allowed_tools_list (Optional[list]): A list of tool names that are allowed to be registered.
+                                                 If None, all discovered tools are allowed.
         """
         try:
             # Import the tools package
@@ -67,16 +68,25 @@ class ToolsHub:
                 try:
                     logger.info(f"Loading module {module_name} from {filename}")
                     module = importlib.import_module(full_module_name)
+
                     # Iterate through all members of the module
                     for name, obj in inspect.getmembers(module, inspect.isfunction):
+
+                        # If we have a list of allowed tools, only proceed if this tool is in that list
+                        if allowed_tools_list is not None and name not in allowed_tools_list:
+                            continue
+
                         # Option 1: Use naming convention (functions starting with 'tool_')
                         if name.startswith("tool_"):
                             self.register_tool(obj)
                             logger.info(f"Registered tool '{name}' from {filename}")
+
                         # Option 2: Use decorator to identify tool functions
                         elif hasattr(obj, "is_tool") and obj.is_tool:
+                            # If we have a list of allowed tools, only proceed if this tool is in that list
                             self.register_tool(obj)
                             logger.info(f"Registered tool '{name}' from {filename}")
+
                 except Exception as e:
                     logger.error(f"Failed to load module {full_module_name}: {e}")
 
