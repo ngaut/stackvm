@@ -66,11 +66,14 @@ def is_math_expression(text):
     """
     Check if the text is a pure mathematical expression.
     """
+    if not isinstance(text, str):
+        return False
+
     # Remove all whitespace
     text_no_space = text.replace(" ", "")
 
     # Regular expression pattern to match a mathematical expression
-    pattern = r"^[-+*/().\d\s]+$"
+    pattern = r'^(?=.*[-+*/().])[-+*/().\d\s]+$'
 
     # Check if the text matches the pattern
     return re.match(pattern, text_no_space) is not None
