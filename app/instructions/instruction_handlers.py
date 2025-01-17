@@ -256,15 +256,21 @@ class InstructionHandlers:
                         "params": params,
                     },
                 )
+        else:
+            if target_seq is None:
+                return (
+                    False,
+                    {
+                        "error_message": "Missing 'target_seq' for unconditional jump.",
+                        "instruction": "jmp",
+                        "params": params,
+                    },
+                )
 
-            return (
-                False,
-                {
-                    "error_message": "Missing 'target_seq' for unconditional jump.",
-                    "instruction": "jmp",
-                    "params": params,
-                },
+            self.vm.logger.info(
+                f"Performing unconditional jump to seq_no {target_seq}."
             )
+            return (True, {"target_seq": target_seq})
 
     def assign_handler(
         self, params: Dict[str, Any], **kwargs
@@ -301,7 +307,7 @@ class InstructionHandlers:
                     "chain_of_thoughts": chain_of_thoughts,
                     "dependency_analysis": dependency_analysis,
                 },
-                ensure_ascii=False
+                ensure_ascii=False,
             )
         )
         return True, None
