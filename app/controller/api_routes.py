@@ -852,7 +852,9 @@ def stream_execute_vm():
             vm = task.create_vm()
             vm.set_plan(plan)
 
-            current_app.logger.info("Generated Plan: %s", json.dumps(plan, ensure_ascii=False))
+            current_app.logger.info(
+                "Generated Plan: %s", json.dumps(plan, ensure_ascii=False)
+            )
 
             final_answer_structure = vm.parse_final_answer()
             # Determine the last or second last calling step

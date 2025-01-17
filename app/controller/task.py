@@ -215,7 +215,9 @@ class Task:
                     self.task_orm.goal, self.branch_manager, self.llm_interface
                 )
                 vm.set_plan(plan)
-                logger.info("Generated Plan:%s", json.dumps(plan, indent=2, ensure_ascii=False))
+                logger.info(
+                    "Generated Plan:%s", json.dumps(plan, indent=2, ensure_ascii=False)
+                )
                 self._run(vm)
             except Exception as e:
                 self.task_orm.status = TaskStatus.failed

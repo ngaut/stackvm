@@ -40,19 +40,57 @@ Each instruction in the plan is represented as a JSON object with the following 
 ## 3. Supported Instructions
 ### 3.1 assign
 - **Purpose**: Assigns values to one or more variables.
-- **Parameters**: An object where each key is a variable name and each value is either a direct value or a variable reference.
+- **Parameters**: An object where each key is a variable name. Each value can be:
+  1. A direct value (number/string).
+  2. A reference to an existing variable: use the syntax "${variable_name}".
+  3. A template string that interpolates variables for string concatenation.
+     - Example: "The reason is: ${reason}, and the solution is: ${solution}"
+  4. A basic arithmetic expression involving numeric variables:
+     - Supported operators: +, -, *, /, ** (pow), % (mod), unary +/-
+     - Example: "${var0} / 3 + ${var1}"
 
-**Example:**
-```json
-{
-  "seq_no": 1,
-  "type": "assign",
-  "parameters": {
-    "random_number": 42,
-    "final_answer": "{recommendations_report}"
-  }
-}
-```
+The VM will:
+1. Replace each "${varName}" with the current value of varName.
+2. If the result is a pure numeric expression (e.g., 2+3, 5*6, or referencing numeric variables), it will be evaluated as a number.
+3. If the result is a string with placeholders, it becomes a string concatenation or template filling.
+4. Assign the final computed result back to the target variable(s).
+
+
+**Examples:**
+
+1. Direct Assignment
+   ```json
+   {
+     "seq_no": 0,
+     "type": "assign",
+     "parameters": {
+       "constant_number": 42,
+       "message": "Hello World"
+     }
+   }
+   ```
+
+2. Template/String Interpolation
+   ```json
+   {
+     "seq_no": 1,
+     "type": "assign",
+     "parameters": {
+       "recommended_solution": "Reason: ${reason}\nSolution: ${solution}"
+     }
+   }
+   ```
+
+3. Basic Arithmetic
+   ```json
+   {
+     "seq_no": 2,
+     "type": "assign",
+     "parameters": {
+       "calculated_result": "${num1} + ${num2} / 3"
+     }
+   }
+   ```
 
 ### 3.2 jmp
 - **Purpose**: Jumps to a specified sequence number based on an optional condition.
@@ -219,12 +257,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
-- **Language Consistency**:
-  - **Requirement**: All the instructions (e.g. `assign`) that directly contribute to generating the `final_answer` must be written in the same language as the goal. This ensures the final output is consistent with the intended language.
-
-  - **For `assign` Instructions**:
-    - **Language Consistency**: Ensure the content being assigned is in the same language as the goal.
-    - **Variable Content**: When inserting variables into the `final_answer`, make sure they are in the target language or have been processed to match it.
+- **Language Consistency**: All the instructions (e.g. `llm_generate`) that directly contribute to generating the `final_answer` must be written in the same language as the goal. This ensures the final output is consistent with the intended language.
 
 - **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
 

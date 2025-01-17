@@ -1,9 +1,11 @@
+import ast
 import json
 from typing import Any, Dict, Optional, List, Union, Tuple
 from inspect import signature
 
 from app.utils import find_first_json_object
 from .tools import ToolsHub
+from .math_expression_eval import is_math_expression, ExpressionEvaluator
 
 
 class InstructionHandlers:
@@ -279,8 +281,21 @@ class InstructionHandlers:
         output_vars_record = {}
         for var_name, value in params.items():
             value_resolved = self.vm.resolve_parameter(value)
-            # self.vm.set_variable(var_name, value_resolved)
-            output_vars_record[var_name] = value_resolved
+
+            if is_math_expression(value_resolved):
+                try:
+                    # Parse the text into an AST (Abstract Syntax Tree)
+                    expr_ast = ast.parse(value_resolved, mode="eval")
+                    evaluator = ExpressionEvaluator()
+                    result = evaluator.visit(expr_ast)
+                    output_vars_record[var_name] = result
+                except Exception:
+                    # If evaluation fails, return the interpolated text as is
+                    output_vars_record[var_name] = value_resolved
+            else:
+                # self.vm.set_variable(var_name, value_resolved)
+                output_vars_record[var_name] = value_resolved
+
         return True, {"output_vars": output_vars_record}
 
     def reasoning_handler(
