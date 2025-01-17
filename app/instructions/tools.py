@@ -73,7 +73,10 @@ class ToolsHub:
                     for name, obj in inspect.getmembers(module, inspect.isfunction):
 
                         # If we have a list of allowed tools, only proceed if this tool is in that list
-                        if allowed_tools_list is not None and name not in allowed_tools_list:
+                        if (
+                            allowed_tools_list is not None
+                            and name not in allowed_tools_list
+                        ):
                             continue
 
                         # Option 1: Use naming convention (functions starting with 'tool_')

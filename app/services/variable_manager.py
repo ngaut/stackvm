@@ -1,7 +1,6 @@
 from typing import Any, Dict
 from threading import Lock
 import re
-import ast
 
 
 class VariableManager:

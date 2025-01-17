@@ -68,26 +68,55 @@ class SimpleCache:
             logger.info("No close matches found for goal: %s", normalized_goal)
             return None
 
+        goal_lang = (
+            response_format.get("Lang") or response_format.get("lang")
+            if response_format
+            else None
+        )
+        goal_allowed_tools = (
+            response_format.get("allowed_tools") if response_format else None
+        )
+
         for matched_goal in closest_matches:
             candidate = cache.get(matched_goal)
             if candidate and candidate["response_format"]:
-                goal_lang = (
-                    response_format.get("Lang") or response_format.get("lang")
-                    if response_format
-                    else None
-                )
                 candidate_response = candidate.get("response_format")
                 candidate_lang = (
                     candidate_response.get("Lang") or candidate_response.get("lang")
                     if candidate_response
                     else None
                 )
+                candidate_allowed_tools = (
+                    candidate_response.get("allowed_tools")
+                    if candidate_response
+                    else None
+                )
 
                 if goal_lang and candidate_lang and goal_lang == candidate_lang:
-                    logger.info("Reusing the cache plan of goal %s", matched_goal)
-                    return {"matched": True, "cached_goal": candidate}
+                    if not goal_allowed_tools:
+                        logger.info(
+                            "Reusing the cache plan of goal %s with matching lang",
+                            matched_goal,
+                        )
+                        return {"matched": True, "cached_goal": candidate}
 
-        logger.info("No matching language found for goal: %s", normalized_goal)
+                    if not candidate_allowed_tools:
+                        logger.info(
+                            "Candidate allowed_tools is empty, skipping goal: %s",
+                            matched_goal,
+                        )
+                        continue
+
+                    if set(goal_allowed_tools).issuperset(set(candidate_allowed_tools)):
+                        logger.info(
+                            "Reusing the cache plan of goal %s with matching lang and allowed_tools coverage",
+                            matched_goal,
+                        )
+                        return {"matched": True, "cached_goal": candidate}
+
+        logger.info(
+            "No matching language and allowed_tools found for goal: %s", normalized_goal
+        )
         return {
             "matched": False,
             "reference_goal": (
