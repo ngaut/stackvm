@@ -64,6 +64,14 @@ class Task:
         allowed_tools = (
             response_format.get("allowed_tools") if response_format else None
         )
+
+        if (
+            allowed_tools is None
+            or not isinstance(allowed_tools, list)
+            or not all(isinstance(tool, str) for tool in allowed_tools)
+        ):
+            allowed_tools = None
+
         return allowed_tools
 
     def get_current_branch(self):
@@ -178,23 +186,13 @@ class Task:
             if response_format:
                 goal = f"{goal} {response_format}"
 
-            allowed_tools = (
-                response_format.get("allowed_tools") if response_format else None
-            )
-            if (
-                allowed_tools is None
-                or not isinstance(allowed_tools, list)
-                or not all(isinstance(tool, str) for tool in allowed_tools)
-            ):
-                allowed_tools = None
-
             logger.info("Generating plan for goal: %s", goal)
             plan = generate_plan(
                 self.llm_interface,
                 goal,
                 example=example_str,
                 best_practices=best_pratices,
-                allowed_tools=allowed_tools,
+                allowed_tools=self.get_allowed_tools(),
             )
 
         return plan
