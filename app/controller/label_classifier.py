@@ -49,12 +49,12 @@ class LabelTree:
         Initializes the LabelTree instance by setting up the label map and constructing the tree.
         """
         self.label_map: Dict[int, Dict] = {}
-        self.tree: List[Dict] = []
+        self.tree: Dict[str, List] = {}
         self.build_label_map()
         self.construct_tree()
         self.fill_tasks()
-        self.light_tree = self.get_light_tree()
-        self.task_list = self.get_task_list()
+        self.light_trees = self._construct_light_tree()
+        self.task_lists = self._construct_task_list()
 
     def build_label_map(self) -> None:
         """
@@ -69,6 +69,7 @@ class LabelTree:
                     "description": label.description,
                     "best_practices": label.best_practices,
                     "parent_id": label.parent_id,
+                    "namespace_name": label.namespace_name,
                     "children": [],
                     "tasks": [],
                 }
@@ -86,7 +87,13 @@ class LabelTree:
                 if parent:
                     parent["children"].append(label)
             else:
-                self.tree.append(label)
+                namespace_name = label.get("namespace_name")
+                if namespace_name is None:
+                    continue
+
+                if self.tree.get(namespace_name, None) is None:
+                    self.tree[namespace_name] = []
+                self.tree[namespace_name].append(label)
 
     def fill_tasks(self) -> None:
         with SessionLocal() as session:
@@ -112,7 +119,9 @@ class LabelTree:
                     }
                 )
 
-    def find_longest_matching_label(self, path: List[Dict]) -> Optional[Dict]:
+    def find_longest_matching_label(
+        self, namespace_name: str, path: List[Dict]
+    ) -> Optional[Dict]:
         """
         Finds the longest matching node in the tree for the given path.
 
@@ -123,6 +132,9 @@ class LabelTree:
         Returns:
             Optional[Dict]: The matching node or None if no match is found.
         """
+
+        if self.tree.get(namespace_name, None) is None:
+            return None
 
         def _find_longest_matching_label_recursive(root_labels, path, depth):
             if depth >= len(path) or not self.tree:
@@ -149,9 +161,13 @@ class LabelTree:
 
             return matching_node
 
-        return _find_longest_matching_label_recursive(self.tree, path, 0)
+        return _find_longest_matching_label_recursive(
+            self.tree.get(namespace_name), path, 0
+        )
 
-    def get_nearest_best_practices(self, label_path: List[Dict]) -> Optional[str]:
+    def get_nearest_best_practices(
+        self, namespace_name: str, label_path: List[Dict]
+    ) -> Optional[str]:
         """
         Finds the nearest best practices along the label path.
 
@@ -166,7 +182,12 @@ class LabelTree:
             label_name = label_dict["label"]
             # Find the label in label_map by name
             label = next(
-                (lbl for lbl in self.label_map.values() if lbl["label"] == label_name),
+                (
+                    lbl
+                    for lbl in self.label_map.values()
+                    if lbl["label"] == label_name
+                    and lbl["namespace_name"] == namespace_name
+                ),
                 None,
             )
             if label and label["best_practices"]:
@@ -202,7 +223,7 @@ class LabelTree:
 
         return candidate
 
-    def get_task_list(self) -> List[Dict[str, Any]]:
+    def _construct_task_list(self) -> Dict[str, List[Dict[str, Any]]]:
         """
         Extracts all tasks from the label tree, including the complete label path for each task.
 
@@ -243,13 +264,16 @@ class LabelTree:
             return results
 
         # Process all root nodes
-        all_tasks = []
-        for root_node in self.tree:
-            all_tasks.extend(extract_tasks_recursive(root_node, []))
+        all_tasks = {}
+        for namespace_name, lt in self.tree.items():
+            tasks_in_ns = []
+            for root_node in lt:
+                tasks_in_ns.extend(extract_tasks_recursive(root_node, []))
+            all_tasks[namespace_name] = tasks_in_ns
 
         return all_tasks
 
-    def get_light_tree(self) -> List[Dict[str, Any]]:
+    def _construct_light_tree(self) -> List[Dict[str, Any]]:
         """
         Generates a simplified version of the label tree.
 
@@ -268,7 +292,19 @@ class LabelTree:
                 ],
             }
 
-        return [copy_tree_recursive(root_label) for root_label in self.tree]
+        light_trees = {}
+        for namespace_name, lt in self.tree.items():
+            light_trees[namespace_name] = [
+                copy_tree_recursive(root_label) for root_label in lt
+            ]
+
+        return light_trees
+
+    def get_light_tree(self, namespace_name: str):
+        return self.light_trees.get(namespace_name)
+
+    def get_task_list(self, namespace_name: str):
+        return self.task_lists.get(namespace_name)
 
 
 class LabelClassifier:
