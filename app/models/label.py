@@ -26,7 +26,6 @@ class Label(Base):
     id = Column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
     )
-    namespace = Column(String(100), nullable=False, index=True, default='default')
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     best_practices = Column(Text, nullable=True)
@@ -37,7 +36,7 @@ class Label(Base):
     parent = relationship("Label", remote_side=[id], backref="children")
 
     def __repr__(self):
-        return f"<Label(namespace={self.namespace}, name={self.name}, parent_id={self.parent_id})>"
+        return f"<Label(name={self.name}, parent_id={self.parent_id})>"
 
     @property
     def is_leaf(self):
