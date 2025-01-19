@@ -67,6 +67,11 @@ class Task(Base):
     label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
     label = relationship("Label")
 
+    namespace_name = Column(
+        String(100), ForeignKey("namespaces.name"), index=True, nullable=True
+    )
+    namespace = relationship("Namespace")
+
     # Relationships
     commits = relationship(
         "Commit", back_populates="task", cascade="all, delete-orphan"

@@ -37,7 +37,6 @@ class Task:
         self,
         task_orm: TaskORM,
         llm_interface: LLMInterface,
-        namespace: Optional[Namespace] = None,
     ):
         self.task_orm = task_orm
         if task_orm.status == TaskStatus.deleted:
@@ -51,7 +50,6 @@ class Task:
 
         self.llm_interface = llm_interface
         self._lock = threading.Lock()
-        self.namespace = namespace
 
     @property
     def id(self):
@@ -64,8 +62,9 @@ class Task:
         return self.task_orm.repo_path
 
     def get_allowed_tools(self):
-        if self.namespace and self.namespace.allowed_tools:
-            return self.namespace.allowed_tools
+        if self.task_orm.namespace_name and self.task_orm.namespace.allowed_tools:
+            return self.task_orm.namespace.allowed_tools
+
         return None
 
     def get_current_branch(self):
@@ -150,10 +149,10 @@ class Task:
         if plan is None and example_str is None:
             # find the similar task from label tree
             try:
-                if self.namespace:
+                if self.task_orm.namespace_name:
                     label_path, example, best_practices = (
                         classifier.generate_label_path(
-                            self.namespace, self.task_orm.goal
+                            self.task_orm.namespace_name, self.task_orm.goal
                         )
                     )
                 else:
@@ -635,32 +634,37 @@ class TaskService:
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
     def create_task(
-        self, session: Session, goal: str, repo_name: str, meta: Optional[Dict] = None
+        self,
+        session: Session,
+        goal: str,
+        repo_name: str,
+        meta: Optional[Dict] = None,
+        namespace_name: Optional[str] = None,
     ) -> Task:
         try:
+            if not namespace_name:
+                logger.warning(f"Namespace is Empty for goal {goal}. Using all tools.")
+            else:
+                namespace = (
+                    session.query(Namespace).filter_by(name=namespace_name).first()
+                )
+                if not namespace:
+                    error_message = f"Namespace '{meta['namespace_name']}' not found for goal {goal}."
+                    raise ValueError(error_message)
+
             task_orm = TaskORM(
                 id=uuid.uuid4(),
                 goal=goal,
                 repo_path="",
                 status="pending",
                 meta=meta,
+                namespace_name=namespace_name,
             )
             session.add(task_orm)
             session.commit()
             session.refresh(task_orm)
             logger.info(f"Created new task with ID {task_orm.id}")
-            namespace = None
-            if meta and "namespace_name" in meta:
-                namespace = (
-                    session.query(Namespace)
-                    .filter_by(name=meta["namespace_name"])
-                    .first()
-                )
-                if not namespace:
-                    logger.warning(
-                        f"Namespace '{meta['namespace_name']}' not found. Using all tools."
-                    )
-            return Task(task_orm, self.llm_interface, namespace=namespace)
+            return Task(task_orm, self.llm_interface)
         except Exception as e:
             logger.error(f"Failed to create task: {str(e)}", exc_info=True)
             raise e
@@ -681,19 +685,7 @@ class TaskService:
                     logger.warning(f"Task with ID {task_id} is deleted.")
                     return None
 
-                namespace = None
-                if task_orm.meta and "namespace_name" in task_orm.meta:
-                    namespace = (
-                        session.query(Namespace)
-                        .filter_by(name=task_orm.meta["namespace_name"])
-                        .first()
-                    )
-                    if not namespace:
-                        logger.warning(
-                            f"Namespace '{task_orm.meta['namespace_name']}' not found. Using all tools."
-                        )
-
-                return Task(task_orm, self.llm_interface, namespace=namespace)
+                return Task(task_orm, self.llm_interface)
             else:
                 logger.warning(f"Task with ID {task_id} not found.")
                 return None

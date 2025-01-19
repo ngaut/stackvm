@@ -12,7 +12,7 @@ class Label(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
     )
     namespace_name = Column(
-        String(100), ForeignKey("namespaces.name"), index=True, nullable=False
+        String(100), ForeignKey("namespaces.name"), index=True, nullable=True
     )
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

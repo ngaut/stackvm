@@ -90,14 +90,8 @@ def run_task(goal, response_format, namespace_name):
             session,
             goal,
             datetime.now().strftime("%Y%m%d%H%M%S"),
-            (
-                {
-                    "response_format": response_format,
-                    "namespace_name": namespace_name,
-                }
-                if namespace_name
-                else {"response_format": response_format}
-            ),
+            {"response_format": response_format},
+            namespace_name
         )
     task.execute()
     logger.info("VM execution completed")

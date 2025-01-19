@@ -834,14 +834,8 @@ def stream_execute_vm():
                 session,
                 clean_goal,
                 datetime.now().strftime("%Y%m%d%H%M%S"),
-                (
-                    {
-                        "response_format": response_format,
-                        "namespace_name": namespace_name,
-                    }
-                    if namespace_name
-                    else {"response_format": response_format}
-                ),
+                {"response_format": response_format},
+                namespace_name,
             )
             task_id = task.id
             task_branch = task.get_current_branch()
