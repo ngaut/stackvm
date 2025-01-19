@@ -48,7 +48,7 @@ class LabelTree:
         """
         Initializes the LabelTree instance by setting up the label map and constructing the tree.
         """
-        self.label_map: Dict[int, Dict] = {}
+        self.label_map: Dict[str, Dict] = {}
         self.tree: Dict[str, List] = {}
         self.build_label_map()
         self.construct_tree()
@@ -137,7 +137,7 @@ class LabelTree:
             return None
 
         def _find_longest_matching_label_recursive(root_labels, path, depth):
-            if depth >= len(path) or not self.tree:
+            if depth >= len(path) or not root_labels:
                 return None
 
             current_label = path[depth]["label"]
@@ -317,7 +317,7 @@ class LabelClassifier:
         self.label_tree = LabelTree()
 
     def generate_label_path(
-        self, task_goal: str
+        self, namespace_name: str, task_goal: str
     ) -> Tuple[List[str], Optional[Dict], Optional[str]]:
         """
         Generates a label path for the given task goal.
@@ -330,7 +330,7 @@ class LabelClassifier:
         """
         # Generate enhanced classification prompt
         prompt = get_label_classification_prompt_wo_description(
-            task_goal, self.label_tree.light_tree, self.label_tree.task_list
+            task_goal, self.label_tree.get_light_tree(namespace_name), self.label_tree.get_task_list(namespace_name)
         )
 
         # Call LLM to get classification
@@ -351,7 +351,7 @@ class LabelClassifier:
             label_path = [{"label": item} for item in label_path]
 
         # find the most similar example in the label tree
-        matching_node = self.label_tree.find_longest_matching_label(label_path)
+        matching_node = self.label_tree.find_longest_matching_label(namespace_name, label_path)
         if not matching_node:
             return label_path, None, None
 
@@ -360,7 +360,7 @@ class LabelClassifier:
         if len(tasks) == 0:
             return label_path, None, None
 
-        best_practices = self.label_tree.get_nearest_best_practices(label_path)
+        best_practices = self.label_tree.get_nearest_best_practices(namespace_name, label_path)
 
         return (
             label_path,
@@ -368,7 +368,7 @@ class LabelClassifier:
             best_practices,
         )
 
-    def generate_label_description(self, task_goal: str) -> List[str]:
+    def generate_label_description(self, namespace_name: str, task_goal: str) -> List[str]:
         """
         Generates a label path for the given task goal.
 
@@ -379,7 +379,7 @@ class LabelClassifier:
             List[str]: A list of label names from root to leaf.
         """
 
-        prompt = get_label_classification_prompt(task_goal, self.label_tree.light_tree)
+        prompt = get_label_classification_prompt(task_goal, self.label_tree.get_light_tree(namespace_name))
 
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
@@ -393,7 +393,7 @@ class LabelClassifier:
 
         return label_path
 
-    def insert_label_path(self, task_id: str, label_path: List[Dict]) -> None:
+    def insert_label_path(self, namespace_name: str, task_id: str, label_path: List[Dict]) -> None:
         """
         Validates the label path and creates any missing labels using SQLAlchemy ORM.
         Finally, updates the task's label_id.
@@ -416,7 +416,7 @@ class LabelClassifier:
 
                     label = (
                         session.query(Label)
-                        .filter_by(name=label_name, parent=parent)
+                        .filter_by(name=label_name, parent=parent, namespace_name=namespace_name)
                         .first()
                     )
 
@@ -426,6 +426,7 @@ class LabelClassifier:
                             id=str(uuid.uuid4()),
                             name=label_name,
                             parent=parent,
+                            namespace_name=namespace_name,
                             description=label_description,
                         )
                         session.add(label)
