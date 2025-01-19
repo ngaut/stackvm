@@ -152,6 +152,7 @@ def get_answer_detail(task_id, branch_name):
                     "evaluation_status": task.task_orm.evaluation_status.value,
                     "evaluation_reason": task.task_orm.evaluation_reason,
                     "vm_state": vm_state,
+                    "namespace": task.task_orm.namespace_name,
                 }
             )
         except Exception as e:
@@ -628,6 +629,7 @@ def get_tasks():
                     "metadata": task.meta,
                     "evaluation_status": task.evaluation_status.value,
                     "evaluation_reason": task.evaluation_reason,
+                    "namespace": task.namespace_name,
                 }
                 for task in tasks
             ]
@@ -656,6 +658,7 @@ def get_task(task_id):
                     "metadata": task.task_orm.meta,
                     "evaluation_status": task.task_orm.evaluation_status.value,
                     "evaluation_reason": task.task_orm.evaluation_reason,
+                    "namespace": task.task_orm.namespace_name,
                 }
             )
     except Exception as e:

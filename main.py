@@ -61,7 +61,7 @@ def stackvm():
     pass
 
 
-@stackvm.command("execute_task")
+@stackvm.command("execute")
 @click.option("--goal", required=True, help="Set a goal for the VM to achieve")
 @click.option(
     "--response-format",

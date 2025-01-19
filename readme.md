@@ -63,7 +63,7 @@ make migrate
 Start the server using the following command:
 
 ```bash
-flask stackvm execute --port 5000 --debug
+flask stackvm serve --port 5000 --debug
 ```
 
 ### Running Tasks

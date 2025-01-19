@@ -5,7 +5,7 @@ import uuid
 import threading
 from datetime import datetime
 from typing import Any, Dict, Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -649,7 +649,9 @@ class TaskService:
                     session.query(Namespace).filter_by(name=namespace_name).first()
                 )
                 if not namespace:
-                    error_message = f"Namespace '{meta['namespace_name']}' not found for goal {goal}."
+                    error_message = (
+                        f"Namespace '{namespace_name}' not found for goal {goal}."
+                    )
                     raise ValueError(error_message)
 
             task_orm = TaskORM(
@@ -662,7 +664,7 @@ class TaskService:
             )
             session.add(task_orm)
             session.commit()
-            session.refresh(task_orm)
+            session.refresh(task_orm, ["namespace"])
             logger.info(f"Created new task with ID {task_orm.id}")
             return Task(task_orm, self.llm_interface)
         except Exception as e:
@@ -671,8 +673,10 @@ class TaskService:
 
     def get_task(self, session: Session, task_id: uuid.UUID) -> Optional[Task]:
         try:
+            # Use joinedload to eagerly load the namespace relationship
             task_orm = (
                 session.query(TaskORM)
+                .options(joinedload(TaskORM.namespace))
                 .filter(TaskORM.id == task_id, TaskORM.status != TaskStatus.deleted)
                 .first()
             )
@@ -754,6 +758,7 @@ class TaskService:
         """
         return (
             session.query(TaskORM)
+            .options(joinedload(TaskORM.namespace))
             .filter(TaskORM.status != TaskStatus.deleted)
             .order_by(TaskORM.updated_at.desc())
             .offset(offset)

@@ -17,8 +17,8 @@ session = SessionLocal()
 # Create Namespaces
 problem_resolving = Namespace(
     id=str(uuid.uuid4()),
-    name="problem_resolving",
-    description="Namespace for problem resolving labels.",
+    name="Default",
+    description="Default Namespace for the best practices applicable to general scenarios",
     created_at=datetime.utcnow(),
     updated_at=datetime.utcnow(),
 )
@@ -30,7 +30,7 @@ session.add(problem_resolving)
 labels = [
     Label(
         id=str(uuid.uuid4()),
-        namespace_name="problem_resolving",
+        namespace_name="Default",
         name="Basic Knowledge",
         description="Queries about simple facts or common knowledge, such as Concept Explanation, Feature Support, and component architectures.",
         created_at=datetime.utcnow(),
@@ -38,7 +38,7 @@ labels = [
     ),
     Label(
         id=str(uuid.uuid4()),
-        namespace_name="problem_resolving",
+        namespace_name="Default",
         name="Operation Guide",
         description="Looking for step-by-step instructions to perform specific operations. Covers topics like deployment procedures, feature configuration, and maintenance tasks.",
         created_at=datetime.utcnow(),
@@ -46,7 +46,7 @@ labels = [
     ),
     Label(
         id=str(uuid.uuid4()),
-        namespace_name="problem_resolving",
+        namespace_name="Default",
         name="Troubleshooting",
         description="Diagnostic guidance and problem-solving approaches for system issues, error conditions, or unexpected behaviors. Focuses on root cause analysis and resolution strategies for common operational challenges",
         created_at=datetime.utcnow(),
@@ -54,7 +54,7 @@ labels = [
     ),
     Label(
         id=str(uuid.uuid4()),
-        namespace_name="problem_resolving",
+        namespace_name="Default",
         name="Complex Task Planning",
         description="Strategic planning and implementation guidance for sophisticated, multi-phase technical projects. Covers system design decisions and large-scale operational changes.",
         created_at=datetime.utcnow(),
@@ -62,7 +62,7 @@ labels = [
     ),
     Label(
         id=str(uuid.uuid4()),
-        namespace_name="problem_resolving",
+        namespace_name="Default",
         name="Other Topics",
         description="General technical discussions and queries that don"
         "t fit into the above categories.",
