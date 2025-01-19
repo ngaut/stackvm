@@ -58,23 +58,59 @@ make migrate
 
 ## Usage
 
-1. Start the server:
-```bash
-python main.py --server
-```
+### Starting the Server
 
-2. Access the web interface using [stackvm-ui](https://github.com/634750802/stackvm-ui)
-
-3. Run a specific task:
-
-To run the script, use the following command:
+Start the server using the following command:
 
 ```bash
-python main.py --goal "your goal description" --response_format '{"lang": "Japanese"}'
+flask serve --port 5000 --debug
 ```
 
-- **--goal**: Sets a goal for the VM to achieve.
-- **--response_format**: (Optional) Specifies the response format for the task as a JSON string representing a dictionary. Defaults to an empty dictionary `{}` if not provided.
+### Running Tasks
+
+Run a specific task using the following command:
+
+```bash
+flask run --goal "your goal description" --response-format '{"lang": "Japanese"}' --namespace-name "your-namespace"
+```
+
+Options:
+- **--goal**: Sets a goal for the VM to achieve (required).
+- **--response-format**: (Optional) Specifies the response format for the task as a JSON string. Defaults to an empty dictionary `{}`.
+- **--namespace-name**: (Optional) Specifies the namespace to use for the task. Determines which tools are available.
+
+### Managing Namespaces
+
+StackVM uses namespaces to manage tool access and configurations. Here are the available namespace management commands:
+
+1. **Create a Namespace**:
+```bash
+flask namespace create my-namespace --allowed-tools tool1 --allowed-tools tool2 --description "My namespace description"
+```
+
+2. **Update a Namespace**:
+```bash
+flask namespace update my-namespace --allowed-tools new-tool --description "Updated description"
+```
+
+3. **Delete a Namespace**:
+```bash
+flask namespace delete my-namespace
+```
+
+4. **List All Namespaces**:
+```bash
+flask namespace list
+```
+
+5. **Show Namespace Details**:
+```bash
+flask namespace show my-namespace
+```
+
+Options for namespace management:
+- **--allowed-tools**: Specify which tools are available in the namespace. Can be specified multiple times.
+- **--description**: Add a description to the namespace.
 
 ## LLM Configuration
 
@@ -130,6 +166,7 @@ StackVM now supports local Language Models through Ollama integration:
 - `app/services/vm.py`: Implements the `PlanExecutionVM` class for executing plans.
 - `app/tools/instruction_handlers.py`: Handles instruction execution and API interactions for knowledge graph searches.
 - `app/tools/retrieve.py`: Implements retrieval logic using the TiDB AI API.
+- `app/models/namespace.py`: Defines the Namespace model for managing tool access and configurations.
 - `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.
 - `plan_example.md`: Example plan demonstrating the instruction execution and plan structure.
 - `models/task.py`: Defines the `Task` model for managing tasks within the database.
@@ -146,6 +183,7 @@ StackVM now supports local Language Models through Ollama integration:
 - Real-time execution of VM steps with commit tracking.
 - Web interface for visualizing VM states, commit history, and code diffs.
 - Local LLM support.
+- Namespace-based tool access management.
 
 ## Customizing Tools
 
@@ -180,6 +218,20 @@ def my_custom_tool(param1, param2):
    return response_data
 ```
 
+### Step 3: Register the Tool with a Namespace
+
+After implementing your tool, you can register it with a specific namespace:
+
+```bash
+flask namespace create my-namespace --allowed-tools my_custom_tool
+```
+
+Or add it to an existing namespace:
+
+```bash
+flask namespace update my-namespace --allowed-tools my_custom_tool
+```
+
 ## Contributing
 
 If you would like to contribute to this project, please fork the repository and submit a pull request with your changes.
@@ -190,3 +242,4 @@ If you would like to contribute to this project, please fork the repository and 
 - If you're getting API-related errors, check that your TiDB AI API key is correctly set in your environment variables.
 - For any LLM-related issues, ensure your OpenAI API key is properly configured.
 - Ensure that Ollama is running if you have set `LLM_PROVIDER=ollama` in your `.env` file.
+- If you're having issues with tool access, verify that the tools are properly registered in the namespace you're using.

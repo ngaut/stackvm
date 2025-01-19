@@ -802,6 +802,7 @@ def stream_execute_vm():
     data = request.json
     goal = data.get("goal")
     response_format = data.get("response_format")
+    namespace_name = data.get("namespace_name")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
 
@@ -833,7 +834,14 @@ def stream_execute_vm():
                 session,
                 clean_goal,
                 datetime.now().strftime("%Y%m%d%H%M%S"),
-                {"response_format": response_format},
+                (
+                    {
+                        "response_format": response_format,
+                        "namespace_name": namespace_name,
+                    }
+                    if namespace_name
+                    else {"response_format": response_format}
+                ),
             )
             task_id = task.id
             task_branch = task.get_current_branch()
