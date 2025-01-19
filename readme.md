@@ -63,7 +63,7 @@ make migrate
 Start the server using the following command:
 
 ```bash
-flask serve --port 5000 --debug
+flask stackvm execute --port 5000 --debug
 ```
 
 ### Running Tasks
@@ -71,7 +71,7 @@ flask serve --port 5000 --debug
 Run a specific task using the following command:
 
 ```bash
-flask run --goal "your goal description" --response-format '{"lang": "Japanese"}' --namespace-name "your-namespace"
+flask stackvm execute --goal "your goal description" --response-format '{"lang": "Japanese"}' --namespace-name "your-namespace"
 ```
 
 Options:

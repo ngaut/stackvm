@@ -5,6 +5,7 @@ import click
 from datetime import datetime
 
 from app.controller.api_routes import api_blueprint, main_blueprint
+from app.services import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub
 from app.database import SessionLocal
@@ -55,12 +56,12 @@ def parse_json(value):
 
 # CLI Commands
 @app.cli.group()
-def cli():
-    """CLI commands for the application."""
+def stackvm():
+    """CLI commands for the stackvm."""
     pass
 
 
-@cli.command("run")
+@stackvm.command("execute_task")
 @click.option("--goal", required=True, help="Set a goal for the VM to achieve")
 @click.option(
     "--response-format",
@@ -73,8 +74,8 @@ def cli():
     help="Specify the namespace name for the task",
     default=None,
 )
-def run_task(goal, response_format, namespace_name):
-    """Run the VM with a specified goal."""
+def execute_task(goal, response_format, namespace_name):
+    """Execute the VM with a specified goal."""
     ts = TaskService()
     with SessionLocal() as session:
         # Get namespace if specified
@@ -91,13 +92,13 @@ def run_task(goal, response_format, namespace_name):
             goal,
             datetime.now().strftime("%Y%m%d%H%M%S"),
             {"response_format": response_format},
-            namespace_name
+            namespace_name,
         )
     task.execute()
     logger.info("VM execution completed")
 
 
-@cli.command("serve")
+@stackvm.command("serve")
 @click.option("--port", default=5000, help="Port to run the visualization server on")
 @click.option("--debug", is_flag=True, help="Run server in debug mode")
 def serve(port, debug):
@@ -238,7 +239,3 @@ def show_namespace(name):
         click.echo(f"Error showing namespace: {str(e)}")
     finally:
         session.close()
-
-
-if __name__ == "__main__":
-    cli()
