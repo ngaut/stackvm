@@ -152,6 +152,7 @@ def get_answer_detail(task_id, branch_name):
                     "evaluation_status": task.task_orm.evaluation_status.value,
                     "evaluation_reason": task.task_orm.evaluation_reason,
                     "vm_state": vm_state,
+                    "namespace": task.task_orm.namespace_name,
                 }
             )
         except Exception as e:
@@ -628,6 +629,7 @@ def get_tasks():
                     "metadata": task.meta,
                     "evaluation_status": task.evaluation_status.value,
                     "evaluation_reason": task.evaluation_reason,
+                    "namespace": task.namespace_name,
                 }
                 for task in tasks
             ]
@@ -656,6 +658,7 @@ def get_task(task_id):
                     "metadata": task.task_orm.meta,
                     "evaluation_status": task.task_orm.evaluation_status.value,
                     "evaluation_reason": task.task_orm.evaluation_reason,
+                    "namespace": task.task_orm.namespace_name,
                 }
             )
     except Exception as e:
@@ -802,6 +805,7 @@ def stream_execute_vm():
     data = request.json
     goal = data.get("goal")
     response_format = data.get("response_format")
+    namespace_name = data.get("namespace_name")
     if not goal:
         return log_and_return_error("Missing 'goal' parameter", "error", 400)
 
@@ -834,6 +838,7 @@ def stream_execute_vm():
                 clean_goal,
                 datetime.now().strftime("%Y%m%d%H%M%S"),
                 {"response_format": response_format},
+                namespace_name,
             )
             task_id = task.id
             task_branch = task.get_current_branch()

@@ -1,15 +1,15 @@
 import json
 import logging
-from flask import Flask, url_for
-import argparse
+from flask import Flask
+import click
 from datetime import datetime
-from typing import Optional
 
 from app.controller.api_routes import api_blueprint, main_blueprint
 from app.services import LLMInterface
 from app.controller.task import TaskService
-from app.instructions import global_tools_hub, tool
+from app.instructions import global_tools_hub
 from app.database import SessionLocal
+from app.models.namespace import Namespace
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -41,60 +41,201 @@ logger = logging.getLogger(__name__)
 global_tools_hub.load_tools("tools")
 
 
-def parse_response_format(value):
+def parse_json(value):
+    """Parse JSON string to dict."""
     if value is None:
         return {}
     try:
-        # Attempt to parse the input as a JSON string
         parsed_value = json.loads(value)
         if not isinstance(parsed_value, dict):
-            raise argparse.ArgumentTypeError(
-                "Response format must be a JSON string representing a dictionary."
-            )
+            raise click.BadParameter("Must be a JSON string representing a dictionary.")
         return parsed_value
     except json.JSONDecodeError:
-        raise argparse.ArgumentTypeError(
-            "Response format must be a valid JSON string representing a dictionary."
+        raise click.BadParameter("Must be a valid JSON string.")
+
+
+# CLI Commands
+@app.cli.group()
+def stackvm():
+    """CLI commands for the stackvm."""
+    pass
+
+
+@stackvm.command("execute")
+@click.option("--goal", required=True, help="Set a goal for the VM to achieve")
+@click.option(
+    "--response-format",
+    default="{}",
+    help="Specify the response format for the task as a JSON string",
+    callback=lambda ctx, param, value: parse_json(value),
+)
+@click.option(
+    "--namespace-name",
+    help="Specify the namespace name for the task",
+    default=None,
+)
+def execute_task(goal, response_format, namespace_name):
+    """Execute the VM with a specified goal."""
+    ts = TaskService()
+    with SessionLocal() as session:
+        # Get namespace if specified
+        namespace = None
+        if namespace_name:
+            namespace = session.query(Namespace).filter_by(name=namespace_name).first()
+            if not namespace:
+                logger.warning(
+                    f"Namespace '{namespace_name}' not found. Using all tools."
+                )
+
+        task = ts.create_task(
+            session,
+            goal,
+            datetime.now().strftime("%Y%m%d%H%M%S"),
+            {"response_format": response_format},
+            namespace_name,
         )
+    task.execute()
+    logger.info("VM execution completed")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Run the VM with a specified goal or start the visualization server."
-    )
-    parser.add_argument("--goal", help="Set a goal for the VM to achieve")
-    parser.add_argument(
-        "--response_format",
-        help="Specify the response format for the task",
-        default={},
-        type=parse_response_format,
-    )
+@stackvm.command("serve")
+@click.option("--port", default=5000, help="Port to run the visualization server on")
+@click.option("--debug", is_flag=True, help="Run server in debug mode")
+def serve(port, debug):
+    """Start the visualization server."""
+    logger.info("Starting visualization server...")
+    app.run(debug=debug, port=port)
 
-    parser.add_argument(
-        "--server", action="store_true", help="Start the visualization server"
-    )
-    parser.add_argument(
-        "--port", type=int, default=5000, help="Port to run the visualization server on"
-    )
 
-    args = parser.parse_args()
+# Namespace management commands
+@app.cli.group()
+def namespace():
+    """Manage namespaces."""
+    pass
 
-    if args.goal:
-        ts = TaskService()
 
-        with SessionLocal() as session:
-            task = ts.create_task(
-                session,
-                args.goal,
-                datetime.now().strftime("%Y%m%d%H%M%S"),
-                {"response_format": args.response_format},
+@namespace.command("create")
+@click.argument("name")
+@click.option(
+    "--allowed-tools",
+    multiple=True,
+    help="Allowed tools for the namespace. Can specify multiple times.",
+)
+@click.option("--description", help="Description of the namespace")
+def create_namespace(name, allowed_tools, description):
+    """Create a new namespace."""
+    session = SessionLocal()
+    try:
+        existing = session.query(Namespace).filter_by(name=name).first()
+        if existing:
+            click.echo(f"Error: Namespace '{name}' already exists.")
+            return
+
+        namespace = Namespace(
+            name=name,
+            allowed_tools=list(allowed_tools) if allowed_tools else None,
+            description=description,
+        )
+        session.add(namespace)
+        session.commit()
+        click.echo(f"Successfully created namespace '{name}'")
+    except Exception as e:
+        click.echo(f"Error creating namespace: {str(e)}")
+    finally:
+        session.close()
+
+
+@namespace.command("delete")
+@click.argument("name")
+def delete_namespace(name):
+    """Delete a namespace."""
+    session = SessionLocal()
+    try:
+        namespace = session.query(Namespace).filter_by(name=name).first()
+        if not namespace:
+            click.echo(f"Error: Namespace '{name}' not found.")
+            return
+
+        session.delete(namespace)
+        session.commit()
+        click.echo(f"Successfully deleted namespace '{name}'")
+    except Exception as e:
+        click.echo(f"Error deleting namespace: {str(e)}")
+    finally:
+        session.close()
+
+
+@namespace.command("update")
+@click.argument("name")
+@click.option(
+    "--allowed-tools",
+    multiple=True,
+    help="New allowed tools for the namespace. Can specify multiple times.",
+)
+@click.option("--description", help="New description of the namespace")
+def update_namespace(name, allowed_tools, description):
+    """Update a namespace."""
+    session = SessionLocal()
+    try:
+        namespace = session.query(Namespace).filter_by(name=name).first()
+        if not namespace:
+            click.echo(f"Error: Namespace '{name}' not found.")
+            return
+
+        if allowed_tools:
+            namespace.allowed_tools = list(allowed_tools)
+        if description is not None:
+            namespace.description = description
+
+        session.commit()
+        click.echo(f"Successfully updated namespace '{name}'")
+    except Exception as e:
+        click.echo(f"Error updating namespace: {str(e)}")
+    finally:
+        session.close()
+
+
+@namespace.command("list")
+def list_namespaces():
+    """List all namespaces."""
+    session = SessionLocal()
+    try:
+        namespaces = session.query(Namespace).all()
+        if not namespaces:
+            click.echo("No namespaces found.")
+            return
+
+        for ns in namespaces:
+            click.echo(f"\nNamespace: {ns.name}")
+            click.echo(f"Description: {ns.description or 'N/A'}")
+            click.echo(
+                f"Allowed Tools: {', '.join(ns.allowed_tools) if ns.allowed_tools else 'All'}"
             )
-        task.execute()
-        logger.info("VM execution completed")
-    elif args.server:
-        logger.info("Starting visualization server...")
-        app.run(debug=True, port=args.port)
-    else:
-        logger.info(
-            "Please specify --goal to run the VM with a goal or --server to start the visualization server"
+    except Exception as e:
+        click.echo(f"Error listing namespaces: {str(e)}")
+    finally:
+        session.close()
+
+
+@namespace.command("show")
+@click.argument("name")
+def show_namespace(name):
+    """Show details of a specific namespace."""
+    session = SessionLocal()
+    try:
+        namespace = session.query(Namespace).filter_by(name=name).first()
+        if not namespace:
+            click.echo(f"Error: Namespace '{name}' not found.")
+            return
+
+        click.echo(f"\nNamespace: {namespace.name}")
+        click.echo(f"Description: {namespace.description or 'N/A'}")
+        click.echo(
+            f"Allowed Tools: {', '.join(namespace.allowed_tools) if namespace.allowed_tools else 'All'}"
         )
+        click.echo(f"Created At: {namespace.created_at}")
+        click.echo(f"Updated At: {namespace.updated_at}")
+    except Exception as e:
+        click.echo(f"Error showing namespace: {str(e)}")
+    finally:
+        session.close()

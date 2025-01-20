@@ -6,7 +6,7 @@ import json
 import os
 import datetime
 from pydantic import BaseModel, Field
-from typing import Generator, Any, List, Dict, Optional
+from typing import Generator, Any, List, Dict
 from dataclasses import dataclass
 
 logging.basicConfig(

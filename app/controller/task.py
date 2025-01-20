@@ -5,9 +5,9 @@ import uuid
 import threading
 from datetime import datetime
 from typing import Any, Dict, Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.models import Task as TaskORM, TaskStatus, EvaluationStatus
+from app.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.services import (
     LLMInterface,
@@ -33,7 +33,11 @@ simple_semantic_cache = initialize_cache()
 
 
 class Task:
-    def __init__(self, task_orm: TaskORM, llm_interface: LLMInterface):
+    def __init__(
+        self,
+        task_orm: TaskORM,
+        llm_interface: LLMInterface,
+    ):
         self.task_orm = task_orm
         if task_orm.status == TaskStatus.deleted:
             raise ValueError(f"Task {task_orm.id} is deleted.")
@@ -58,21 +62,10 @@ class Task:
         return self.task_orm.repo_path
 
     def get_allowed_tools(self):
-        response_format = (
-            self.task_orm.meta.get("response_format") if self.task_orm.meta else None
-        )
-        allowed_tools = (
-            response_format.get("allowed_tools") if response_format else None
-        )
+        if self.task_orm.namespace_name and self.task_orm.namespace.allowed_tools:
+            return self.task_orm.namespace.allowed_tools
 
-        if (
-            allowed_tools is None
-            or not isinstance(allowed_tools, list)
-            or not all(isinstance(tool, str) for tool in allowed_tools)
-        ):
-            allowed_tools = None
-
-        return allowed_tools
+        return None
 
     def get_current_branch(self):
         return self.branch_manager.get_current_branch()
@@ -127,7 +120,7 @@ class Task:
         """Generate a plan for the task."""
         example_str = None
         plan = None
-        best_pratices = None
+        best_practices = None
         response_format = (
             self.task_orm.meta.get("response_format") if self.task_orm.meta else None
         )
@@ -156,9 +149,15 @@ class Task:
         if plan is None and example_str is None:
             # find the similar task from label tree
             try:
-                label_path, example, best_pratices = classifier.generate_label_path(
-                    self.task_orm.goal
-                )
+                if self.task_orm.namespace_name:
+                    label_path, example, best_practices = (
+                        classifier.generate_label_path(
+                            self.task_orm.namespace_name, self.task_orm.goal
+                        )
+                    )
+                else:
+                    label_path, example, best_practices = [], None, None
+
                 if label_path:
                     if self.task_orm.meta:
                         self.task_orm.meta = {
@@ -167,6 +166,7 @@ class Task:
                         }
                     else:
                         self.task_orm.meta = {"label_path": label_path}
+
                 example_goal = example.get("goal", None) if example else None
                 example_plan = example.get("best_plan", None) if example else None
                 logger.info(
@@ -191,7 +191,7 @@ class Task:
                 self.llm_interface,
                 goal,
                 example=example_str,
-                best_practices=best_pratices,
+                best_practices=best_practices,
                 allowed_tools=self.get_allowed_tools(),
             )
 
@@ -634,19 +634,37 @@ class TaskService:
         self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
     def create_task(
-        self, session: Session, goal: str, repo_name: str, meta: Optional[Dict] = None
+        self,
+        session: Session,
+        goal: str,
+        repo_name: str,
+        meta: Optional[Dict] = None,
+        namespace_name: Optional[str] = None,
     ) -> Task:
         try:
+            if not namespace_name:
+                logger.warning(f"Namespace is Empty for goal {goal}. Using all tools.")
+            else:
+                namespace = (
+                    session.query(Namespace).filter_by(name=namespace_name).first()
+                )
+                if not namespace:
+                    error_message = (
+                        f"Namespace '{namespace_name}' not found for goal {goal}."
+                    )
+                    raise ValueError(error_message)
+
             task_orm = TaskORM(
                 id=uuid.uuid4(),
                 goal=goal,
                 repo_path="",
                 status="pending",
                 meta=meta,
+                namespace_name=namespace_name,
             )
             session.add(task_orm)
             session.commit()
-            session.refresh(task_orm)
+            session.refresh(task_orm, ["namespace"])
             logger.info(f"Created new task with ID {task_orm.id}")
             return Task(task_orm, self.llm_interface)
         except Exception as e:
@@ -655,8 +673,10 @@ class TaskService:
 
     def get_task(self, session: Session, task_id: uuid.UUID) -> Optional[Task]:
         try:
+            # Use joinedload to eagerly load the namespace relationship
             task_orm = (
                 session.query(TaskORM)
+                .options(joinedload(TaskORM.namespace))
                 .filter(TaskORM.id == task_id, TaskORM.status != TaskStatus.deleted)
                 .first()
             )
@@ -738,6 +758,7 @@ class TaskService:
         """
         return (
             session.query(TaskORM)
+            .options(joinedload(TaskORM.namespace))
             .filter(TaskORM.status != TaskStatus.deleted)
             .order_by(TaskORM.updated_at.desc())
             .offset(offset)
