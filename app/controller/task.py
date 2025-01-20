@@ -149,14 +149,9 @@ class Task:
         if plan is None and example_str is None:
             # find the similar task from label tree
             try:
-                if self.task_orm.namespace_name:
-                    label_path, example, best_practices = (
-                        classifier.generate_label_path(
-                            self.task_orm.namespace_name, self.task_orm.goal
-                        )
-                    )
-                else:
-                    label_path, example, best_practices = [], None, None
+                label_path, example, best_practices = classifier.generate_label_path(
+                    self.task_orm.namespace_name, self.task_orm.goal
+                )
 
                 if label_path:
                     if self.task_orm.meta:
@@ -170,7 +165,10 @@ class Task:
                 example_goal = example.get("goal", None) if example else None
                 example_plan = example.get("best_plan", None) if example else None
                 logger.info(
-                    "Label path: %s for task %s", label_path, self.task_orm.goal
+                    "Label path: %s for task %s in namespace %s",
+                    label_path,
+                    self.task_orm.goal,
+                    self.task_orm.namespace_name,
                 )
                 # use it as an example to generate a plan
                 if example_goal and example_plan:
