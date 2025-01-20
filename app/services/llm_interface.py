@@ -337,6 +337,64 @@ class BedrockProvider(BaseLLMProvider):
             yield f"Error: {str(e)}"
 
 
+class VLLMProvider(BaseLLMProvider):
+    """
+    Provider for VLLM served models.
+    """
+
+    def __init__(self, model: str, **kwargs):
+        super().__init__(model, **kwargs)
+        vllm_base_url = os.getenv("VLLM_BASE_URL", "http://localhost:8000")
+        self.client = openai.OpenAI(
+            api_key="EMPTY",  # vLLM doesn't require an API key
+            base_url=f"{vllm_base_url}/v1",
+        )
+
+    def generate(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Optional[str]:
+        full_prompt = f"{context}\n{prompt}" if context else prompt
+        response = self._retry_with_exponential_backoff(
+            self.client.completions.create,
+            model=self.model,
+            prompt=full_prompt,
+            **kwargs,
+        )
+        return response.choices[0].text.strip()
+
+    def generate_stream(
+        self, prompt: str, context: Optional[str] = None, **kwargs
+    ) -> Generator[str, None, None]:
+        """
+        Generate streaming response from VLLM API.
+
+        Args:
+            prompt (str): The prompt to send to VLLM
+            context (Optional[str]): Optional context to prepend to the prompt
+            **kwargs: Additional arguments to pass to VLLM API
+
+        Yields:
+            str: Chunks of the generated text
+        """
+        full_prompt = f"{context}\n{prompt}" if context else prompt
+        try:
+            response = self._retry_with_exponential_backoff(
+                self.client.completions.create,
+                model=self.model,
+                prompt=full_prompt,
+                stream=True,
+                **kwargs,
+            )
+
+            for chunk in response:
+                if chunk.choices:
+                    yield chunk.choices[0].text
+
+        except Exception as e:
+            logger.error(f"Error during VLLM streaming: {e}")
+            yield f"Error: {str(e)}"
+
+
 class LLMInterface:
     def __init__(self, provider: str, model: str, **kwargs):
         self.provider = self._get_provider(provider.lower(), model, **kwargs)
@@ -350,6 +408,8 @@ class LLMInterface:
             return GeminiProvider(model, **kwargs)
         elif provider == "bedrock":
             return BedrockProvider(model, **kwargs)
+        elif provider == "vllm":
+            return VLLMProvider(model, **kwargs)
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
