@@ -833,15 +833,20 @@ def stream_execute_vm():
         protocol = StreamingProtocol()
 
         with SessionLocal() as session:
-            task = ts.create_task(
-                session,
-                clean_goal,
-                datetime.now().strftime("%Y%m%d%H%M%S"),
-                {"response_format": response_format},
-                namespace_name,
-            )
-            task_id = task.id
-            task_branch = task.get_current_branch()
+            try:
+                task = ts.create_task(
+                    session,
+                    clean_goal,
+                    datetime.now().strftime("%Y%m%d%H%M%S"),
+                    {"response_format": response_format},
+                    namespace_name,
+                )
+                task_id = task.id
+                task_branch = task.get_current_branch()
+            except Exception as e:
+                error_message = f"Error during Goal initilization (goal): {str(e)}"
+                current_app.logger.error(error_message, exc_info=True)
+                yield protocol.send_error(error_message)
 
         try:
             current_app.logger.info(f"Starting VM execution with goal: {clean_goal}")
