@@ -1,6 +1,17 @@
 import uuid
 from enum import Enum as PyEnum
-from sqlalchemy import Column, String, Text, Enum, DateTime, JSON, ForeignKey, Boolean
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    Enum,
+    DateTime,
+    JSON,
+    ForeignKey,
+    Boolean,
+    ForeignKeyConstraint,
+    Index,
+)
 from datetime import datetime
 from app.database import Base
 from sqlalchemy.orm import relationship
@@ -28,7 +39,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     goal = Column(Text, nullable=False)
     status = Column(
@@ -64,20 +75,24 @@ class Task(Base):
         Text, nullable=True, comment="Reason for rejection if the task is not approved."
     )
 
-    label_id = Column(String(36), ForeignKey("labels.id"), nullable=True)
-    label = relationship("Label")
-
-    namespace_name = Column(
-        String(100), ForeignKey("namespaces.name"), index=True, nullable=True
-    )
-    namespace = relationship("Namespace")
+    label_id = Column(String(36), nullable=True)
+    namespace_name = Column(String(100), nullable=True)
 
     # Relationships
-    commits = relationship(
-        "Commit", back_populates="task", cascade="all, delete-orphan"
-    )
-    branches = relationship(
-        "Branch", back_populates="task", cascade="all, delete-orphan"
+    label = relationship("Label")
+    namespace = relationship("Namespace")
+    commits = relationship("Commit", back_populates="task", cascade="all, delete-orphan")
+    branches = relationship("Branch", back_populates="task", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["label_id"], ["labels.id"],
+            name="fk_task_label"
+        ),
+        ForeignKeyConstraint(
+            ["namespace_name"], ["namespaces.name"],
+            name="fk_task_namespace"
+        )
     )
 
     def __repr__(self):
