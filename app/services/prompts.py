@@ -146,14 +146,14 @@ def get_generate_plan_prompt(
     tools_instruction_content,
     plan_example_content,
     plan_approach,
+    allowed_tools_list,
 ):
     """
     Get the prompt for generating a plan.
     """
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Your task is to generate a detailed action plan to achieve the following goal:
-Goal: {goal}
+Your task is to generate a detailed action plan to achieve the following goal: {goal}
 
 **MUST follow the Specification**:
 {vm_spec_content}
@@ -175,7 +175,7 @@ Goal: {goal}
 
 -------------------------------
 
-Now, let's generate the plan.
+Now, let's generate the plan for goal: {goal}
 
 1. **Analyze the Request**:
    - Determine the primary intent behind the goal.
@@ -194,7 +194,7 @@ Now, let's generate the plan.
 
 4. **Tool Usage Guidelines**:
    - When using a tool, always wrap it in a "calling" instruction.
-   - For calling instruction, Only select tools listed in the “Available Tools” section. Using tools outside this list will cause the plan to fail.
+   - For calling instruction, **Only select tools listed from allowed tool list {allowed_tools_list}. Using tools outside this list will cause the plan to fail.
    - The "calling" instruction should have the following structure:
      ```json
      {{

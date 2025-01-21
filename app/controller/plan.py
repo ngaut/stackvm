@@ -46,6 +46,7 @@ def generate_plan(
         global_tools_hub.get_tools_description(allowed_tools),
         example or PLAN_EXAMPLE_CONTENT,
         best_practices or "Refer the best practices and example",
+        global_tools_hub.get_tools_name(allowed_tools),
     )
 
     plan_response = llm_interface.generate(prompt)

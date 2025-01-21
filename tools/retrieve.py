@@ -47,7 +47,7 @@ def retrieve_knowledge_graph(query):
     Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
 
     Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
+    - `query` [Required]: The query string. Can be a direct string or a variable reference.
 
     Output:
     - Returns a single value representing the retrieved knowledge graph data.
@@ -117,8 +117,8 @@ def vector_search(query, top_k=10):
     Retrieves the most relevant TiDB Document data chunks based on embedding similarity to the query.
 
     Arguments:
-    - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
-    - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
+    - `query` [Required]: The query string. It should be a clear and simple statement or question, focusing on a single objective.
+    - `top_k` [Optional, default=10]: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
 
     Output:
     - Returns a single value containing the concatenated top `k` document chunks, stored in a unique variable. It does not return a JSON or dictionary object.

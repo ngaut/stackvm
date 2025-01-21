@@ -580,11 +580,26 @@ def retrieve_knowledge_graph(query):
     Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
 
     Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
+    - `query` [Required]: The query string. Can be a direct string or a variable reference.
 
     Output:
     - Returns a single value representing the retrieved knowledge graph data.
 
+    Example to call this tool:
+    **Example:**
+    ```json
+    {
+        "seq_no": 2,
+        "type": "calling",
+        "parameters": {
+            "tool_name": "retrieve_knowledge_graph",
+            "tool_params": {
+                "query": "TiDB latest stable version"
+            },
+            "output_vars": ["tidb_version_graph"]
+        }
+    }
+    ```
 
     Best practices:
     - Focus on Structured Knowledge: Use the retrieve_knowledge_graph tool to retrieve structured and relational knowledge that is relevant to the query. This tool excels in identifying fine-grained knowledge points and understanding their connections.

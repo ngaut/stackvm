@@ -55,6 +55,21 @@ class ToolsHub:
 
         return description
 
+    def get_tools_name(self, allowed_tools: list[str]) -> str:
+        """Get the list of all registered tools."""
+
+        tools_list = []
+        if not allowed_tools:
+            for tool_name in self.tools_docstrings:
+                tools_list.append(tool_name)
+            return tools_list
+
+        for tool_name in allowed_tools:
+            if self.tools_docstrings.get(tool_name):
+                tools_list.append(tool_name)
+
+        return tools_list
+
     def load_tools(self, tools_package: str, allowed_tools_list: Optional[list] = None):
         """
         Dynamically load and register all tool functions from the specified package.
