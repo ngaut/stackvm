@@ -39,7 +39,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id = Column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     goal = Column(Text, nullable=False)
     status = Column(
@@ -76,7 +76,7 @@ class Task(Base):
     )
 
     label_id = Column(String(36), nullable=True)
-    namespace_name = Column(String(100), index=True, nullable=True)
+    namespace_name = Column(String(100), nullable=True)
 
     # Relationships
     label = relationship("Label")
@@ -92,9 +92,7 @@ class Task(Base):
         ForeignKeyConstraint(
             ["namespace_name"], ["namespaces.name"],
             name="fk_task_namespace"
-        ),
-        Index("idx_task_label", "label_id"),
-        Index("idx_task_namespace", "namespace_name")
+        )
     )
 
     def __repr__(self):

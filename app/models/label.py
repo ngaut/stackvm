@@ -19,9 +19,7 @@ class Label(Base):
     id = Column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
     )
-    namespace_name = Column(
-        String(100), index=True, nullable=True
-    )
+    namespace_name = Column(String(100), nullable=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     best_practices = Column(Text, nullable=True)
@@ -40,9 +38,7 @@ class Label(Base):
         ForeignKeyConstraint(
             ["parent_id"], ["labels.id"],
             name="fk_label_parent"
-        ),
-        Index("idx_label_namespace", "namespace_name"),
-        Index("idx_label_parent", "parent_id")
+        )
     )
 
     def __repr__(self):
