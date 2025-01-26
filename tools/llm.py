@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 from queue import Queue
+from datetime import datetime
 
 from app.instructions.tools import tool
 from app.config.settings import LLM_PROVIDER, FAST_LLM_MODEL
@@ -57,6 +58,10 @@ def llm_generate(
     - Always use llm_generate within a "calling" instruction in your plan.
     - Use variable references (${variable_name}) when you need to include dynamic content from previous steps.
     """
+    # Add current time to the prompt
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    prompt = f"Current time: {current_time}\n\n{prompt}"
+
     if response_format:
         prompt += f"\n\n{response_format}"
     elif context is not None:

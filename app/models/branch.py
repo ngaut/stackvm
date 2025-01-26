@@ -33,10 +33,7 @@ class Commit(Base):
         Index("idx_commit_hash", "commit_hash"),
         Index("idx_commit_parent", "parent_hash"),
         Index("idx_commit_task_time", "task_id", "committed_at"),
-        ForeignKeyConstraint(
-            ["task_id"], ["tasks.id"], 
-            name="fk_commit_task"
-        )
+        ForeignKeyConstraint(["task_id"], ["tasks.id"], name="fk_commit_task"),
     )
 
     def __repr__(self):
@@ -59,14 +56,10 @@ class Branch(Base):
 
     __table_args__ = (
         UniqueConstraint("name", "task_id", name="uk_branch_name_task"),
+        ForeignKeyConstraint(["task_id"], ["tasks.id"], name="fk_branch_task"),
         ForeignKeyConstraint(
-            ["task_id"], ["tasks.id"], 
-            name="fk_branch_task"
+            ["head_commit_hash"], ["commits.commit_hash"], name="fk_branch_commit"
         ),
-        ForeignKeyConstraint(
-            ["head_commit_hash"], ["commits.commit_hash"],
-            name="fk_branch_commit"
-        )
     )
 
     def __repr__(self):

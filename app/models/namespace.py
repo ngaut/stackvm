@@ -8,9 +8,7 @@ import uuid
 class Namespace(Base):
     __tablename__ = "namespaces"
 
-    id = Column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), unique=True, index=True, nullable=False)
     allowed_tools = Column(JSON, nullable=True)
     description = Column(Text, nullable=True)

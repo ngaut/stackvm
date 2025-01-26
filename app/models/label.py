@@ -32,13 +32,9 @@ class Label(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["namespace_name"], ["namespaces.name"],
-            name="fk_label_namespace"
+            ["namespace_name"], ["namespaces.name"], name="fk_label_namespace"
         ),
-        ForeignKeyConstraint(
-            ["parent_id"], ["labels.id"],
-            name="fk_label_parent"
-        )
+        ForeignKeyConstraint(["parent_id"], ["labels.id"], name="fk_label_parent"),
     )
 
     def __repr__(self):
