@@ -38,9 +38,7 @@ class EvaluationStatus(PyEnum):
 class Task(Base):
     __tablename__ = "tasks"
 
-    id = Column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     goal = Column(Text, nullable=False)
     status = Column(
         SQLAlchemyEnum(TaskStatus, name="task_status"),
@@ -81,18 +79,18 @@ class Task(Base):
     # Relationships
     label = relationship("Label")
     namespace = relationship("Namespace")
-    commits = relationship("Commit", back_populates="task", cascade="all, delete-orphan")
-    branches = relationship("Branch", back_populates="task", cascade="all, delete-orphan")
+    commits = relationship(
+        "Commit", back_populates="task", cascade="all, delete-orphan"
+    )
+    branches = relationship(
+        "Branch", back_populates="task", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
+        ForeignKeyConstraint(["label_id"], ["labels.id"], name="fk_task_label"),
         ForeignKeyConstraint(
-            ["label_id"], ["labels.id"],
-            name="fk_task_label"
+            ["namespace_name"], ["namespaces.name"], name="fk_task_namespace"
         ),
-        ForeignKeyConstraint(
-            ["namespace_name"], ["namespaces.name"],
-            name="fk_task_namespace"
-        )
     )
 
     def __repr__(self):
