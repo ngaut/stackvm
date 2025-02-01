@@ -63,7 +63,7 @@ make migrate
 Start the server using the following command:
 
 ```bash
-flask stackvm serve --port 5000 --debug
+gunicorn -w 16 -b 0.0.0.0:5000 -t 300 main:app
 ```
 
 ### Running Tasks

@@ -76,17 +76,15 @@ class OpenAIProvider(BaseLLMProvider):
     def _get_default_model_config(self) -> dict:
         """Get model-specific configuration parameters."""
 
-        # OpenAI models
         if self.model == "gpt-4o":
             return {
                 "temperature": 0,
             }
-
-        # Ollama models
         elif self.model == "o3-mini":
             return {
                 "reasoning_effort": "medium",
             }
+
         return {}
 
     def _update_kwargs(self, kwargs: dict) -> dict:
