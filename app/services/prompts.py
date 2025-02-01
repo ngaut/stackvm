@@ -10,73 +10,48 @@ def get_plan_update_prompt(
     Get the prompt for updating the plan.
     """
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze the current VM execution state and update the plan based on suggestions and the current execution results.
+Analyze the current VM execution state and update the plan using the suggestion provided.
 
-Goal:
-{vm.state['goal']}
+## Context
+Goal: {vm.state['goal']}
+Program Counter: {vm.state['program_counter']}
 
-Current Plan:
+## Current Plan
+```json
 {json.dumps(vm.state['current_plan'], indent=2)}
+```
 
-Current Program Counter: {vm.state['program_counter']}
+## Suggestion
+{suggestion}"""
 
-Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
-
-**Suggestion for plan update**: {suggestion}
-"""
-
-    if key_factors and len(key_factors) > 0:
-        prompt += f"\nKey factors influencing the update:\n{json.dumps(key_factors, indent=2)}\n"
+    if key_factors:
+        prompt += f"\n## Key Factors\n{json.dumps(key_factors, indent=2)}"
 
     prompt += f"""
 
-**Instructions**:
-1. **Analyze Suggestions and Current Execution**:
-    - Review the suggestions in detail.
-    - Assess how the suggestions align with the current execution results and overall goal.
+## Requirements
+1. Merge changes from current program counter onward
+2. Preserve completed steps without modification
+3. Use only available tools in 'calling' instructions
+4. Ensure compliance with VM specification
+5. Avoid redundant steps
 
-2. **Identify and Prioritize Changes**:
-    - Determine which suggestions directly contribute to achieving the goal.
-    - Prioritize changes based on their potential impact and feasibility.
-
-3. **Propose Solutions**:
-    - Suggest modifications to existing steps to incorporate suggestions.
-    - Introduce new steps or action types if necessary to align with suggestions.
-    - Ensure that each modification or addition directly contributes to achieving the goal.
-
-4. **Evaluate Critical Aspects**:
-    - **Goal Alignment**: Ensure the updated plan remains focused on the primary objective.
-    - **Efficiency**: Optimize the plan for better performance and resource utilization.
-    - **Potential Obstacles**: Identify and mitigate foreseeable challenges.
-    - **Adaptability**: Ensure the plan can handle unexpected changes.
-
-5. **Maintain Referential Integrity**:
-    - Do not reference output variables from already executed steps if those variables are not present in Current Variables, as they have been garbage collected.
-
-6. **Merge with Original Plan**:
-    - Integrate proposed changes seamlessly into the original plan starting from the current program counter.
-    - Preserve all steps prior to the current program counter without alteration.
-
-7. **Adhere to VM Specification**:
-    - Ensure that the revised plan complies with the provided VM specification in format and structure.
-
-8. **Avoid Redundancy**:
-    - Do not generate an identical plan. Ensure that the updated plan includes at least some meaningful changes to improve upon the original.
-
-**MUST follow VM Specification**:
+## VM Specification
 {vm_spec_content}
 
-## 9. Available Tools for `calling` instruction
+## Available Tools
 {tools_instruction_content}
 
--------------------------------
-
-Now, let's update the plan.
-
-**Output**:
-1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
-2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
-    """
+## Output Format
+```json
+{{
+    "updated_plan": <entire updated plan array>,
+    "change_summary": {{
+        "modifications": [{{"seq_no": number, "changes": string}}],
+        "additions": [{{"seq_no": number, "description": string}}],
+        "removals": [number]
+    }}
+}}```"""
 
     return prompt
 
@@ -100,44 +75,29 @@ def get_should_update_plan_prompt(vm, suggestion):
     """
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze the current VM execution state and determine if the plan needs to be updated.
+Analyze if plan needs update based on current state and suggestion.
 
-Goal:
-{vm.state['goal']}
+## Current State
+```json
+{{
+    "plan": {json.dumps(vm.state['current_plan'])},
+    "variables": {json.dumps(vm.get_all_variables())},
+    "program_counter": {vm.state['program_counter']}
+}}```
 
-User Suggestion for plan update:
+## Suggestion
 {suggestion}
 
-Current Plan:
-{json.dumps(vm.state['current_plan'], indent=2)}
+## Evaluation Criteria
+- Goal alignment
+- Variable changes impact
+- Efficiency improvements
+- Foreseeable obstacles
 
-Current Program Counter:
-{vm.state['program_counter']}
-
-Last Executed Step:
-{json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
-
-Current Variables:
-{json.dumps(vm.get_all_variables(), indent=2)}
-
-Evaluate the following aspects:
-1. Goal Alignment: Is the current plan still effectively working towards the goal?
-2. New Information: Have any variables changed in a way that affects the plan's validity?
-3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
-4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
-5. Completeness: Does the plan address all necessary aspects of the goal?
-6. Adaptability: Can the current plan handle any new circumstances that have arisen?
-
-MUST Provide your analysis in JSON format:
+## Output Format
+```json
 {json_format}
-
-Set "should_update" to true if the plan requires modification, false otherwise.
-In the "explanation", provide a concise rationale for your decision.
-List the most significant factors influencing your decision in "key_factors",
-including how each factor impacts the need for a plan update.
-
-Ensure your response is thorough yet concise, focusing on the most critical aspects of the decision.
-"""
+```"""
 
 
 def get_generate_plan_prompt(
@@ -152,83 +112,36 @@ def get_generate_plan_prompt(
     """
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Your task is to generate a detailed action plan to achieve the following goal:
-Goal: {goal}
+Generate action plan to achieve: {goal}
 
-**MUST follow the Specification**:
+## Requirements
+1. Decompose into sequential sub-tasks
+2. Use only specified tools in 'calling' instructions
+3. Include initial reasoning step
+4. Final step must assign to 'final_answer'
+
+## VM Specification
 {vm_spec_content}
 
-## 9. Available Tools for `calling` instruction
+## Available Tools
 {tools_instruction_content}
 
-## 10. Example: Here are an example how to handle a similar task.
-
-### The approach
-
+## Example Approach
 {plan_approach}
 
-###  Plan Example
-
-{plan_example_content}
-
-**Note**: Examples are to provide the ideas and examples for solving similar problems. Please do not use tools that appear in the example but do not appear in Available Tools for `calling` instruction. You can find more suitable tools in Available Tools for `calling` instruction to achieve the goal.
-
--------------------------------
-
-Now, let's generate the plan.
-
-1. **Analyze the Request**:
-   - Determine the primary intent behind the goal.
-   - Identify any implicit requirements or necessary prerequisites.
-
-2. **Break Down the Goal**:
-   - Decompose the goal into smaller, manageable sub-goals or tasks.
-   - Ensure each sub-goal is specific, actionable, and can be addressed with existing tools or data sources.
-   - Identify dependencies between sub-goals to establish the correct execution order.
-
-3. **Generate an Action Plan**:
-   - For each sub-goal, create a corresponding action step to achieve it.
-   - Ensure the plan follows the VM Specification.
-   - Include a 'reasoning' step at the beginning of the plan that outlines the chain of thought and dependency analysis of the steps.
-   - IMPORTANT: Always use tools within "calling" instructions. Never use tool functions directly in the plan.
-
-4. **Tool Usage Guidelines**:
-   - When using a tool, always wrap it in a "calling" instruction.
-   - For calling instruction, Only select tools listed in the “Available Tools” section. Using tools outside this list will cause the plan to fail.
-   - The "calling" instruction should have the following structure:
-     ```json
-     {{
-       "seq_no": <unique_sequential_number>,
-       "type": "calling",
-       "parameters": {{
-         "tool_name": "<tool_name>",
-         "tool_params": {{
-           <tool-specific parameters>
-         }},
-         "output_vars": [<list_of_output_variable_names>]
-       }}
-     }}
-     ```
-   - Ensure that the "tool_params" object contains all necessary parameters for the specific tool being called.
-
-The final step of the plan must be assign the final output result to the 'final_answer' variable.
-Please provide only the JSON array for the action plan without any additional text, explanations, or markdown. 
-Ensure the JSON is properly formatted and encapsulated within a ```json code block.
-
-    ```json
-    [
-      {{
+## Output Format
+```json
+[
+    {{
         "seq_no": 0,
         "type": "reasoning",
         "parameters": {{
-          "chain_of_thoughts": "...",
-          "dependency_analysis": "..."
+            "chain_of_thoughts": "...",
+            "dependency_analysis": "..."
         }}
-      }},
-      ...
-    ]
-    ```
-"""
+    }},
+    // ... additional steps ...
+]```"""
 
 
 def get_step_update_prompt(
@@ -424,7 +337,7 @@ def get_label_classification_prompt_wo_description(
    - Leaf Nodes First: Match with existing leaf nodes before considering parent nodes.
    - Task Complexity: Only consider task complexity-based categories (like "Complex Task Planning") when the task is truly about planning or analysis, not when it's about specific features
    - Use Descriptions: Utilize label descriptions to better understand the scope and intent of each category.
-    - Ambiguous Queries: Assign to “Other Topics” for tasks that are ambiguous, or do not fit into specific categories.
+    - Ambiguous Queries: Assign to "Other Topics" for tasks that are ambiguous, or do not fit into specific categories.
 
 2. Intent Analysis:
    - Identify key technical terms and concepts in the task
@@ -464,11 +377,11 @@ Bad Classification:
 
 Task: "How does TiCDC handle Resolved TS?"
 Wrong Path: ["Complex Task Planning", "Research & Analysis", "Technical Design"]
-Reason: This question does not require complex research or involve multiple aspects. It is specific to understanding a single feature, making the “Complex Task Planning” category unnecessary.
+Reason: This question does not require complex research or involve multiple aspects. It is specific to understanding a single feature, making the "Complex Task Planning" category unnecessary.
 
 Task: "What is this for?"
 Wrong Path: ["Basic Knowledge", "Feature Support"]
-Reason: The task is too ambiguous to be classified under a specific feature or category. Assign it to “Other Topics” instead.
+Reason: The task is too ambiguous to be classified under a specific feature or category. Assign it to "Other Topics" instead.
 
 ## Task Related to Labels
 
