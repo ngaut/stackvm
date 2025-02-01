@@ -71,6 +71,32 @@ class OpenAIProvider(BaseLLMProvider):
                 "OpenAI API key not set. Please set the OPENAI_API_KEY environment variable."
             )
         self.client = openai.OpenAI()
+        self._default_model_config = self._get_default_model_config()
+
+    def _get_default_model_config(self) -> dict:
+        """Get model-specific configuration parameters."""
+
+        # OpenAI models
+        if self.model == "gpt-4o":
+            return {
+                "temperature": 0,
+            }
+
+        # Ollama models
+        elif self.model == "o3-mini":
+            return {
+                "reasoning_effort": "medium",
+            }
+        return {}
+
+    def _update_kwargs(self, kwargs: dict) -> dict:
+        # if config exists both in default and kwargs, use kwargs
+        for key, value in self._default_model_config.items():
+            if key in kwargs:
+                kwargs[key] = kwargs[key]
+            else:
+                kwargs[key] = value
+        return kwargs
 
     def generate(
         self, prompt: str, context: Optional[str] = None, **kwargs
@@ -83,8 +109,7 @@ class OpenAIProvider(BaseLLMProvider):
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": full_prompt},
             ],
-            temperature=0,
-            **kwargs,
+            **self._update_kwargs(kwargs),
         )
         return response.choices[0].message.content.strip()
 
@@ -101,8 +126,7 @@ class OpenAIProvider(BaseLLMProvider):
                     {"role": "user", "content": full_prompt},
                 ],
                 stream=True,  # Enable streaming
-                temperature=0,
-                **kwargs,
+                **self._update_kwargs(kwargs),
             )
 
             for chunk in response:

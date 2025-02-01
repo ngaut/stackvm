@@ -32,6 +32,17 @@ BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGIN
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 LLM_MODEL = os.environ.get("LLM_MODEL", "aya-expanse")
 FAST_LLM_MODEL = os.environ.get("FAST_LLM_MODEL", None)
+
+# Reasoning model settings (fallback to legacy settings if not set)
+REASON_LLM_PROVIDER = os.environ.get("REASON_LLM_PROVIDER", None)
+REASON_LLM_MODEL = os.environ.get("REASON_LLM_MODEL", None)
+REASON_FAST_LLM_MODEL = os.environ.get("REASON_FAST_LLM_MODEL", None)
+if REASON_LLM_PROVIDER is None or REASON_LLM_MODEL is None:
+    REASON_LLM_PROVIDER = LLM_PROVIDER
+    REASON_LLM_MODEL = LLM_MODEL
+    REASON_FAST_LLM_MODEL = FAST_LLM_MODEL
+
+# Common LLM provider settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1/")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -48,8 +59,12 @@ GENERATED_FILES_DIR = os.environ.get("GENERATED_FILES_DIR", "/tmp/stack_vm/gener
 VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")
 PLAN_EXAMPLE_PATH = os.path.join(os.getcwd(), "plan_example.md")
 
+# Set fast models to main models if not specified
 if FAST_LLM_MODEL is None:
     FAST_LLM_MODEL = LLM_MODEL
+
+if REASON_FAST_LLM_MODEL is None:
+    REASON_FAST_LLM_MODEL = REASON_LLM_MODEL
 
 if not os.path.exists(GIT_REPO_PATH):
     try:

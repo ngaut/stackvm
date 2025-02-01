@@ -114,7 +114,7 @@ Options for namespace management:
 
 ## LLM Configuration
 
-StackVM now supports local Language Models through Ollama integration:
+StackVM supports multiple LLM configurations including a dedicated reasoning model:
 
 - **Default LLM Provider**: The default LLM provider is set based on the `LLM_PROVIDER` variable in the `.env` file.
 - **Default Model**: The default model is set based on the `LLM_MODEL` variable in the `.env` file.
@@ -150,6 +150,28 @@ StackVM now supports local Language Models through Ollama integration:
    LLM_MODEL=gpt-4o-mini
    OPENAI_API_KEY=your_openai_api_key
    ```
+
+### Reasoning Model with OpenAI
+
+You can configure both standard and reasoning models in your `.env` file:
+
+```env
+# Standard LLM Configuration
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o
+
+# Reasoning Model Configuration (Optional)
+REASON_LLM_PROVIDER=openai
+REASON_LLM_MODEL=o3-mini
+```
+
+If `REASON_LLM_PROVIDER` and `REASON_LLM_MODEL` are not set, they will default to the standard LLM configuration values.
+
+The reasoning model is specifically used for:
+- Plan generation
+- Plan updates
+- Plan evaluation
+- Complex decision making
 
 ## Project Structure
 

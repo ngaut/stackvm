@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
-from app.config.settings import LLM_PROVIDER, LLM_MODEL
+from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
 from app.services import (
     LLMInterface,
     PlanExecutionVM,
@@ -629,7 +629,7 @@ class Task:
 
 class TaskService:
     def __init__(self):
-        self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+        self.llm_interface = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 
     def create_task(
         self,
