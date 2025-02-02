@@ -8,28 +8,100 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.database import SessionLocal
+from app.models.branch import Branch, Commit
+from sqlalchemy import select
+
 # Add project root to Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
 from notebooks.optimize_plan import (
     get_task_answer,
-    update_plan,
-    execute_task_using_new_plan,
     evaulate_task_answer,
 )
 
 
+def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]:
+    """Query all commits and branches for a specific task, organizing commits in a tree structure.
+
+    Args:
+        task_id: The ID of the task to query
+
+    Returns:
+        Tuple of:
+        1. Dict of all commits indexed by commit_hash
+        2. Dict of branch names mapping to their head commit hashes
+
+        Example:
+        (
+            {
+                "abc123": {
+                    "commit_hash": "abc123",
+                    "parent_hash": "def456",
+                    "message": {...},
+                    "vm_state": {...},
+                    "committed_at": "2024-03-20T10:00:00",
+                    "children": ["ghi789", "jkl012"]  # List of child commit hashes
+                },
+                ...
+            },
+            {
+                "main": "abc123",
+                "feature-branch": "ghi789"
+            }
+        )
+    """
+
+    commits_dict = {}  # hash -> commit data
+    branch_heads = {}  # branch_name -> head_commit_hash
+
+    with SessionLocal() as session:
+        # First, get all commits for this task
+        commits = (
+            session.execute(select(Commit).where(Commit.task_id == task_id))
+            .scalars()
+            .all()
+        )
+
+        # Build the commit dictionary and establish parent-child relationships
+        for commit in commits:
+            commits_dict[commit.commit_hash] = {
+                "commit_hash": commit.commit_hash,
+                "parent_hash": commit.parent_hash,
+                "message": commit.message,
+                "vm_state": commit.vm_state,
+                "committed_at": commit.committed_at.isoformat(),
+                "children": [],  # Will be populated in next step
+            }
+
+        # Populate children lists
+        for commit_hash, commit_data in commits_dict.items():
+            parent_hash = commit_data["parent_hash"]
+            if parent_hash and parent_hash in commits_dict:
+                commits_dict[parent_hash]["children"].append(commit_hash)
+
+        # Get all branches and their head commits
+        branches = (
+            session.execute(select(Branch).where(Branch.task_id == task_id))
+            .scalars()
+            .all()
+        )
+
+        for branch in branches:
+            branch_heads[branch.name] = branch.head_commit_hash
+
+    return commits_dict, branch_heads
+
+
 @dataclass
 class MCTSState:
-    """Represents a state in the MCTS tree"""
+    """Represents the state for a single step in the MCTS tree"""
 
-    task_id: str
-    branch_name: str
-    commit_hash: str
-    plan: List[Dict]
-    goal: str
-    metadata: Dict
+    plan: List[Dict] = None
+    seq_no: int = 0
+    vm_state: Optional[Dict] = None
+    commit_hash: Optional[str] = None
     final_answer: Optional[str] = None
     evaluation_score: Optional[float] = None
 
@@ -73,58 +145,106 @@ class MCTSNode:
         return exploitation + exploration
 
 
-def evaluate_state(state: MCTSState) -> float:
-    """Evaluate the quality of a state using the existing evaluation mechanism"""
-    try:
-        eval_response = evaulate_task_answer(
-            state.goal, state.metadata, state.final_answer, json.dumps(state.plan)
-        )
-        eval_result = json.loads(eval_response)
-
-        # Convert evaluation result to a numerical score
-        base_score = 1.0 if eval_result.get("accept", False) else 0.0
-
-        # TODO: Add bonus for other quality assessment
-
-        return base_score
-    except Exception as e:
-        print(f"Error evaluating state: {e}")
-        return 0.0
-
-
 class MCTSPlanOptimizer:
     """MCTS-based plan optimizer"""
 
     def __init__(
         self,
         task_id: str,
-        branch_name: str = "main",
         max_iterations: int = 10,
         exploration_weight: float = 1.414,
         time_limit_seconds: int = 300,
     ):
         self.task_id = task_id
-        self.branch_name = branch_name
         self.max_iterations = max_iterations
         self.exploration_weight = exploration_weight
         self.time_limit_seconds = time_limit_seconds
 
-        # Initialize root state from current task
-        initial_state = self._get_initial_state()
-        self.root = MCTSNode(state=initial_state)
+        # Build the full MCTS tree from commit history
+        self._build_mcts_tree()
 
-    def _get_initial_state(self) -> MCTSState:
-        """Get initial state from current task"""
-        task_detail = get_task_answer(self.task_id, self.branch_name)
-        return MCTSState(
-            task_id=self.task_id,
-            branch_name=self.branch_name,
-            commit_hash=task_detail.get("commit_hash", ""),
-            plan=task_detail.get("plan", []),
-            goal=task_detail.get("goal", ""),
-            metadata=task_detail.get("metadata", {}),
-            final_answer=task_detail.get("final_answer"),
+    def _build_mcts_tree(self) -> MCTSNode:
+        """Build complete MCTS tree from commit history"""
+
+        # Get commit tree data
+        commits_dict, branches = get_task_commit_tree(self.task_id)
+
+        # Find root commit (commit with no parent)
+        root_commit_hash = next(
+            hash for hash, data in commits_dict.items() if not data["parent_hash"]
         )
+
+        # Create root node
+        root_commit = commits_dict[root_commit_hash]
+        root_state = MCTSState(
+            commit_hash=root_commit_hash,
+            vm_state=root_commit["vm_state"],
+            plan=root_commit["vm_state"].get("plan", []),
+            final_answer=root_commit["vm_state"].get("final_answer"),
+        )
+        self.root = MCTSNode(state=root_state)
+
+        # Build tree recursively
+        self._build_tree_recursive(self.root, root_commit_hash, commits_dict)
+
+        # Build the branch reference
+        self.branches = self._build_branch_index(branches)
+
+    def _build_branch_index(self, branches: Dict[str, str]) -> Dict[str, str]:
+        """Build branch index from commit history
+
+        Args:
+            branches: Dict mapping branch names to their head commit hashes
+
+        Returns:
+            Dict mapping commit hashes to their branch names
+        """
+        commit_hash_to_branch = {}
+        for branch_name, commit_hash in branches.items():
+            commit_hash_to_branch[commit_hash] = branch_name
+
+        branches_ref = {}
+
+        # Traverse the entire tree to map commits to branches
+        def traverse(node: MCTSNode):
+            if node.state.commit_hash in commit_hash_to_branch:
+                branches_ref[node.state.commit_hash] = commit_hash_to_branch[
+                    node.state.commit_hash
+                ]
+            for child in node.children:
+                traverse(child)
+
+        traverse(self.root)
+        return branches_ref
+
+    def _build_tree_recursive(
+        self, parent_node: MCTSNode, commit_hash: str, commits_dict: Dict[str, Dict]
+    ):
+        """Recursively build MCTS tree from commit history"""
+        # Get all child commits
+        commit_data = commits_dict[commit_hash]
+        child_hashes = commit_data["children"]
+
+        # Create nodes for each child commit
+        for child_hash in child_hashes:
+            child_commit = commits_dict[child_hash]
+
+            # Create child state
+            child_state = MCTSState(
+                commit_hash=child_hash,
+                vm_state=child_commit["vm_state"],
+                plan=child_commit["vm_state"].get("plan", []),
+                final_answer=child_commit["vm_state"].get("final_answer"),
+            )
+
+            # Create child node
+            child_node = MCTSNode(state=child_state, parent=parent_node)
+
+            # Add to parent's children
+            parent_node.children.append(child_node)
+
+            # Recursively build tree for this child
+            self._build_tree_recursive(child_node, child_hash, commits_dict)
 
     def select_node(self) -> MCTSNode:
         """Select a node for expansion using UCB1"""
@@ -159,10 +279,28 @@ class MCTSPlanOptimizer:
         # TODO: Implement this, to choose what to do next
         pass
 
+    def evaluate_state(self, state: MCTSState) -> float:
+        """Evaluate the quality of a state using the existing evaluation mechanism"""
+        try:
+            eval_response = evaulate_task_answer(
+                self.goal, self.metadata, state.final_answer, json.dumps(state.plan)
+            )
+            eval_result = json.loads(eval_response)
+
+            # Convert evaluation result to a numerical score
+            base_score = 1.0 if eval_result.get("accept", False) else 0.0
+
+            # TODO: Add bonus for other quality assessment
+
+            return base_score
+        except Exception as e:
+            print(f"Error evaluating state: {e}")
+            return 0.0
+
     def simulate(self, node: MCTSNode) -> float:
         """Simulate from node to get a reward"""
         # For now, directly evaluate the state
-        return evaluate_state(node.state)
+        return self.evaluate_state(node.state)
 
     def backpropagate(self, node: MCTSNode, reward: float):
         """Backpropagate reward through tree.
