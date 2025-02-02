@@ -178,8 +178,9 @@ class MCTSPlanOptimizer:
         root_commit = commits_dict[root_commit_hash]
         root_state = MCTSState(
             commit_hash=root_commit_hash,
+            seq_no=root_commit["vm_state"].get("program_counter", 0) - 1,
             vm_state=root_commit["vm_state"],
-            plan=root_commit["vm_state"].get("plan", []),
+            plan=root_commit["vm_state"].get("current_plan", []),
             final_answer=root_commit["vm_state"].get("final_answer"),
         )
         self.root = MCTSNode(state=root_state)
@@ -189,6 +190,36 @@ class MCTSPlanOptimizer:
 
         # Build the branch reference
         self.branches = self._build_branch_index(branches)
+
+        # Find and extend leaf nodes with remaining unexecuted steps
+        def find_and_extend_leaves(node: MCTSNode):
+            if not node.children:  # This is a real leaf node
+                current_plan = node.state.plan
+                current_seq = node.state.seq_no
+
+                # Check if there are remaining unexecuted steps
+                remaining_steps = []
+                for step in current_plan:
+                    if step.get("seq_no") > current_seq:
+                        remaining_steps.append(step)
+
+                # Create new nodes for each remaining step
+                current_node = node
+                for step in remaining_steps:
+                    new_state = MCTSState(
+                        plan=current_plan,
+                        seq_no=step.step.get("seq_no"),
+                    )
+                    new_node = MCTSNode(state=new_state, parent=current_node)
+                    current_node.children.append(new_node)
+                    current_node = new_node
+            else:
+                # If not a leaf, recursively check all children
+                for child in node.children:
+                    find_and_extend_leaves(child)
+
+        # Start the extension process from the root
+        find_and_extend_leaves(self.root)
 
     def _build_branch_index(self, branches: Dict[str, str]) -> Dict[str, str]:
         """Build branch index from commit history
@@ -232,8 +263,9 @@ class MCTSPlanOptimizer:
             # Create child state
             child_state = MCTSState(
                 commit_hash=child_hash,
+                seq_no=child_commit["vm_state"].get("program_counter", 0) - 1,
                 vm_state=child_commit["vm_state"],
-                plan=child_commit["vm_state"].get("plan", []),
+                plan=child_commit["vm_state"].get("current_plan", []),
                 final_answer=child_commit["vm_state"].get("final_answer"),
             )
 
