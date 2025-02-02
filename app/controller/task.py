@@ -184,7 +184,11 @@ class Task:
             if response_format:
                 goal = f"{goal} {response_format}"
 
-            logger.info("Generating plan for goal: %s", goal)
+            logger.info(
+                "Generating plan for goal using LLM Model %s: %s",
+                REASON_LLM_MODEL,
+                goal,
+            )
             plan = generate_plan(
                 self.llm_interface,
                 goal,
