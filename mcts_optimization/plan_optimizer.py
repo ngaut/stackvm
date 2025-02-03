@@ -8,8 +8,10 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.utils.json import extract_json
 from app.database import SessionLocal
 from app.models.branch import Branch, Commit
+from app.models.task import Task
 from sqlalchemy import select
 
 # Add project root to Python path
@@ -20,6 +22,17 @@ from notebooks.optimize_plan import (
     get_task_answer,
     evaulate_task_answer,
 )
+
+
+def get_task(task_id: str) -> Tuple[str, str, str]:
+    """Get the task details"""
+    with SessionLocal() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one()
+        return {
+            "goal": task.goal,
+            "metadata": task.meta,
+            "namespace": task.namespace_name,
+        }
 
 
 def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]:
@@ -103,7 +116,7 @@ class MCTSState:
     vm_state: Optional[Dict] = None
     commit_hash: Optional[str] = None
     final_answer: Optional[str] = None
-    evaluation_score: Optional[float] = None
+    evaluation: Optional[Dict] = None
 
 
 class MCTSNode:
@@ -160,6 +173,11 @@ class MCTSPlanOptimizer:
         self.exploration_weight = exploration_weight
         self.time_limit_seconds = time_limit_seconds
 
+        task_details = get_task(task_id)
+        self.goal = task_details["goal"]
+        self.metadata = task_details["metadata"]
+        self.namespace = task_details["namespace"]
+
         # Build the full MCTS tree from commit history
         self._build_mcts_tree()
 
@@ -175,13 +193,9 @@ class MCTSPlanOptimizer:
         )
 
         # Create root node
-        root_commit = commits_dict[root_commit_hash]
         root_state = MCTSState(
             commit_hash=root_commit_hash,
-            seq_no=root_commit["vm_state"].get("program_counter", 0) - 1,
-            vm_state=root_commit["vm_state"],
-            plan=root_commit["vm_state"].get("current_plan", []),
-            final_answer=root_commit["vm_state"].get("final_answer"),
+            seq_no=-1,
         )
         self.root = MCTSNode(state=root_state)
 
@@ -192,34 +206,47 @@ class MCTSPlanOptimizer:
         self.branches = self._build_branch_index(branches)
 
         # Find and extend leaf nodes with remaining unexecuted steps
-        def find_and_extend_leaves(node: MCTSNode):
-            if not node.children:  # This is a real leaf node
-                current_plan = node.state.plan
-                current_seq = node.state.seq_no
-
-                # Check if there are remaining unexecuted steps
-                remaining_steps = []
-                for step in current_plan:
-                    if step.get("seq_no") > current_seq:
-                        remaining_steps.append(step)
-
-                # Create new nodes for each remaining step
-                current_node = node
-                for step in remaining_steps:
-                    new_state = MCTSState(
-                        plan=current_plan,
-                        seq_no=step.step.get("seq_no"),
-                    )
-                    new_node = MCTSNode(state=new_state, parent=current_node)
-                    current_node.children.append(new_node)
-                    current_node = new_node
-            else:
-                # If not a leaf, recursively check all children
-                for child in node.children:
-                    find_and_extend_leaves(child)
-
         # Start the extension process from the root
-        find_and_extend_leaves(self.root)
+        self.find_and_extend_leaves(self.root)
+
+    def _build_tree_recursive(
+        self, parent_node: MCTSNode, commit_hash: str, commits_dict: Dict[str, Dict]
+    ):
+        """Recursively build MCTS tree from commit history"""
+        # Get all child commits
+        commit_data = commits_dict[commit_hash]
+        child_hashes = commit_data["children"]
+
+        # Create nodes for each child commit
+        for child_hash in child_hashes:
+            child_commit = commits_dict[child_hash]
+
+            # Create child state
+            child_state = MCTSState(
+                commit_hash=child_hash,
+                seq_no=child_commit["vm_state"].get("program_counter", 0) - 1,
+                vm_state=child_commit["vm_state"],
+                plan=child_commit["vm_state"].get("current_plan", []),
+                final_answer=child_commit["vm_state"]
+                .get("variables", {})
+                .get("final_answer", None),
+            )
+
+            # Create child node
+            child_node = MCTSNode(state=child_state, parent=parent_node)
+
+            # Add to parent's children
+            parent_node.children.append(child_node)
+
+            if child_state.final_answer is not None:
+                print(f"Final answer found for {child_hash}, evaluating...")
+                # calculate the reward and backpropagate
+                reward = self.evaluate_state(child_state)
+                self.backpropagate(child_node, reward)
+                continue
+
+            # Recursively build tree for this child
+            self._build_tree_recursive(child_node, child_hash, commits_dict)
 
     def _build_branch_index(self, branches: Dict[str, str]) -> Dict[str, str]:
         """Build branch index from commit history
@@ -248,35 +275,31 @@ class MCTSPlanOptimizer:
         traverse(self.root)
         return branches_ref
 
-    def _build_tree_recursive(
-        self, parent_node: MCTSNode, commit_hash: str, commits_dict: Dict[str, Dict]
-    ):
-        """Recursively build MCTS tree from commit history"""
-        # Get all child commits
-        commit_data = commits_dict[commit_hash]
-        child_hashes = commit_data["children"]
+    def find_and_extend_leaves(self, node: MCTSNode):
+        if not node.children:  # This is a real leaf node
+            current_plan = node.state.plan
+            current_seq = node.state.seq_no
 
-        # Create nodes for each child commit
-        for child_hash in child_hashes:
-            child_commit = commits_dict[child_hash]
+            # Check if there are remaining unexecuted steps
+            remaining_steps = []
+            for step in current_plan:
+                if step.get("seq_no") > current_seq:
+                    remaining_steps.append(step)
 
-            # Create child state
-            child_state = MCTSState(
-                commit_hash=child_hash,
-                seq_no=child_commit["vm_state"].get("program_counter", 0) - 1,
-                vm_state=child_commit["vm_state"],
-                plan=child_commit["vm_state"].get("current_plan", []),
-                final_answer=child_commit["vm_state"].get("final_answer"),
-            )
-
-            # Create child node
-            child_node = MCTSNode(state=child_state, parent=parent_node)
-
-            # Add to parent's children
-            parent_node.children.append(child_node)
-
-            # Recursively build tree for this child
-            self._build_tree_recursive(child_node, child_hash, commits_dict)
+            # Create new nodes for each remaining step
+            current_node = node
+            for step in remaining_steps:
+                new_state = MCTSState(
+                    plan=current_plan,
+                    seq_no=step.get("seq_no"),
+                )
+                new_node = MCTSNode(state=new_state, parent=current_node)
+                current_node.children.append(new_node)
+                current_node = new_node
+        else:
+            # If not a leaf, recursively check all children
+            for child in node.children:
+                self.find_and_extend_leaves(child)
 
     def select_node(self) -> MCTSNode:
         """Select a node for expansion using UCB1"""
@@ -317,10 +340,11 @@ class MCTSPlanOptimizer:
             eval_response = evaulate_task_answer(
                 self.goal, self.metadata, state.final_answer, json.dumps(state.plan)
             )
-            eval_result = json.loads(eval_response)
+            response_json_str = extract_json(eval_response)
+            state.evaluation = json.loads(response_json_str)
 
             # Convert evaluation result to a numerical score
-            base_score = 1.0 if eval_result.get("accept", False) else 0.0
+            base_score = 1.0 if state.evaluation.get("accept", False) else 0.0
 
             # TODO: Add bonus for other quality assessment
 
