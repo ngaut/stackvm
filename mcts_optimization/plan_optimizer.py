@@ -11,8 +11,11 @@ from datetime import datetime
 from app.utils.json import extract_json
 from app.database import SessionLocal
 from app.models.branch import Branch, Commit
-from app.models.task import Task
+from app.models.task import TaskORM
+from app.controller.task import Task
 from sqlalchemy import select
+from app.config.settings import REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL
+from app.services.llm_interface import LLMInterface
 
 # Add project root to Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -23,11 +26,15 @@ from notebooks.optimize_plan import (
     evaulate_task_answer,
 )
 
+llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL)
+
 
 def get_task(task_id: str) -> Tuple[str, str, str]:
     """Get the task details"""
     with SessionLocal() as session:
-        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one()
+        task = session.execute(
+            select(TaskORM).where(TaskORM.id == task_id)
+        ).scalar_one()
         return {
             "goal": task.goal,
             "metadata": task.meta,
@@ -107,6 +114,42 @@ def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]
     return commits_dict, branch_heads
 
 
+def get_branch_commits(
+    task_id: str, from_commit_hash: str, branch_name: str
+) -> Dict[str, Dict]:
+    commits_dict = {}  # hash -> commit data
+
+    with SessionLocal() as session:
+        # First, get all commits for this task
+        branch = (
+            session.execute(
+                select(Branch).where(
+                    Branch.task_id == task_id, Branch.name == branch_name
+                )
+            )
+            .scalars()
+            .first()
+        )
+
+        latest_commit = branch.head_commit
+        while latest_commit.commit_hash != from_commit_hash:
+            commits_dict[latest_commit.commit_hash] = {
+                "commit_hash": latest_commit.commit_hash,
+                "parent_hash": latest_commit.parent_hash,
+                "message": latest_commit.message,
+                "vm_state": latest_commit.vm_state,
+                "committed_at": latest_commit.committed_at.isoformat(),
+                "children": [],
+            }
+
+        for commit_hash, commit_data in commits_dict.items():
+            parent_hash = commit_data["parent_hash"]
+            if parent_hash and parent_hash in commits_dict:
+                commits_dict[parent_hash]["children"].append(commit_hash)
+
+    return commits_dict
+
+
 @dataclass
 class MCTSState:
     """Represents the state for a single step in the MCTS tree"""
@@ -134,13 +177,13 @@ class MCTSNode:
         self.children: List[MCTSNode] = []
         self.visits = 0
         self.value = 0.0
-        self.untried_actions = self._get_valid_actions()
+        self.untried_optimization_suggestions = self._get_optimization_suggestions()
 
-    def _get_valid_actions(self) -> List[Dict]:
+    def _get_optimization_suggestions(self) -> List[Dict]:
         """Get list of valid actions from current state using LLM."""
 
-        # TODO: Implement this, to choose what to do next
-        pass
+        # TODO: Implement this, to choose what to optimize next
+        return []
 
     def get_ucb_score(self, exploration_weight: float = 1.414) -> float:
         if self.visits == 0:
@@ -156,6 +199,76 @@ class MCTSNode:
         )
 
         return exploitation + exploration
+
+    def reflect_on_final_answer(
+        self, goal: str, final_answer: str, metadata: Dict
+    ) -> Dict:
+        """Reflect on the current step and suggest optimizations for remaining steps.
+
+        Args:
+            goal: The original task goal
+            final_answer: The final answer produced by the plan
+            metadata: Additional task metadata
+
+        Returns:
+            Dict containing:
+            {
+                "should_optimize": bool,  # Whether optimization is possible
+                "suggestion": str,     # Optimization suggestion explanation
+            }
+        """
+        current_step_index = self.state.seq_no
+        if current_step_index < 0 or not self.state.plan:
+            return {
+                "should_optimize": False,
+                "suggestion": "No current step to analyze",
+            }
+
+        # Prepare the reflection prompt
+        prompt = f"""
+        Goal: {goal} 
+
+        The supplementary information for Goal:
+        {metadata.get('response_format')}
+
+        Final Answer: {final_answer}
+        
+        Current Step ({current_step_index}):
+        {json.dumps(self.state.plan[current_step_index], indent=2)}
+        
+        Remaining Steps:
+        {json.dumps(self.state.plan[current_step_index + 1:], indent=2)}
+
+        Based on the current step's execution and the final answer:
+        1. Can the remaining steps be optimized to improve the final answer? Answer with yes or no.
+        2. If yes, explain how to optimize the remaining steps.
+
+        Format your response as JSON:
+        {{
+            "should_optimize": boolean,
+            "suggestion": "string",
+        }}
+        """
+
+        try:
+            # Get reflection from LLM
+            reflection_response = llm_client.generate(prompt)
+            reflection = json.loads(extract_json(reflection_response))
+
+            if reflection.get("should_optimize", False):
+                reflection["suggestion"] = (
+                    reflection.get("suggestion", "")
+                    + f"\nPlease keep all steps up to and including the step ({current_step_index}) unchanged."
+                )
+                self.untried_optimization_suggestions.append(reflection)
+
+            return reflection
+        except Exception as e:
+            print(f"Error during reflection: {e}")
+            return {
+                "can_optimize": False,
+                "suggestion": f"Error during reflection: {str(e)}",
+            }
 
 
 class MCTSPlanOptimizer:
@@ -202,9 +315,6 @@ class MCTSPlanOptimizer:
         # Build tree recursively
         self._build_tree_recursive(self.root, root_commit_hash, commits_dict)
 
-        # Build the branch reference
-        self.branches = self._build_branch_index(branches)
-
         # Find and extend leaf nodes with remaining unexecuted steps
         # Start the extension process from the root
         self.find_and_extend_leaves(self.root)
@@ -238,42 +348,12 @@ class MCTSPlanOptimizer:
             # Add to parent's children
             parent_node.children.append(child_node)
 
-            if child_state.final_answer is not None:
-                print(f"Final answer found for {child_hash}, evaluating...")
-                # calculate the reward and backpropagate
-                reward = self.evaluate_state(child_state)
+            need_backprop, reward = self.simulate(child_node)
+            if need_backprop:
                 self.backpropagate(child_node, reward)
-                continue
 
             # Recursively build tree for this child
             self._build_tree_recursive(child_node, child_hash, commits_dict)
-
-    def _build_branch_index(self, branches: Dict[str, str]) -> Dict[str, str]:
-        """Build branch index from commit history
-
-        Args:
-            branches: Dict mapping branch names to their head commit hashes
-
-        Returns:
-            Dict mapping commit hashes to their branch names
-        """
-        commit_hash_to_branch = {}
-        for branch_name, commit_hash in branches.items():
-            commit_hash_to_branch[commit_hash] = branch_name
-
-        branches_ref = {}
-
-        # Traverse the entire tree to map commits to branches
-        def traverse(node: MCTSNode):
-            if node.state.commit_hash in commit_hash_to_branch:
-                branches_ref[node.state.commit_hash] = commit_hash_to_branch[
-                    node.state.commit_hash
-                ]
-            for child in node.children:
-                traverse(child)
-
-        traverse(self.root)
-        return branches_ref
 
     def find_and_extend_leaves(self, node: MCTSNode):
         if not node.children:  # This is a real leaf node
@@ -302,61 +382,117 @@ class MCTSPlanOptimizer:
                 self.find_and_extend_leaves(child)
 
     def select_node(self) -> MCTSNode:
-        """Select a node for expansion using UCB1"""
+        """Select a node for expansion using UCB1."""
         node = self.root
-        while node.untried_actions == [] and node.children != []:
+
+        while node.children:
+            if node.untried_optimization_suggestions:
+                return node
+
+            # Otherwise, select best child using UCB
             node = max(
                 node.children, key=lambda n: n.get_ucb_score(self.exploration_weight)
             )
-        return node
+
+        # If we reach here, we're at a leaf node with no untried actions
+        # Let's analyze the execution path and get optimization suggestions
+        if node.untried_optimization_suggestions:
+            return node
+
+        return None
 
     def expand_node(self, node: MCTSNode) -> Optional[MCTSNode]:
         """Expand selected node with a new child"""
-        if not node.untried_actions:
+        if not node.untried_optimization_suggestions:
             return None
 
         # Select random untried action
-        action = random.choice(node.untried_actions)
-        node.untried_actions.remove(action)
+        reflection = random.choice(node.untried_optimization_suggestions)
+        node.untried_optimization_suggestions.remove(reflection)
 
         # Create new state by applying action
-        new_state = self._apply_action(node.state, action)
+        new_state = self._apply_reflection(node, reflection)
         if new_state is None:
             return None
 
         # Create new node
-        child_node = MCTSNode(state=new_state, parent=node, action=action)
-        node.children.append(child_node)
+        child_node = MCTSNode(state=new_state, parent=node)
         return child_node
 
-    def _apply_action(self, state: MCTSState, action: Dict) -> Optional[MCTSState]:
-        """Apply action to state to generate new state"""
-        # TODO: Implement this, to choose what to do next
-        pass
+    def _apply_reflection(self, node: MCTSNode, reflection: Dict) -> Optional[MCTSNode]:
+        """Apply an optimization suggestion to create a new state."""
 
-    def evaluate_state(self, state: MCTSState) -> float:
-        """Evaluate the quality of a state using the existing evaluation mechanism"""
+        current_commit_hash = node.state.commit_hash
+        branch_name = f"mcts_optimized_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        with SessionLocal() as session:
+            taskORM = session.execute(
+                select(TaskORM).where(TaskORM.id == self.task_id)
+            ).scalar_one()
+            task = Task(taskORM, llm_client)
+
+        res = task.update(
+            new_branch_name=branch_name,
+            commit_hash=current_commit_hash,
+            suggestion=reflection["suggestion"],
+        )
+
+        if res.get("success", False) is False:
+            return None
+
+        current_branch = res.get("current_branch")
+        # find the node from current_commit_hash to the current branch
+        commits_dict = get_branch_commits(
+            self.task_id, current_commit_hash, current_branch
+        )
+
+        # Find root commit (commit with no parent)
+        root_commit_hash = next(
+            hash for hash, data in commits_dict.items() if not data["parent_hash"]
+        )
+        commits_dict[root_commit_hash]["parent_hash"] = current_commit_hash
+        commits_dict[current_commit_hash] = {"children": [root_commit_hash]}
+
+        # Build tree recursively
+        self._build_tree_recursive(node, root_commit_hash, commits_dict)
+
+        return None
+
+    def evaluate_state(self, node: MCTSNode) -> Tuple[bool, float]:
+        """Evaluate the quality of a state using the existing evaluation mechanism
+
+        Returns:
+            Tuple of (need_backprop, reward)
+            - need_backprop: Whether to backpropagate the reward
+            - reward: The reward value from simulation (0.0 to 1.0)
+        """
         try:
-            eval_response = evaulate_task_answer(
-                self.goal, self.metadata, state.final_answer, json.dumps(state.plan)
-            )
-            response_json_str = extract_json(eval_response)
-            state.evaluation = json.loads(response_json_str)
 
-            # Convert evaluation result to a numerical score
-            base_score = 1.0 if state.evaluation.get("accept", False) else 0.0
+            if node.state.final_answer is None:
+                eval_response = evaulate_task_answer(
+                    self.goal,
+                    self.metadata,
+                    node.state.final_answer,
+                    json.dumps(node.state.plan),
+                )
+                response_json_str = extract_json(eval_response)
+                node.state.evaluation = json.loads(response_json_str)
 
-            # TODO: Add bonus for other quality assessment
+                # Convert evaluation result to a numerical score
+                base_score = 1.0 if node.state.evaluation.get("accept", False) else 0.0
 
-            return base_score
+                # TODO: Add bonus for other quality assessment
+
+                return True, base_score
         except Exception as e:
             print(f"Error evaluating state: {e}")
-            return 0.0
 
-    def simulate(self, node: MCTSNode) -> float:
+        return False, 0
+
+    def simulate(self, node: MCTSNode) -> Tuple[bool, float]:
         """Simulate from node to get a reward"""
         # For now, directly evaluate the state
-        return self.evaluate_state(node.state)
+        return self.evaluate_state(node)
 
     def backpropagate(self, node: MCTSNode, reward: float):
         """Backpropagate reward through tree.
@@ -371,12 +507,18 @@ class MCTSPlanOptimizer:
                     - +0.2: Comprehensive answer
                     - +0.1: Well-structured answer
         """
+        if node.state.final_answer is None:
+            return
+
+        final_answer = node.state.final_answer
+
         while node is not None:
             node.visits += 1  # Increment visit count
             node.value += reward  # Accumulate reward value
+            node.reflect_on_final_answer(self.goal, final_answer, self.metadata)
             node = node.parent  # Move up to parent
 
-    def optimize(self) -> Tuple[List[Dict], float]:
+    def optimize(self) -> List[MCTSNode]:
         """Run MCTS optimization"""
         start_time = datetime.now()
 
@@ -387,6 +529,9 @@ class MCTSPlanOptimizer:
 
             # Selection
             selected_node = self.select_node()
+            if selected_node is None:
+                print("No expandable nodes found in tree")
+                break  # Or implement some tree reset/regeneration logic
 
             # Expansion
             new_node = self.expand_node(selected_node)
@@ -394,16 +539,30 @@ class MCTSPlanOptimizer:
                 continue
 
             # Simulation
-            reward = self.simulate(new_node)
+            """
+            need_backprop, reward = self.simulate(new_node)
+            if need_backprop:
+                # Backpropagation
+                self.backpropagate(new_node, reward)
+            """
 
-            # Backpropagation
-            self.backpropagate(new_node, reward)
+        def get_leaf_nodes(node: MCTSNode) -> List[MCTSNode]:
+            if not node.children:
+                return [node]
 
-        # Return best plan found
-        best_node = max(
-            [n for n in self.root.children if n.visits > 0],
-            key=lambda n: n.value / n.visits,
-            default=self.root,
+            leaves = []
+            for child in node.children:
+                leaves.extend(get_leaf_nodes(child))
+            return leaves
+
+        # Get all leaf nodes
+        leaf_nodes = get_leaf_nodes(self.root)
+
+        # Filter visited leaf nodes and sort by score
+        scored_leaves = sorted(
+            [node for node in leaf_nodes if node.visits > 0],
+            key=lambda node: node.value / node.visits,
+            reverse=True,
         )
 
-        return best_node.state.plan, best_node.value / max(best_node.visits, 1)
+        return scored_leaves
