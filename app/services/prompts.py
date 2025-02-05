@@ -4,7 +4,7 @@ from typing import Dict, List
 
 
 def get_plan_update_prompt(
-    vm, vm_spec_content, tools_instruction_content, suggestion, key_factors=None
+    vm, vm_spec_content, tools_instruction_content, plan, suggestion, key_factors=None
 ):
     """
     Get the prompt for updating the plan.
@@ -16,11 +16,11 @@ Goal:
 {vm.state['goal']}
 
 Current Plan:
-{json.dumps(vm.state['current_plan'], indent=2)}
+{json.dumps(plan, indent=2)}
 
 Current Program Counter: {vm.state['program_counter']}
 
-Last Executed Step: {json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+Last Executed Step: {json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
 
 **Suggestion for plan update**: {suggestion}
 """
@@ -76,12 +76,27 @@ Now, let's update the plan.
 **Output**:
 1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
 2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
-    """
+
+Ensure the plan is a valid JSON and is properly formatted and encapsulated within a ```json code block.
+
+```json
+[
+    {{
+    "seq_no": 0,
+    "type": "reasoning",
+    "parameters": {{
+        "chain_of_thoughts": "...",
+        "dependency_analysis": "..."
+    }}
+    }},
+    ...
+]
+```"""
 
     return prompt
 
 
-def get_should_update_plan_prompt(vm, suggestion):
+def get_should_update_plan_prompt(vm, plan, suggestion):
     """
     Get the prompt for determining if the plan should be updated.
     """
@@ -109,13 +124,13 @@ User Suggestion for plan update:
 {suggestion}
 
 Current Plan:
-{json.dumps(vm.state['current_plan'], indent=2)}
+{json.dumps(plan, indent=2)}
 
 Current Program Counter:
 {vm.state['program_counter']}
 
 Last Executed Step:
-{json.dumps(vm.state['current_plan'][vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+{json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
 
 Current Variables:
 {json.dumps(vm.get_all_variables(), indent=2)}
