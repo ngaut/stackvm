@@ -340,10 +340,10 @@ class Task:
         branch_name: str,
         suggestion: str,
         key_factors: list = [],
+        plan: Optional[List[Dict[str, Any]]] = None,
     ):
-
         updated_plan = generate_updated_plan(
-            vm, suggestion, key_factors, self.get_allowed_tools()
+            vm, suggestion, key_factors, self.get_allowed_tools(), plan
         )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
@@ -374,6 +374,7 @@ class Task:
         commit_hash: Optional[str] = None,
         suggestion: Optional[str] = None,
         from_scratch: Optional[bool] = False,
+        source_branch: Optional[str] = None,
     ) -> Dict[str, Any]:
         with self._lock:
             try:
@@ -397,6 +398,24 @@ class Task:
                     logger.error(error_message)
                     raise ValueError(error_message)
 
+                plan = None
+                if source_branch:
+                    if not self.branch_manager.checkout_branch(source_branch):
+                        raise ValueError(f"Failed to checkout branch '{source_branch}'")
+
+                    plan = self.branch_manager.current_state.get("current_plan", None)
+                else:
+                    plan = (
+                        self.branch_manager.get_commit(commit_hash)
+                        .get("vm_state", {})
+                        .get("current_plan", None)
+                    )
+
+                if not plan:
+                    raise ValueError(
+                        "No plan found in the source branch %s", source_branch
+                    )
+
                 if not self.branch_manager.checkout_branch_from_commit(
                     new_branch_name, commit_hash
                 ):
@@ -412,7 +431,9 @@ class Task:
                     f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
                 )
 
-                new_commit_hash = self.update_plan(vm, new_branch_name, suggestion)
+                new_commit_hash = self.update_plan(
+                    vm, new_branch_name, suggestion, plan=plan
+                )
                 if not new_commit_hash:
                     raise ValueError("Failed to commit updated plan")
 
