@@ -4,27 +4,24 @@ import math
 import json
 import random
 from typing import List, Dict, Optional, Tuple
-from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 
 from app.utils.json import extract_json
 from app.database import SessionLocal
 from app.models.branch import Branch, Commit
-from app.models.task import TaskORM
+from app.models.task import Task as TaskORM
 from app.controller.task import Task
 from sqlalchemy import select
 from app.config.settings import REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL
 from app.services.llm_interface import LLMInterface
+from app.services.utils import parse_commit_message
 
 # Add project root to Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-from notebooks.optimize_plan import (
-    get_task_answer,
-    evaulate_task_answer,
-)
+from notebooks.optimize_plan import evaulate_task_answer
 
 llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL)
 
@@ -42,39 +39,29 @@ def get_task(task_id: str) -> Tuple[str, str, str]:
         }
 
 
-def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]:
+def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
     """Query all commits and branches for a specific task, organizing commits in a tree structure.
 
     Args:
         task_id: The ID of the task to query
 
-    Returns:
-        Tuple of:
-        1. Dict of all commits indexed by commit_hash
-        2. Dict of branch names mapping to their head commit hashes
+    Returns: Dict of all commits indexed by commit_hash
 
-        Example:
-        (
-            {
-                "abc123": {
-                    "commit_hash": "abc123",
-                    "parent_hash": "def456",
-                    "message": {...},
-                    "vm_state": {...},
-                    "committed_at": "2024-03-20T10:00:00",
-                    "children": ["ghi789", "jkl012"]  # List of child commit hashes
-                },
-                ...
-            },
-            {
-                "main": "abc123",
-                "feature-branch": "ghi789"
-            }
-        )
+    Example:
+    {
+        "abc123": {
+            "commit_hash": "abc123",
+            "parent_hash": "def456",
+            "message": {...},
+            "vm_state": {...},
+            "committed_at": "2024-03-20T10:00:00",
+            "children": ["ghi789", "jkl012"]  # List of child commit hashes
+        },
+        ...
+    }
     """
 
     commits_dict = {}  # hash -> commit data
-    branch_heads = {}  # branch_name -> head_commit_hash
 
     with SessionLocal() as session:
         # First, get all commits for this task
@@ -86,13 +73,17 @@ def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]
 
         # Build the commit dictionary and establish parent-child relationships
         for commit in commits:
+            seq_no, title, details, commit_type = parse_commit_message(commit.message)
             commits_dict[commit.commit_hash] = {
                 "commit_hash": commit.commit_hash,
                 "parent_hash": commit.parent_hash,
-                "message": commit.message,
                 "vm_state": commit.vm_state,
                 "committed_at": commit.committed_at.isoformat(),
                 "children": [],  # Will be populated in next step
+                "seq_no": seq_no,
+                "title": title,
+                "details": details,
+                "commit_type": commit_type,
             }
 
         # Populate children lists
@@ -101,23 +92,14 @@ def get_task_commit_tree(task_id: str) -> Tuple[Dict[str, Dict], Dict[str, str]]
             if parent_hash and parent_hash in commits_dict:
                 commits_dict[parent_hash]["children"].append(commit_hash)
 
-        # Get all branches and their head commits
-        branches = (
-            session.execute(select(Branch).where(Branch.task_id == task_id))
-            .scalars()
-            .all()
-        )
-
-        for branch in branches:
-            branch_heads[branch.name] = branch.head_commit_hash
-
-    return commits_dict, branch_heads
+    return commits_dict
 
 
 def get_branch_commits(
     task_id: str, from_commit_hash: str, branch_name: str
 ) -> Dict[str, Dict]:
-    commits_dict = {}  # hash -> commit data
+    commits_dict = get_task_commit_tree(task_id)
+    branch_commits = {}
 
     with SessionLocal() as session:
         # First, get all commits for this task
@@ -131,23 +113,15 @@ def get_branch_commits(
             .first()
         )
 
-        latest_commit = branch.head_commit
-        while latest_commit.commit_hash != from_commit_hash:
-            commits_dict[latest_commit.commit_hash] = {
-                "commit_hash": latest_commit.commit_hash,
-                "parent_hash": latest_commit.parent_hash,
-                "message": latest_commit.message,
-                "vm_state": latest_commit.vm_state,
-                "committed_at": latest_commit.committed_at.isoformat(),
-                "children": [],
-            }
+        current_commit = branch.head_commit
+        current_commit_hash = current_commit.commit_hash
 
-        for commit_hash, commit_data in commits_dict.items():
-            parent_hash = commit_data["parent_hash"]
-            if parent_hash and parent_hash in commits_dict:
-                commits_dict[parent_hash]["children"].append(commit_hash)
+        while current_commit_hash != from_commit_hash:
+            print(current_commit_hash)
+            branch_commits[current_commit_hash] = commits_dict[current_commit_hash]
+            current_commit_hash = commits_dict[current_commit_hash]["parent_hash"]
 
-    return commits_dict
+    return branch_commits
 
 
 @dataclass
@@ -298,7 +272,7 @@ class MCTSPlanOptimizer:
         """Build complete MCTS tree from commit history"""
 
         # Get commit tree data
-        commits_dict, branches = get_task_commit_tree(self.task_id)
+        commits_dict = get_task_commit_tree(self.task_id)
 
         # Find root commit (commit with no parent)
         root_commit_hash = next(

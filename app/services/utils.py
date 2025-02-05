@@ -70,7 +70,7 @@ def parse_step(step_response: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def parse_commit_message(message: str) -> tuple:
+def parse_commit_message(message) -> tuple:
     """Parse a commit message and return its components."""
     seq_no = "Unknown"
     try:
