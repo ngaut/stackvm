@@ -4,59 +4,59 @@ from typing import Dict, List
 
 
 def get_plan_update_prompt(
-    vm, vm_spec_content, tools_instruction_content, suggestion, key_factors=None
+    vm, vm_spec_content, tools_instruction_content, plan, suggestion
 ):
-    """
-    Get the prompt for updating the plan.
-    """
-    prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze the current VM execution state and update the plan using the suggestion provided.
+    date_today = datetime.date.today().strftime("%Y-%m-%d")
+    prompt = f"""Today is {date_today}
 
-## Context
-Goal: {vm.state['goal']}
+Goal:
+{vm.state['goal']}
+
+Suggestion for updating the following plan: {suggestion}
+
+Current Plan:
+{json.dumps(plan, indent=2)}
+
 Program Counter: {vm.state['program_counter']}
 
-## Current Plan
-```json
-{json.dumps(vm.state['current_plan'], indent=2)}
-```
+Last Executed Step: {json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
 
-## Suggestion
-{suggestion}"""
+Instructions:
+- Analyze the suggestion together with the current plan.
+- Identify improvements that directly support the goal.
+- Modify existing steps or add new ones, starting from the current program counter.
+- Keep all steps before the current program counter unchanged.
+- Avoid redundant changes. The updated plan must be meaningfully different from the original.
 
-    if key_factors:
-        prompt += f"\n## Key Factors\n{json.dumps(key_factors, indent=2)}"
-
-    prompt += f"""
-
-## Requirements
-1. Merge changes from current program counter onward
-2. Preserve completed steps without modification
-3. Use only available tools in 'calling' instructions
-4. Ensure compliance with VM specification
-5. Avoid redundant steps
-
-## VM Specification
+Ensure the updated plan strictly follows the VM specification:
 {vm_spec_content}
 
-## Available Tools
+Use only the available tools as listed:
 {tools_instruction_content}
 
-## Output Format
-```json
-{{
-    "updated_plan": <entire updated plan array>,
-    "change_summary": {{
-        "modifications": [{{"seq_no": number, "changes": string}}],
-        "additions": [{{"seq_no": number, "description": string}}],
-        "removals": [number]
-    }}
-}}```"""
+Output:
+1. Provide the complete updated plan in a valid JSON array.
+2. Include a summary of the changes and a diff relative to the previous plan.
+3. The updated plan should be in json format, enclose it within a ```json code block, for example:
 
+```json
+[
+    {{
+        "seq_no": 0,
+        "type": "reasoning",
+        "parameters": {{
+            "chain_of_thoughts": "...",
+            "dependency_analysis": "..."
+        }}
+    }},
+    ...
+]
+```
+"""
     return prompt
 
 
-def get_should_update_plan_prompt(vm, suggestion):
+def get_should_update_plan_prompt(vm, plan, suggestion):
     """
     Get the prompt for determining if the plan should be updated.
     """
@@ -73,31 +73,44 @@ def get_should_update_plan_prompt(vm, suggestion):
         ]
     }}
     """
+    date_today = datetime.date.today().strftime("%Y-%m-%d")
 
-    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze if plan needs update based on current state and suggestion.
+    prompt = f"""Today is {date_today}
 
-## Current State
-```json
-{{
-    "plan": {json.dumps(vm.state['current_plan'])},
-    "variables": {json.dumps(vm.get_all_variables())},
-    "program_counter": {vm.state['program_counter']}
-}}```
+Goal:
+{vm.state['goal']}
 
-## Suggestion
+User Suggestion for plan update:
 {suggestion}
 
-## Evaluation Criteria
-- Goal alignment
-- Variable changes impact
-- Efficiency improvements
-- Foreseeable obstacles
+Current Plan:
+{json.dumps(plan, indent=2)}
 
-## Output Format
+Program Counter: {vm.state['program_counter']}
+
+Last Executed Step: {json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+
+Current Variables:
+{json.dumps(vm.get_all_variables(), indent=2)}
+
+Instructions:
+- Analyze the current VM execution state and determine if the plan remains aligned with the goal.
+- Evaluate whether new variables or state changes affect the plan's validity.
+- Identify opportunities to improve efficiency, address potential obstacles, ensure completeness, and enhance adaptability.
+- Decide if the plan requires updates.
+
+Output Requirements:
+Provide your analysis in valid JSON format encapsulated within a ```json code block. Follow this structure:
+
 ```json
 {json_format}
-```"""
+```
+
+- Set "should_update" to true if modifications are needed, otherwise false.
+- In "explanation", provide a concise rationale for your decision.
+- List the key factors in "key_factors", describing each factor and its impact on the need for a plan update.
+"""
+    return prompt
 
 
 def get_generate_plan_prompt(
@@ -110,38 +123,56 @@ def get_generate_plan_prompt(
     """
     Get the prompt for generating a plan.
     """
+    date_today = datetime.date.today().strftime("%Y-%m-%d")
+    return f"""Today is {date_today}
 
-    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Generate action plan to achieve: {goal}
+Goal:
+{goal}
 
-## Requirements
-1. Decompose into sequential sub-tasks
-2. Use only specified tools in 'calling' instructions
-3. Include initial reasoning step
-4. Final step must assign to 'final_answer'
-
-## VM Specification
+MUST follow the VM Specification:
 {vm_spec_content}
 
-## Available Tools
+## 9. Available Tools for `calling` instruction
 {tools_instruction_content}
 
-## Example Approach
+## 10. Example: Here are an example how to handle a similar task.
+
+### The approach
+
 {plan_approach}
 
-## Output Format
+###  Plan Example
+
+{plan_example_content}
+
+**Note**: Examples are to provide the ideas and examples for solving similar problems. Please do not use tools that appear in the example but do not appear in Available Tools for `calling` instruction. You can find more suitable tools in Available Tools for `calling` instruction to achieve the goal.
+
+-------------------------------
+
+Instructions:
+- Analyze the goal and break it down into smaller, actionable tasks.
+- Create an action plan that strictly adheres to the VM specification.
+- Start the plan with a reasoning step summarizing your analysis.
+- For each sub-goal, propose an action step ensuring the correct dependency order.
+- When invoking a tool, always wrap the call in a "calling" instruction. For example:
+
 ```json
-[
-    {{
-        "seq_no": 0,
-        "type": "reasoning",
-        "parameters": {{
-            "chain_of_thoughts": "...",
-            "dependency_analysis": "..."
-        }}
+{{
+  "seq_no": <unique_sequential_number>,
+  "type": "calling",
+  "parameters": {{
+    "tool_name": "<tool_name>",
+    "tool_params": {{
+      <tool-specific parameters>
     }},
-    // ... additional steps ...
-]```"""
+    "output_vars": [<list_of_output_variable_names>]
+  }}
+}}
+```
+
+- Ensure the final step assigns the output to the 'final_answer' variable.
+- Provide only the action plan in a valid JSON array, encapsulated within a ```json code block.
+"""
 
 
 def get_step_update_prompt(
@@ -152,8 +183,10 @@ def get_step_update_prompt(
     """
     current_step = vm.state["current_plan"][seq_no]
     current_variables = json.dumps(vm.get_all_variables(), indent=2)
+    date_today = datetime.date.today().strftime("%Y-%m-%d")
 
-    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+    prompt = f"""Today is {date_today}
+
 You are tasked with updating a specific step in the VM execution plan.
 
 Current Step (seq_no: {seq_no}):
@@ -171,16 +204,15 @@ Suggestion for Improvement:
 ## 8. Available Tools for `calling` instruction
 {tools_instruction_content}
 
--------------------------------
+Instructions:
+- Analyze the current step, the provided suggestion, and the current VM variables.
+- Modify the step to incorporate the suggestion while ensuring it aligns with the overall goal and plan structure.
+- Avoid redundancy and ensure compatibility with the current VM state.
 
-Now, let's update the step.
-1. Analyze the current step, the provided suggestion, and the current VM variables.
-2. Modify the step to incorporate the suggestion while ensuring it aligns with the overall goal and plan structure.
-3. Ensure the updated step is consistent with the VM's current state and does not introduce redundancy.
-
-**Output**:
-Provide only the updated step in JSON format.
+Output:
+Provide only the updated step in valid JSON format, enclosed within a ```json code block.
 """
+    return prompt
 
 
 def get_label_classification_prompt(task_goal: str, labels_tree: List[Dict]) -> str:
@@ -400,7 +432,6 @@ Return the label path as a JSON array of labels, for example:
     "Label 2"
 ]
 ```
-
 """
 
     return prompt

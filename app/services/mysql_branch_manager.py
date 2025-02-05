@@ -323,9 +323,7 @@ class MySQLBranchManager(BranchManager):
             if not commit:
                 return None
 
-            seq_no, title, details, commit_type = parse_commit_message(
-                commit.message.get("description", "")
-            )
+            seq_no, title, details, commit_type = parse_commit_message(commit.message)
 
             return {
                 "time": commit.committed_at.isoformat(),

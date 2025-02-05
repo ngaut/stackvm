@@ -4,7 +4,7 @@ Visualization module for the VM execution and Git repository management.
 
 import json
 import logging
-
+from typing import List, Dict, Any
 from app.config.settings import VM_SPEC_CONTENT, PLAN_EXAMPLE_CONTENT
 from app.services import (
     find_first_json_object,
@@ -68,15 +68,22 @@ def generate_plan(
 
 
 def generate_updated_plan(
-    vm: PlanExecutionVM, explanation: str, key_factors: list, allowed_tools=None
+    vm: PlanExecutionVM,
+    suggestion: str,
+    allowed_tools=None,
+    plan=None,
 ):
+    if not plan:
+        plan = vm.state["current_plan"]
+
     prompt = get_plan_update_prompt(
         vm,
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(allowed_tools),
-        explanation,
-        key_factors,
+        plan,
+        suggestion,
     )
+
     new_plan = generate_plan(
         vm.llm_interface,
         vm.state["goal"],
@@ -86,7 +93,7 @@ def generate_updated_plan(
     return new_plan
 
 
-def should_update_plan(vm: PlanExecutionVM, suggestion: str):
+def should_update_plan(vm: PlanExecutionVM, suggestion: str, plan=None):
     if vm.state.get("errors"):
         logger.info("Plan update triggered due to errors.")
         return (
@@ -95,7 +102,10 @@ def should_update_plan(vm: PlanExecutionVM, suggestion: str):
             [{"factor": "VM errors", "impact": "Critical"}],
         )
 
-    prompt = get_should_update_plan_prompt(vm, suggestion)
+    if not plan:
+        plan = vm.state["current_plan"]
+
+    prompt = get_should_update_plan_prompt(vm, plan, suggestion)
     response = vm.llm_interface.generate(prompt)
 
     json_response = find_first_json_object(response)

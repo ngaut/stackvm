@@ -187,6 +187,15 @@ def code_diff(task_id, commit_hash):
 def update_task(task_id):
     """
     API endpoint to update the plan and execute the VM.
+
+    Args:
+        task_id (str): The ID of the task
+
+    Expected JSON payload:
+        - suggestion (str): Required. The suggestion for updating the plan
+        - commit_hash (str): Optional. The commit hash to update from
+        - from_scratch (bool): Optional. Whether to start from scratch. Defaults to False
+        - source_branch (str): Optional. The branch to be updated from
     """
     data = request.json
     current_app.logger.info(f"Received update_task request with data: {data}")
@@ -194,6 +203,7 @@ def update_task(task_id):
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
     from_scratch = data.get("from_scratch", False)
+    source_branch = data.get("source_branch")  # The branch to be updated from
 
     if not all([suggestion]):
         return log_and_return_error(
@@ -216,6 +226,7 @@ def update_task(task_id):
                 "commit_hash": commit_hash,
                 "suggestion": suggestion,
                 "from_scratch": from_scratch,
+                "source_branch": source_branch,  # The branch we want to update from
             },
             task.update,
             datetime.utcnow(),
