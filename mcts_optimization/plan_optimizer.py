@@ -3,6 +3,7 @@ import os
 import math
 import json
 import random
+import logging
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,8 +24,16 @@ sys.path.append(project_root)
 
 from notebooks.optimize_plan import evaulate_task_answer
 
+logger = logging.getLogger(__name__)
+
 llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL)
 
+def get_branch(task_id: str, head_commit_hash: str) -> str:
+    with SessionLocal() as session:
+        branch = session.execute(
+            select(Branch).where(Branch.task_id == task_id, Branch.head_commit_hash == head_commit_hash)
+        ).scalar_one()
+        return branch.name
 
 def get_task(task_id: str) -> Tuple[str, str, str]:
     """Get the task details"""
@@ -117,7 +126,6 @@ def get_branch_commits(
         current_commit_hash = current_commit.commit_hash
 
         while current_commit_hash != from_commit_hash:
-            print(current_commit_hash)
             branch_commits[current_commit_hash] = commits_dict[current_commit_hash]
             current_commit_hash = commits_dict[current_commit_hash]["parent_hash"]
 
@@ -143,21 +151,13 @@ class MCTSNode:
         self,
         state: MCTSState,
         parent: Optional["MCTSNode"] = None,
-        action: Optional[Dict] = None,
     ):
         self.state = state
         self.parent = parent
-        self.action = action  # Action that led to this state
         self.children: List[MCTSNode] = []
         self.visits = 0
         self.value = 0.0
-        self.untried_optimization_suggestions = self._get_optimization_suggestions()
-
-    def _get_optimization_suggestions(self) -> List[Dict]:
-        """Get list of valid actions from current state using LLM."""
-
-        # TODO: Implement this, to choose what to optimize next
-        return []
+        self.optimization_suggestions = []
 
     def get_ucb_score(self, exploration_weight: float = 1.414) -> float:
         if self.visits == 0:
@@ -175,7 +175,7 @@ class MCTSNode:
         return exploitation + exploration
 
     def reflect_on_final_answer(
-        self, goal: str, final_answer: str, metadata: Dict
+        self, goal: str, final_answer: str, metadata: Dict, branch_name: str
     ) -> Dict:
         """Reflect on the current step and suggest optimizations for remaining steps.
 
@@ -185,14 +185,13 @@ class MCTSNode:
             metadata: Additional task metadata
 
         Returns:
-            Dict containing:
             {
                 "should_optimize": bool,  # Whether optimization is possible
                 "suggestion": str,     # Optimization suggestion explanation
             }
         """
-        current_step_index = self.state.seq_no
-        if current_step_index < 0 or not self.state.plan:
+        current_step_no = self.state.seq_no
+        if current_step_no < 0 or not self.state.plan:
             return {
                 "should_optimize": False,
                 "suggestion": "No current step to analyze",
@@ -207,40 +206,44 @@ class MCTSNode:
 
         Final Answer: {final_answer}
         
-        Current Step ({current_step_index}):
-        {json.dumps(self.state.plan[current_step_index], indent=2)}
+        Current Step ({current_step_no}):
+        {json.dumps(self.state.plan[current_step_no], indent=2)}
         
         Remaining Steps:
-        {json.dumps(self.state.plan[current_step_index + 1:], indent=2)}
+        {json.dumps(self.state.plan[current_step_no + 1:], indent=2)}
 
         Based on the current step's execution and the final answer:
         1. Can the remaining steps be optimized to improve the final answer? Answer with yes or no.
         2. If yes, explain how to optimize the remaining steps.
 
         Format your response as JSON:
+        ```json
         {{
             "should_optimize": boolean,
             "suggestion": "string",
         }}
+        ```
         """
 
         try:
             # Get reflection from LLM
-            reflection_response = llm_client.generate(prompt)
-            reflection = json.loads(extract_json(reflection_response))
+            response = llm_client.generate(prompt)
+            response_json_str = extract_json(response)
+            reflection = json.loads(response_json_str)
 
             if reflection.get("should_optimize", False):
                 reflection["suggestion"] = (
                     reflection.get("suggestion", "")
-                    + f"\nPlease keep all steps up to and including the step ({current_step_index}) unchanged."
+                    + f"\nPlease keep all steps up to and including the step ({current_step_no}) unchanged."
                 )
-                self.untried_optimization_suggestions.append(reflection)
+                reflection["branch_name"] = branch_name
+                self.optimization_suggestions.append(reflection)
 
             return reflection
         except Exception as e:
-            print(f"Error during reflection: {e}")
+            logger.error("Error during reflection: %s", e)
             return {
-                "can_optimize": False,
+                "should_optimize": False,
                 "suggestion": f"Error during reflection: {str(e)}",
             }
 
@@ -291,7 +294,8 @@ class MCTSPlanOptimizer:
 
         # Find and extend leaf nodes with remaining unexecuted steps
         # Start the extension process from the root
-        self.find_and_extend_leaves(self.root)
+        # enable it later
+        # self.find_and_extend_leaves(self.root)
 
     def _build_tree_recursive(
         self, parent_node: MCTSNode, commit_hash: str, commits_dict: Dict[str, Dict]
@@ -305,29 +309,32 @@ class MCTSPlanOptimizer:
         for child_hash in child_hashes:
             child_commit = commits_dict[child_hash]
 
-            # Create child state
-            child_state = MCTSState(
-                commit_hash=child_hash,
-                seq_no=child_commit["vm_state"].get("program_counter", 0) - 1,
-                vm_state=child_commit["vm_state"],
-                plan=child_commit["vm_state"].get("current_plan", []),
-                final_answer=child_commit["vm_state"]
-                .get("variables", {})
-                .get("final_answer", None),
-            )
+            if child_commit["commit_type"] == "StepExecution":
+                # Create child state
+                child_state = MCTSState(
+                    commit_hash=child_hash,
+                    seq_no=child_commit["seq_no"],
+                    vm_state=child_commit["vm_state"],
+                    plan=child_commit["vm_state"].get("current_plan", []),
+                    final_answer=child_commit["vm_state"]
+                    .get("variables", {})
+                    .get("final_answer", None),
+                )
 
-            # Create child node
-            child_node = MCTSNode(state=child_state, parent=parent_node)
+                # Create child node
+                child_node = MCTSNode(state=child_state, parent=parent_node)
 
-            # Add to parent's children
-            parent_node.children.append(child_node)
+                # Add to parent's children
+                parent_node.children.append(child_node)
 
-            need_backprop, reward = self.simulate(child_node)
-            if need_backprop:
-                self.backpropagate(child_node, reward)
+                need_backprop, reward = self.simulate(child_node)
+                if need_backprop:
+                    self.backpropagate(child_node, reward)
 
-            # Recursively build tree for this child
-            self._build_tree_recursive(child_node, child_hash, commits_dict)
+                # Recursively build tree for this child
+                self._build_tree_recursive(child_node, child_hash, commits_dict)
+            else:
+                self._build_tree_recursive(parent_node, child_hash, commits_dict)
 
     def find_and_extend_leaves(self, node: MCTSNode):
         if not node.children:  # This is a real leaf node
@@ -360,7 +367,7 @@ class MCTSPlanOptimizer:
         node = self.root
 
         while node.children:
-            if node.untried_optimization_suggestions:
+            if node.optimization_suggestions:
                 return node
 
             # Otherwise, select best child using UCB
@@ -370,19 +377,19 @@ class MCTSPlanOptimizer:
 
         # If we reach here, we're at a leaf node with no untried actions
         # Let's analyze the execution path and get optimization suggestions
-        if node.untried_optimization_suggestions:
+        if node.optimization_suggestions:
             return node
 
         return None
 
     def expand_node(self, node: MCTSNode) -> Optional[MCTSNode]:
         """Expand selected node with a new child"""
-        if not node.untried_optimization_suggestions:
+        if not node.optimization_suggestions:
             return None
 
         # Select random untried action
-        reflection = random.choice(node.untried_optimization_suggestions)
-        node.untried_optimization_suggestions.remove(reflection)
+        reflection = random.choice(node.optimization_suggestions)
+        node.optimization_suggestions.remove(reflection)
 
         # Create new state by applying action
         new_state = self._apply_reflection(node, reflection)
@@ -409,6 +416,7 @@ class MCTSPlanOptimizer:
             new_branch_name=branch_name,
             commit_hash=current_commit_hash,
             suggestion=reflection["suggestion"],
+            source_branch=reflection["branch_name"],
         )
 
         if res.get("success", False) is False:
@@ -422,7 +430,7 @@ class MCTSPlanOptimizer:
 
         # Find root commit (commit with no parent)
         root_commit_hash = next(
-            hash for hash, data in commits_dict.items() if not data["parent_hash"]
+            hash for hash, data in commits_dict.items() if data["parent_hash"] == current_commit_hash
         )
         commits_dict[root_commit_hash]["parent_hash"] = current_commit_hash
         commits_dict[current_commit_hash] = {"children": [root_commit_hash]}
@@ -442,7 +450,7 @@ class MCTSPlanOptimizer:
         """
         try:
 
-            if node.state.final_answer is None:
+            if node.state.final_answer is not None:
                 eval_response = evaulate_task_answer(
                     self.goal,
                     self.metadata,
@@ -458,8 +466,10 @@ class MCTSPlanOptimizer:
                 # TODO: Add bonus for other quality assessment
 
                 return True, base_score
+            elif not node.children:
+                return True, 0
         except Exception as e:
-            print(f"Error evaluating state: {e}")
+            logger.error("Error evaluating state: %s", e)
 
         return False, 0
 
@@ -485,11 +495,12 @@ class MCTSPlanOptimizer:
             return
 
         final_answer = node.state.final_answer
+        branch_name = get_branch(self.task_id, node.state.commit_hash)
 
         while node is not None:
             node.visits += 1  # Increment visit count
             node.value += reward  # Accumulate reward value
-            node.reflect_on_final_answer(self.goal, final_answer, self.metadata)
+            node.reflect_on_final_answer(self.goal, final_answer, self.metadata, branch_name)
             node = node.parent  # Move up to parent
 
     def optimize(self) -> List[MCTSNode]:
@@ -504,7 +515,7 @@ class MCTSPlanOptimizer:
             # Selection
             selected_node = self.select_node()
             if selected_node is None:
-                print("No expandable nodes found in tree")
+                logger.info("No expandable nodes found in tree")
                 break  # Or implement some tree reset/regeneration logic
 
             # Expansion
