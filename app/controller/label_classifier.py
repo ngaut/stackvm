@@ -1,4 +1,5 @@
 import json
+import logging
 import copy
 from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
@@ -14,9 +15,11 @@ from app.services.prompts import (
 from app.services.llm_interface import LLMInterface
 from app.models.label import Label
 from app.database import SessionLocal
-from app.config.settings import LLM_PROVIDER, FAST_LLM_MODEL
+from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.utils import extract_json
 from app.models.task import Task
+
+logger = logging.getLogger(__name__)
 
 
 def get_label_path(label: Label) -> List[str]:
@@ -313,7 +316,7 @@ class LabelClassifier:
     """
 
     def __init__(self):
-        self.llm_interface = LLMInterface(LLM_PROVIDER, FAST_LLM_MODEL)
+        self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
         self.label_tree = LabelTree()
 
     def generate_label_path(
@@ -328,6 +331,7 @@ class LabelClassifier:
         Returns:
             List[str]: A list of label names from root to leaf.
         """
+        logger.info(f"Using {LLM_MODEL} for label classification")
         # Generate enhanced classification prompt
         prompt = get_label_classification_prompt_wo_description(
             task_goal,

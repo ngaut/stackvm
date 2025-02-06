@@ -15,7 +15,7 @@ from app.models.task import Task as TaskORM
 from app.controller.task import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from app.config.settings import REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL
+from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
 from app.services.llm_interface import LLMInterface
 from app.services.utils import parse_commit_message
 
@@ -27,7 +27,7 @@ from notebooks.optimize_plan import evaulate_task_answer
 
 logger = logging.getLogger(__name__)
 
-llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_FAST_LLM_MODEL)
+llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 
 
 def get_branch(task_id: str, head_commit_hash: str) -> str:

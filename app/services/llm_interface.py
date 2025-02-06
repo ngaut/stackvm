@@ -8,6 +8,7 @@ import json
 import logging
 from google import genai
 import boto3
+from app.config.settings import MODEL_CONFIGS
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,23 @@ class BaseLLMProvider(ABC):
         """
         pass
 
+    def _get_default_model_config(self) -> dict:
+        """Get model-specific configuration parameters."""
+        # First check if there's a user-defined config in environment variables
+        env_config = MODEL_CONFIGS.get(self.model, {})
+        if env_config:
+            return env_config
+
+        # If no environment config, use default configs
+        if self.model == "gpt-4o":
+            return {
+                "temperature": 0,
+            }
+        elif self.model == "o3-mini":
+            return {"reasoning_effort": "medium"}
+
+        return {}
+
 
 class OpenAIProvider(BaseLLMProvider):
     """
@@ -72,20 +90,6 @@ class OpenAIProvider(BaseLLMProvider):
             )
         self.client = openai.OpenAI()
         self._default_model_config = self._get_default_model_config()
-
-    def _get_default_model_config(self) -> dict:
-        """Get model-specific configuration parameters."""
-
-        if self.model == "gpt-4o":
-            return {
-                "temperature": 0,
-            }
-        elif self.model == "o3-mini":
-            return {
-                "reasoning_effort": "medium",
-            }
-
-        return {}
 
     def _update_kwargs(self, kwargs: dict) -> dict:
         # if config exists both in default and kwargs, use kwargs

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 
 from app.utils import extract_json
-from app.config.settings import LLM_PROVIDER, LLM_MODEL
+from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
 from app.services import LLMInterface
 from app.instructions.tools import tool
 
@@ -183,13 +183,13 @@ class KnowledgeGraphClient:
 
 
 knowledge_client = KnowledgeGraphClient(f"{AUTOFLOW_BASE_URL}/api/v1", KB_ID)
-llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 if os.getenv("GOOGLE_API_KEY", None):
-    eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash-exp")
+    eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash")
     logger.info("Using Gemini 2.0 Flash Evaluation LLM")
 else:
     eval_llm_client = llm_client
-    logger.info(f"Using {LLM_MODEL} Evaluation LLM")
+    logger.info(f"Using {REASON_LLM_MODEL} Evaluation LLM")
 
 
 class MetaGraph:
