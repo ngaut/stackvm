@@ -31,16 +31,13 @@ BACKEND_CORS_ORIGINS: list[str] = parse_cors(os.environ.get("BACKEND_CORS_ORIGIN
 # LLM settings
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 LLM_MODEL = os.environ.get("LLM_MODEL", "aya-expanse")
-FAST_LLM_MODEL = os.environ.get("FAST_LLM_MODEL", None)
 
 # Reasoning model settings (fallback to legacy settings if not set)
 REASON_LLM_PROVIDER = os.environ.get("REASON_LLM_PROVIDER", None)
 REASON_LLM_MODEL = os.environ.get("REASON_LLM_MODEL", None)
-REASON_FAST_LLM_MODEL = os.environ.get("REASON_FAST_LLM_MODEL", None)
 if REASON_LLM_PROVIDER is None or REASON_LLM_MODEL is None:
     REASON_LLM_PROVIDER = LLM_PROVIDER
     REASON_LLM_MODEL = LLM_MODEL
-    REASON_FAST_LLM_MODEL = FAST_LLM_MODEL
 
 # Common LLM provider settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -58,13 +55,6 @@ GIT_REPO_PATH = os.environ.get("GIT_REPO_PATH", "/tmp/stack_vm/runtime/")
 GENERATED_FILES_DIR = os.environ.get("GENERATED_FILES_DIR", "/tmp/stack_vm/generated/")
 VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")
 PLAN_EXAMPLE_PATH = os.path.join(os.getcwd(), "plan_example.md")
-
-# Set fast models to main models if not specified
-if FAST_LLM_MODEL is None:
-    FAST_LLM_MODEL = LLM_MODEL
-
-if REASON_FAST_LLM_MODEL is None:
-    REASON_FAST_LLM_MODEL = REASON_LLM_MODEL
 
 if not os.path.exists(GIT_REPO_PATH):
     try:
@@ -87,3 +77,17 @@ try:
 except FileNotFoundError:
     print(f"Warning: spec.md file not found at {VM_SPEC_PATH}")
     VM_SPEC_CONTENT = ""
+
+
+# Model configurations
+def parse_model_configs() -> dict:
+    """Parse MODEL_CONFIGS from environment variable"""
+    config_str = os.environ.get("MODEL_CONFIGS", "{}")
+    try:
+        return json.loads(config_str)
+    except json.JSONDecodeError:
+        print(f"Warning: Invalid MODEL_CONFIGS format: {config_str}")
+        return {}
+
+
+MODEL_CONFIGS = parse_model_configs()
