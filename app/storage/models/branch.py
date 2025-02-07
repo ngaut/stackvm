@@ -2,7 +2,6 @@ from sqlalchemy import (
     Column,
     String,
     DateTime,
-    ForeignKey,
     BigInteger,
     JSON,
     UniqueConstraint,
@@ -11,8 +10,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from app.database import Base
-import uuid
+from app.config.database import Base
 
 
 class Commit(Base):

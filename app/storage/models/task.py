@@ -4,19 +4,14 @@ from sqlalchemy import (
     Column,
     String,
     Text,
-    Enum,
     DateTime,
     JSON,
-    ForeignKey,
-    Boolean,
     ForeignKeyConstraint,
-    Index,
 )
 from datetime import datetime
-from app.database import Base
+from app.config.database import Base
 from sqlalchemy.orm import relationship
 from sqlalchemy import Enum as SQLAlchemyEnum
-from .label import Label
 
 
 # Define Python Enums for task status and evaluation status

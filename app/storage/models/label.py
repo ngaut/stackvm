@@ -1,15 +1,13 @@
 from sqlalchemy import (
     Column,
     String,
-    ForeignKey,
     DateTime,
     Text,
     ForeignKeyConstraint,
-    Index,
 )
 from datetime import datetime
 from sqlalchemy.orm import relationship
-from app.database import Base
+from app.config.database import Base
 import uuid
 
 

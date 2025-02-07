@@ -2,7 +2,6 @@
 Visualization module for the VM execution and Git repository management.
 """
 
-import os
 import json
 import logging
 from datetime import datetime, timedelta
@@ -22,20 +21,18 @@ from flask import (
 )
 from flask_cors import CORS
 
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.config.settings import (
     BACKEND_CORS_ORIGINS,
     GENERATED_FILES_DIR,
-    TASK_QUEUE_WORKERS,
 )
 from app.utils import parse_goal_response_format
 from app.storage.models import TaskStatus, EvaluationStatus
 
 from .streaming_protocol import StreamingProtocol
-from ..core.task.task import TaskService
-from ..core.task.queue import TaskQueue
-from ..core.task.label_classifier import get_label_path
-from ..core.plan.plan import PlanUnavailableError
+from app.core.task.manager import TaskService
+from app.core.labels.classifier import get_label_path
+from app.core.plan.generator import PlanUnavailableError
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 
@@ -52,10 +49,6 @@ if BACKEND_CORS_ORIGINS and len(BACKEND_CORS_ORIGINS) > 0:
 logger = logging.getLogger(__name__)
 
 ts = TaskService()
-
-# create global task queue instance
-task_queue = TaskQueue(max_concurrent_tasks=TASK_QUEUE_WORKERS)
-task_queue.start_workers()
 
 
 def log_and_return_error(message, error_type, status_code):
@@ -219,7 +212,7 @@ def update_task(task_id):
 
     try:
         branch_name = f"plan_update_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        task_queue.add_task(
+        ts.task_queue.add_task(
             task_id,
             {
                 "new_branch_name": branch_name,
@@ -271,8 +264,7 @@ def dynamic_update(task_id):
 
     try:
         branch_name = f"dynamic_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        task_queue.add_task(
+        ts.task_queue.add_task(
             task_id,
             {
                 "new_branch_name": branch_name,

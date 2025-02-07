@@ -2,11 +2,10 @@ import difflib
 import re
 import logging
 import threading
-import time
 from types import MappingProxyType
 import datetime
 
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.storage.models import Task
 
 from apscheduler.schedulers.background import BackgroundScheduler

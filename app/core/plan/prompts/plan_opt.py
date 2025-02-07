@@ -3,7 +3,13 @@ import datetime
 
 
 def get_plan_update_prompt(
-    vm, vm_spec_content, tools_instruction_content, plan, suggestion, key_factors=None
+    goal,
+    vm_program_counter,
+    vm_spec_content,
+    tools_instruction_content,
+    plan,
+    suggestion,
+    key_factors=None,
 ):
     """
     Get the prompt for updating the plan.
@@ -12,14 +18,14 @@ def get_plan_update_prompt(
 Analyze the current VM execution state and update the plan based on suggestions and the current execution results.
 
 Goal:
-{vm.state['goal']}
+{goal}
 
 Current Plan:
 {json.dumps(plan, indent=2)}
 
-Current Program Counter: {vm.state['program_counter']}
+Current Program Counter: {vm_program_counter}
 
-Last Executed Step: {json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+Last Executed Step: {json.dumps(plan[vm_program_counter - 1], indent=2) if vm_program_counter > 0 else "No steps executed yet"}
 
 **Suggestion for plan update**: {suggestion}
 """
@@ -95,7 +101,9 @@ Ensure the plan is a valid JSON and is properly formatted and encapsulated withi
     return prompt
 
 
-def get_should_update_plan_prompt(vm, plan, suggestion):
+def get_should_update_plan_prompt(
+    goal, vm_program_counter, plan, vm_variables, suggestion
+):
     """
     Get the prompt for determining if the plan should be updated.
     """
@@ -117,7 +125,7 @@ def get_should_update_plan_prompt(vm, plan, suggestion):
 Analyze the current VM execution state and determine if the plan needs to be updated.
 
 Goal:
-{vm.state['goal']}
+{goal}
 
 User Suggestion for plan update:
 {suggestion}
@@ -126,13 +134,13 @@ Current Plan:
 {json.dumps(plan, indent=2)}
 
 Current Program Counter:
-{vm.state['program_counter']}
+{vm_program_counter}
 
 Last Executed Step:
-{json.dumps(plan[vm.state['program_counter'] - 1], indent=2) if vm.state['program_counter'] > 0 else "No steps executed yet"}
+{json.dumps(plan[vm_program_counter - 1], indent=2) if vm_program_counter > 0 else "No steps executed yet"}
 
 Current Variables:
-{json.dumps(vm.get_all_variables(), indent=2)}
+{json.dumps(vm_variables, indent=2)}
 
 Evaluate the following aspects:
 1. Goal Alignment: Is the current plan still effectively working towards the goal?
@@ -155,13 +163,13 @@ Ensure your response is thorough yet concise, focusing on the most critical aspe
 
 
 def get_step_update_prompt(
-    vm, seq_no, vm_spec_content, tools_instruction_content, suggestion
+    plan, vm_variables, seq_no, vm_spec_content, tools_instruction_content, suggestion
 ):
     """
     Get the prompt for updating a step.
     """
-    current_step = vm.state["current_plan"][seq_no]
-    current_variables = json.dumps(vm.get_all_variables(), indent=2)
+    current_step = plan[seq_no]
+    current_variables = json.dumps(vm_variables, indent=2)
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 You are tasked with updating a specific step in the VM execution plan.

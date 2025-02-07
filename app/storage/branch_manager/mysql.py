@@ -6,7 +6,7 @@ from sqlalchemy.orm import scoped_session, Session
 from deepdiff import DeepDiff
 from contextlib import contextmanager
 
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.storage.models import Branch, Commit
 from app.storage.branch_manager.commit import parse_commit_message
 from app.storage.branch_manager import BranchManager

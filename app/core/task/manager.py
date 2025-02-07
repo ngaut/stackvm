@@ -8,21 +8,31 @@ from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session, joinedload
 
 from app.storage.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
-from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.config.settings import (
+    REASON_LLM_PROVIDER,
+    REASON_LLM_MODEL,
+    TASK_QUEUE_WORKERS,
+)
 from app.storage.branch_manager import GitManager, MySQLBranchManager
 from app.core.vm.engine import PlanExecutionVM
 from app.core.plan.utils import parse_step
 
-from app.llm.prompts import get_step_update_prompt
+from app.core.task.queue import TaskQueue
+
+from app.core.plan.prompts import get_step_update_prompt
 
 from app.llm.interface import LLMInterface
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
 from app.storage.branch_manager import CommitType
 
-from ..plan.plan import generate_updated_plan, should_update_plan, generate_plan
-from .label_classifier import LabelClassifier
+from app.core.plan.generator import (
+    generate_updated_plan,
+    generate_plan,
+)
+from app.core.plan.optimizer import should_update_plan
+from app.core.labels.classifier import LabelClassifier
 from .simple_cache import initialize_cache
 
 logger = logging.getLogger(__name__)
@@ -341,7 +351,14 @@ class Task:
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
         updated_plan = generate_updated_plan(
-            vm, suggestion, key_factors, self.get_allowed_tools(), plan
+            self.llm_interface,
+            self.task_orm.goal,
+            vm.state["program_counter"],
+            plan or vm.state["current_plan"],
+            vm.get_all_variables(),
+            suggestion,
+            key_factors,
+            self.get_allowed_tools(),
         )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
@@ -480,7 +497,12 @@ class Task:
 
                 for _ in range(steps):
                     should_update, explanation, key_factors = should_update_plan(
-                        vm, suggestion
+                        self.llm_interface,
+                        self.task_orm.goal,
+                        vm.state["program_counter"],
+                        vm.state["current_plan"],
+                        vm.get_all_variables(),
+                        suggestion,
                     )
                     if should_update:
                         new_commit_hash = self.update_plan(
@@ -653,6 +675,8 @@ class Task:
 class TaskService:
     def __init__(self):
         self.llm_interface = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+        self.task_queue = TaskQueue(max_concurrent_tasks=TASK_QUEUE_WORKERS)
+        self.task_queue.start_workers()
 
     def create_task(
         self,

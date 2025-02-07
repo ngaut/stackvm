@@ -7,7 +7,7 @@ sys.path.append(project_root)
 import uuid
 from datetime import datetime
 
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.storage.models import Namespace, Label
 
 # Create a new session

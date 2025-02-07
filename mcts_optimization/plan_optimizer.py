@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.utils.json import extract_json
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.storage.models import Branch, Commit, Task as TaskORM
-from app.core.task.task import Task
+from app.core.task.manager import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL

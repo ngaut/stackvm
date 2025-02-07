@@ -5,13 +5,13 @@ from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
 import uuid
 
-from app.llm.prompts import (
+from app.core.labels.prompts import (
     get_label_classification_prompt,
     get_label_classification_prompt_wo_description,
 )
 from app.llm.interface import LLMInterface
 from app.storage.models import Label, Task
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.utils import extract_json
 

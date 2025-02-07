@@ -1,14 +1,13 @@
-import json
 import logging
+import json
 from flask import Flask
 import click
 from datetime import datetime
 
 from app.api.api_routes import api_blueprint, main_blueprint
-from app.llm.interface import LLMInterface
-from app.core.task.task import TaskService
+from app.core.task.manager import TaskService
 from app.instructions import global_tools_hub
-from app.database import SessionLocal
+from app.config.database import SessionLocal
 from app.storage.models import Namespace
 
 # Initialize Flask app
@@ -17,7 +16,7 @@ app.register_blueprint(api_blueprint)
 app.register_blueprint(main_blueprint)
 
 
-# Setup logging
+# Initialize logger
 def setup_logging(app):
     """Configure logging for the application."""
     logging.basicConfig(
@@ -96,15 +95,6 @@ def execute_task(goal, response_format, namespace_name):
         )
     task.execute()
     logger.info("VM execution completed")
-
-
-@stackvm.command("serve")
-@click.option("--port", default=5000, help="Port to run the visualization server on")
-@click.option("--debug", is_flag=True, help="Run server in debug mode")
-def serve(port, debug):
-    """Start the visualization server."""
-    logger.info("Starting visualization server...")
-    app.run(debug=debug, port=port)
 
 
 # Namespace management commands
