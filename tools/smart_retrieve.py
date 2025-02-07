@@ -11,7 +11,7 @@ from functools import wraps
 
 from app.utils import extract_json
 from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
-from app.services import LLMInterface
+from app.llm.interface import LLMInterface
 from app.instructions.tools import tool
 
 logger = logging.getLogger(__name__)
