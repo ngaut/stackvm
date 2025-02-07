@@ -4,9 +4,9 @@ from flask import Flask
 import click
 from datetime import datetime
 
-from app.controller.api_routes import api_blueprint, main_blueprint
+from app.api.api_routes import api_blueprint, main_blueprint
 from app.llm.interface import LLMInterface
-from app.controller.task import TaskService
+from app.core.task.task import TaskService
 from app.instructions import global_tools_hub
 from app.database import SessionLocal
 from app.storage.models import Namespace

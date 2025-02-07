@@ -32,10 +32,10 @@ from app.utils import parse_goal_response_format
 from app.storage.models import TaskStatus, EvaluationStatus
 
 from .streaming_protocol import StreamingProtocol
-from .task import TaskService
-from .task_queue import TaskQueue
-from .label_classifier import get_label_path
-from .plan import PlanUnavailableError
+from ..core.task.task import TaskService
+from ..core.task.queue import TaskQueue
+from ..core.task.label_classifier import get_label_path
+from ..core.plan.plan import PlanUnavailableError
 
 api_blueprint = Blueprint("api", __name__, url_prefix="/api")
 

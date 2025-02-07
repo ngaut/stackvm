@@ -6,9 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, List
 
 from app.instructions import InstructionHandlers
-from app.services.utils import StepType
-from app.services.step import Step, StepStatus
-from app.services.variable_manager import VariableManager
+from app.storage.branch_manager import CommitType
+from app.core.vm.step import Step, StepStatus
+from app.core.vm.variable_manager import VariableManager
 from app.storage.branch_manager import BranchManager
 from app.llm.interface import LLMInterface
 
@@ -294,7 +294,7 @@ class PlanExecutionVM:
 
             commit_hash = self.branch_manager.commit_changes(
                 commit_info={
-                    "type": StepType.STEP_EXECUTION.value,
+                    "type": CommitType.STEP_EXECUTION.value,
                     "seq_no": current_step.seq_no,
                     **commit_message_dict,
                 }

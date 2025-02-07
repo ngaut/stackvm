@@ -4,13 +4,12 @@ Visualization module for the VM execution and Git repository management.
 
 import json
 import logging
-from typing import List, Dict, Any
 from app.config.settings import VM_SPEC_CONTENT, PLAN_EXAMPLE_CONTENT
-from app.services import (
+from app.core.plan.utils import (
     find_first_json_object,
     parse_plan,
 )
-from app.services import PlanExecutionVM
+from app.core.vm.engine import PlanExecutionVM
 from app.llm.prompts import (
     get_plan_update_prompt,
     get_should_update_plan_prompt,

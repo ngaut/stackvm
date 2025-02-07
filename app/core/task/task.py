@@ -10,19 +10,18 @@ from sqlalchemy.orm import Session, joinedload
 from app.storage.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
 from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
 from app.storage.branch_manager import GitManager, MySQLBranchManager
-from app.services import (
-    PlanExecutionVM,
-    parse_step,
-    StepType,
-)
+from app.core.vm.engine import PlanExecutionVM
+from app.core.plan.utils import parse_step
+
 from app.llm.prompts import get_step_update_prompt
 
 from app.llm.interface import LLMInterface
 from app.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
+from app.storage.branch_manager import CommitType
 
-from .plan import generate_updated_plan, should_update_plan, generate_plan
+from ..plan.plan import generate_updated_plan, should_update_plan, generate_plan
 from .label_classifier import LabelClassifier
 from .simple_cache import initialize_cache
 
@@ -351,7 +350,7 @@ class Task:
         vm.save_state()
         new_commit_hash = vm.branch_manager.commit_changes(
             commit_info={
-                "type": StepType.PLAN_UPDATE.value,
+                "type": CommitType.PLAN_UPDATE.value,
                 "seq_no": str(vm.state["program_counter"]),
                 "description": suggestion,
                 "input_parameters": {"updated_plan": updated_plan},
@@ -584,7 +583,7 @@ class Task:
 
                     new_commit_hash = vm.branch_manager.commit_changes(
                         commit_info={
-                            "type": StepType.STEP_OPTIMIZATION.value,
+                            "type": CommitType.STEP_OPTIMIZATION.value,
                             "seq_no": str(vm.state["program_counter"]),
                             "description": suggestion,
                             "input_parameters": {"updated_step": updated_step},

@@ -8,7 +8,7 @@ from contextlib import contextmanager
 
 from app.database import SessionLocal
 from app.storage.models import Branch, Commit
-from app.services.utils import parse_commit_message
+from app.storage.branch_manager.commit import parse_commit_message
 from app.storage.branch_manager import BranchManager
 
 logger = logging.getLogger(__name__)
