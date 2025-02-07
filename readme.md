@@ -175,26 +175,39 @@ The reasoning model is specifically used for:
 
 ## Project Structure
 
-- `app/config/settings.py`: Configuration settings, including environment variable loading and default paths.
-- `app/controller/api_routes.py`: Defines API routes for the Flask application, handling VM data retrieval and rendering the main interface.
-- `app/controller/plan.py`: Handles plan generation and updating based on suggestions.
-- `app/controller/task.py`: Manages task-related operations within the VM.
-- `app/services/prompts.py`: Contains functions to generate prompts for updating VM execution steps.
-- `app/services/utils.py`: Utility functions for state management and commit message parsing.
-- `app/services/branch_manager.py`: Manage branches for plan execution using Git.
-- `app/services/mysql_branch_manager.py`: Manage branches for plan execution using TiDB.
-- `app/services/llm_interface.py`: Interface for interacting with the OpenAI language model.
-- `app/services/variable_manager.py`: Manages variable interpolation and references within the VM.
-- `app/services/vm.py`: Implements the `PlanExecutionVM` class for executing plans.
-- `app/tools/instruction_handlers.py`: Handles instruction execution and API interactions for knowledge graph searches.
-- `app/tools/retrieve.py`: Implements retrieval logic using the TiDB AI API.
-- `app/models/namespace.py`: Defines the Namespace model for managing tool access and configurations.
-- `spec.md`: Specifications and requirements for the project, detailing the VM's functionality and design.
-- `plan_example.md`: Example plan demonstrating the instruction execution and plan structure.
-- `models/task.py`: Defines the `Task` model for managing tasks within the database.
-- `templates/index.html`: HTML template for the main interface.
-- `static/scripts.js`: JavaScript for front-end functionalities, including chart management and UI interactions.
-- `static/styles.css`: CSS styles for the web interface, ensuring a responsive and user-friendly design.
+- `app/`: Main application directory
+  - `api/`: API endpoints and routes
+    - `api_routes.py`: API routes for task management and VM operations
+  - `config/`: Configuration settings
+    - `settings.py`: Environment variables and application settings
+    - `database.py`: Database configuration
+  - `core/`: Core business logic
+    - `task/`: Task management
+      - `manager.py`: Task creation and management
+      - `queue.py`: Asynchronous task queue implementation
+    - `vm/`: Virtual Machine implementation
+      - `engine.py`: Plan execution engine
+      - `step.py`: Step execution logic
+    - `plan/`: Plan management
+      - `generator.py`: Plan generation and updates
+      - `utils.py`: Plan-related utilities
+    - `labels/`: Label classification system
+  - `llm/`: Language Model integration
+    - `base.py`: Abstract base class for LLM providers
+    - `interface.py`: LLM provider interface
+  - `storage/`: Data storage and persistence
+    - `branch_manager/`: Branch management implementations
+      - `git.py`: Git-based branch manager
+      - `mysql.py`: MySQL-based branch manager
+    - `models/`: Database models
+  - `utils/`: Utility functions
+    - `logging.py`: Centralized logging configuration
+  - `instructions/`: Tool definitions and handlers
+    - `tools.py`: Tool registration and management
+    - `global_tools_hub.py`: Global tool registry
+
+- `alembic/`: Database migration scripts
+- `notebooks/`: Jupyter notebooks for maintanence
 
 ## Features
 
