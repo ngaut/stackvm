@@ -30,8 +30,8 @@ from app.storage.branch_manager import CommitType
 from app.core.plan.generator import (
     generate_updated_plan,
     generate_plan,
+    should_update_plan,
 )
-from app.core.plan.optimizer import should_update_plan
 from app.core.labels.classifier import LabelClassifier
 from .simple_cache import initialize_cache
 
