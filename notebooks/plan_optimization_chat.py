@@ -8,6 +8,10 @@ import datetime
 from pydantic import BaseModel, Field
 from typing import Generator, Any, List, Dict
 from dataclasses import dataclass
+from app.llm.interface import LLMInterface
+from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.core.plan.evaluator import evaulate_answer
+from app.core.plan.optimizer import optimize_whole_plan
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -22,6 +26,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 assert OPENAI_API_KEY is not None, "OPENAI_API_KEY environment variable is not set."
 
 fc_llm = openai.OpenAI(api_key=OPENAI_API_KEY)
+eval_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 
 
 def get_task_answer(task_id: str, branch_name: str) -> dict:
@@ -97,111 +102,11 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
             raise e
 
 
-def evaulate_task_answer(goal: str, metadata: dict, final_answer: str, plan: str):
-    evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
-
-------------------------------------
-KEY POINTS TO CONSIDER IN YOUR EVALUATION:
-1. Deep Analysis of the User's Problem:
-  - Does the Plan demonstrate a sufficient understanding of the user's overall background, constraints, and specific questions?
-  - Has the Plan identified the critical context that shapes the user's goal (e.g., large data volumes, performance constraints, GC usage, version details, etc.)?
-
-2. Instructions Context & Coverage:
-  - For each instruction in the Plan (including steps like searching for relevant data or generating partial solutions), verify whether it explicitly or implicitly incorporates the "specific problem background + user's question."
-  - Do the instructions effectively handle the sub-questions or concerns raised by the user? Are any key points missing or glossed over?
-
-3. Verification of Problem Decomposition and Factual Information Retrieval for TiDB-Related Goals
-  - Problem Decomposition - If the Goal is TiDB-related, verify whether the Plan has effectively broken down the Goal into distinct sub-questions.
-  - Individual Retrieval Methods for Each Sub-Question - For each sub-question, verify wheter the plan has applied the following retrieval methods independently:
-    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
-    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
-  - Ensuring Relevance and Separation:
-    - Confirm that each sub-question is handled separately, ensuring that the retrieval process targets the most relevant data for that specific sub-question.
-    - Ensure that retrieval operations for different sub-questions are not combined, preventing the mixing of data across sub-questions.
-
-4. Completeness of the Plan:
-   • Does the Plan address all major aspects of the user's problem or goal?
-   • Are there any unanswered questions or issues that the user might still have after following the Plan?
-
-5. Cohesion of Plan Steps:
-   • Assess whether the Plan's instructions flow logically from one step to the next, and whether they form a coherent end-to-end workflow.
-   • Consider whether the Plan's approach to searching for data, filtering out irrelevant information, and eventually generating a final integrated solution is clearly articulated and consistent with the user's context.
-
-When providing your evaluation, reference these points and also consider the following general guidelines:
-
-- Direct Problem Resolution: The Plan and Final Answer should yield a clear, actionable solution or next step.
-- Clarification of User Intent: If the Goal is unclear or missing details, verify if the Plan seeks clarification properly, clarification is enough for this kind of goa, no other process is needed.
-- Unrelated to TiDB: If the Goal is not TiDB-related, ensure the Plan provides a polite response indicating the capability to assist with TiDB-related queries only.
-- Providing Relevant Information: Ensure the solution or Plan steps remain focused on the user's needs, without extraneous or off-topic content.
-- Maintaining Conversational Flow: The explanation or solution should guide the user logically from their question to the solution, smoothly transitioning between steps.
-
-------------------------------------
-YOUR OUTPUT FORMAT:
-You must return a JSON object with the following keys:
-1. "accept": Boolean value (true or false) indicating whether the Final Answer effectively resolves the Goal.
-2. "answer_quality_assessment_explanation": A detailed explanation justifying why the final answer does or does not meet the goal, referencing any guidelines or key points above.
-3. "plan_adjustment_suggestion": If "accept" is false, provide a comprehensive analysis of how the Plan could be improved to fully address the user's context and questions. Propose modifications or additional steps in detail.
-4. "goal_classification": (Optional) A categorization of the goal type based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed").
-
-------------------------------------
-EXAMPLE OUTPUT:
-{{
-  "accept": false,
-  "answer_quality_assessment_explanation": "...",
-  "plan_adjustment_suggestion": "...",
-  "goal_classification": "Direct Problem Resolution"
-}}
-
-Below are the inputs for your evaluation:
-
-## Goal
-{goal}
-
-## Supplementary goal information
-{metadata.get('response_format')}
-
-## Final Answer
-{final_answer}
-
-## Plan
-{plan}
-
-Now Let's think step by step! Do you best on this evaluation task!
-"""
-
-    response = fc_llm.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "user", "content": evaluation_prompt},
-        ],
-        temperature=0,
-    )
-    return response.choices[0].message.content.strip()
-
-
 def update_plan(goal: str, metadata: dict, plan: str, suggestion: str | Dict):
     """
     Get the prompt for updating the plan.
     """
-    updated_prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-
-Here are the inputs:
-
-## Goal
-{goal}
-
-The supplementary information for Goal:
-{metadata.get('response_format')}
-
-## Previous Plan:
-{plan}
-
-## **Evaluation Feedback**:
-{suggestion}
-
-------------------------------------
-
-Important Requirements for Revising the Plan:
+    user_instructions = f"""Important Requirements for Revising the Plan:
 
 1. Deeply Understand the User Context:
   - Revisit the user's specific problem background, constraints, and sub-questions.
@@ -224,101 +129,10 @@ Important Requirements for Revising the Plan:
 5. Cohesion and Executability:
   - Check that the sequence of instructions (seq_no) flows logically and forms a coherent, end-to-end solution.
   - Pay attention to the final assignment to “final_answer”, ensuring it incorporates all relevant information from the prior steps.
-
-------------------------------------
-As the evaluating feedback said, the previous plan has been rejected or found insufficient in fully addressing the goal. Please revise the previous plan based on these guidelines and the evaluation feedback.
-
-Make sure the updated plan adheres to the Executable Plan Specifications:
-
-```
-
-1. Overview
-
-- Functionality: Executes plans composed of sequential instructions, each performing specific operations and interacting with a variable store.
--	Key Features:
-  - Variable Store: A key-value store for storing and accessing variables by name.
-  - Instruction Execution: Executes instructions in order based on seq_no, with support for conditional jumps.
-
-2. Instruction Format
-
-Each instruction is a JSON object with:
-- seq_no: Unique, auto-increment integer starting from 0.
-- type: Instruction type (assign, jmp, calling, reasoning).
-- parameters: Object containing necessary parameters for the instruction.
-
-3. Supported Instructions
-
-3.1 assign
-- Purpose: Assign values to variables.
-- Parameters: Key-value pairs where keys are variable names and values are direct values or variable references.
-
-3.2 jmp
-- Purpose: Conditional or unconditional jump to a specified seq_no.
-- Parameters:
-  - Conditional Jump:
-    - condition_prompt (optional): Prompt to evaluate condition.
-    - jump_if_true: seq_no to jump if condition is true.
-    - jump_if_false (optional): seq_no to jump if condition is false.
-  - Unconditional Jump:
-    - target_seq: seq_no to jump to.
-
-3.3 calling
-- Purpose: Invoke a tool or function.
-- Parameters:
-  - tool_name: Name of the tool to call.
-	- tool_params: Arguments for the tool, can include variable references.
-	- output_vars (optional): Variables to store the tool's output.
-
-3.4 reasoning
-- Purpose: Provide detailed reasoning and analysis.
-- Parameters:
-  - chain_of_thoughts: Detailed reasoning process.
-  - dependency_analysis: Description of dependencies between steps.
-
-4. Parameters and Variable References
-- Variable Reference Format: Dynamic values based on previous steps, format: ${{variable_name}}
-- Direct Values: Fixed, known values.
-
-5. Plan Structure
-  - Sequential Execution: Instructions execute in order based on seq_no.
-  - Control Flow: Use jmp for conditional jumps and loops.
-
-6. Supported Tools for Calling Instructions (other tool is unavailble)
-  - llm_generate: Generates text content based on prompts and context.
-  - vector_search: Performs vector-based searches to retrieve relevant information.
-  - retrieve_knowledge_graph: Retrieves structured data from a knowledge graph.
-
-7. Best Practices
-  -	Sequence Numbering: Ensure seq_no values are unique and sequential.
-  - Variable Naming: Use descriptive names for clarity and maintainability.
-  - Final Answer: The last instruction must assign to the variable final_answer.
-	- Language Consistency:
-    - All instructions contributing to final_answer must be in the same language as the goal.
-    - Ensure variable content matches the target language.
-  - For each query, use both retrieve_knowledge_graph and vector_search to search information, then use llm_generate to summarize the relevant information for the query.
-```
-
--------------------------------
-
-Now, let's think step by step, and revise the plan.
-1. Incorporate the Evaluation Feedback by mapping each identified issue to a concrete fix in your instructions.
-2. Ensure your revised Plan has all instructions needed to search, filter, and integrate relevant data before generating the final, comprehensive answer.
-
-**Output**:
-1. **Provide the complete updated plan in JSON format**, ensuring it fully complies with the executable plan specification. **Within the ```json``` block, do not use any additional triple backticks (` ``` `) to prevent parsing issues.**
-2. **Provide a summary of the changes made to the plan**, including a clear diff comparing the previous plan with the updated plan."""
-
-    llm_response = fc_llm.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "user", "content": updated_prompt},
-        ],
-        temperature=0,
+"""
+    return optimize_whole_plan(
+        eval_llm, goal, metadata, plan, suggestion, user_instructions
     )
-
-    plan = llm_response.choices[0].message.content.strip()
-
-    return plan
 
 
 class EventType(str, enum.Enum):
@@ -492,7 +306,8 @@ class PlanOptimizationService:
                         elif tool_call.function.name == "evaulate_task_answer_object":
                             args = json.loads(tool_call.function.arguments)
                             answer_detail = get_task_answer(**args)
-                            eval_res = evaulate_task_answer(
+                            eval_res = evaulate_answer(
+                                eval_llm,
                                 answer_detail["goal"],
                                 answer_detail["metadata"],
                                 answer_detail["final_answer"],

@@ -27,11 +27,8 @@ from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
 from app.storage.branch_manager import CommitType
 
-from app.core.plan.generator import (
-    generate_updated_plan,
-    generate_plan,
-    should_update_plan,
-)
+from app.core.plan.generator import generate_plan
+from app.core.plan.optimizer import optimize_partial_plan
 from app.core.labels.classifier import LabelClassifier
 from .simple_cache import initialize_cache
 
@@ -347,17 +344,15 @@ class Task:
         vm: PlanExecutionVM,
         branch_name: str,
         suggestion: str,
-        key_factors: list = [],
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
-        updated_plan = generate_updated_plan(
+        updated_plan = optimize_partial_plan(
             self.llm_interface,
             self.task_orm.goal,
+            self.task_orm.meta,
             vm.state["program_counter"],
             plan or vm.state["current_plan"],
-            vm.get_all_variables(),
             suggestion,
-            key_factors,
             self.get_allowed_tools(),
         )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
@@ -456,90 +451,6 @@ class Task:
                 return {
                     "success": True,
                     "current_branch": vm.branch_manager.get_current_branch(),
-                }
-            except Exception as e:
-                self.task_orm.status = TaskStatus.failed
-                self.task_orm.logs = f"Failed to update task {self.task_orm.id}, goal: {self.task_orm.goal}: {str(e)}"
-                logger.error(self.task_orm.logs, exc_info=True)
-                self.save()
-                raise e
-
-    def dynamic_update(
-        self,
-        new_branch_name: str,
-        commit_hash: str,
-        suggestion: Optional[str] = None,
-        steps: int = 20,
-    ) -> Dict[str, Any]:
-        with self._lock:
-            try:
-
-                if not self.branch_manager.checkout_branch_from_commit(
-                    new_branch_name, commit_hash
-                ):
-                    raise ValueError(
-                        f"Failed to create or checkout branch '{new_branch_name}'"
-                    )
-
-                vm = PlanExecutionVM(
-                    self.task_orm.goal, self.branch_manager, self.llm_interface
-                )
-                steps_executed = 0
-
-                logger.info(
-                    f"Dynamic update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
-                )
-
-                if not self.branch_manager.checkout_branch(new_branch_name):
-                    raise ValueError(
-                        f"Failed to create or checkout branch '{new_branch_name}'"
-                    )
-
-                for _ in range(steps):
-                    should_update, explanation, key_factors = should_update_plan(
-                        self.llm_interface,
-                        self.task_orm.goal,
-                        vm.state["program_counter"],
-                        vm.state["current_plan"],
-                        vm.get_all_variables(),
-                        suggestion,
-                    )
-                    if should_update:
-                        new_commit_hash = self.update_plan(
-                            vm, new_branch_name, explanation, key_factors
-                        )
-
-                    try:
-                        execution_result = vm.step()
-                    except Exception as e:
-                        error_msg = f"Error during VM step execution: {str(e)}"
-                        logger.error(error_msg, exc_info=True)
-                        raise e
-
-                    if execution_result.get(
-                        "success"
-                    ) is not True or not execution_result.get("commit_hash"):
-                        raise ValueError(
-                            f"Execution result is not successful:{execution_result.get('error')}"
-                        )
-
-                    steps_executed += 1
-
-                    if vm.state.get("goal_completed"):
-                        logger.info("Goal completed. Stopping execution.")
-                        break
-
-                self.task_orm.status = (
-                    TaskStatus.completed
-                    if vm.state.get("goal_completed")
-                    else TaskStatus.failed
-                )
-                self.save()
-
-                return {
-                    "success": True,
-                    "steps_executed": steps_executed,
-                    "current_branch": self.branch_manager.get_current_branch(),
                 }
             except Exception as e:
                 self.task_orm.status = TaskStatus.failed
