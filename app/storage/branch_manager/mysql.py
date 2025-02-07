@@ -7,9 +7,9 @@ from deepdiff import DeepDiff
 from contextlib import contextmanager
 
 from app.database import SessionLocal
-from app.models.branch import Branch, Commit
-from .branch_manager import BranchManager
-from .utils import parse_commit_message
+from app.storage.models import Branch, Commit
+from app.services.utils import parse_commit_message
+from app.storage.branch_manager import BranchManager
 
 logger = logging.getLogger(__name__)
 

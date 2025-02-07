@@ -10,8 +10,7 @@ from datetime import datetime
 
 from app.utils.json import extract_json
 from app.database import SessionLocal
-from app.models.branch import Branch, Commit
-from app.models.task import Task as TaskORM
+from app.storage.models import Branch, Commit, Task as TaskORM
 from app.controller.task import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload

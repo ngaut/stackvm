@@ -9,7 +9,7 @@ from app.llm.interface import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub
 from app.database import SessionLocal
-from app.models.namespace import Namespace
+from app.storage.models import Namespace
 
 # Initialize Flask app
 app = Flask(__name__)

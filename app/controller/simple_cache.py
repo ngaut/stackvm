@@ -7,7 +7,7 @@ from types import MappingProxyType
 import datetime
 
 from app.database import SessionLocal
-from app.models.task import Task
+from app.storage.models import Task
 
 from apscheduler.schedulers.background import BackgroundScheduler
 

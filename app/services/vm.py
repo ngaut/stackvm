@@ -8,9 +8,8 @@ from typing import Any, Dict, Optional, List
 from app.instructions import InstructionHandlers
 from app.services.utils import StepType
 from app.services.step import Step, StepStatus
-from app.services.branch_manager import GitManager
 from app.services.variable_manager import VariableManager
-from app.services.branch_manager import BranchManager
+from app.storage.branch_manager import BranchManager
 from app.llm.interface import LLMInterface
 
 # Constants

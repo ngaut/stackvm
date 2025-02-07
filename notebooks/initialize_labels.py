@@ -8,8 +8,7 @@ import uuid
 from datetime import datetime
 
 from app.database import SessionLocal
-from app.models.namespace import Namespace
-from app.models.label import Label
+from app.storage.models import Namespace, Label
 
 # Create a new session
 session = SessionLocal()

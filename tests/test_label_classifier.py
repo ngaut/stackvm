@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from app.controller.label_classifier import get_labels_tree
-from app.models.label import Label
+from app.storage.models import Label
 
 
 @pytest.fixture

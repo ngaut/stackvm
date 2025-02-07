@@ -29,7 +29,7 @@ from app.config.settings import (
     TASK_QUEUE_WORKERS,
 )
 from app.utils import parse_goal_response_format
-from app.models import TaskStatus, EvaluationStatus
+from app.storage.models import TaskStatus, EvaluationStatus
 
 from .streaming_protocol import StreamingProtocol
 from .task import TaskService

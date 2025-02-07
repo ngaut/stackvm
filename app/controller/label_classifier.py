@@ -10,11 +10,10 @@ from app.llm.prompts import (
     get_label_classification_prompt_wo_description,
 )
 from app.llm.interface import LLMInterface
-from app.models.label import Label
+from app.storage.models import Label, Task
 from app.database import SessionLocal
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
 from app.utils import extract_json
-from app.models.task import Task
 
 logger = logging.getLogger(__name__)
 

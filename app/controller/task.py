@@ -7,14 +7,13 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
+from app.storage.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
 from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.storage.branch_manager import GitManager, MySQLBranchManager
 from app.services import (
     PlanExecutionVM,
     parse_step,
     StepType,
-    MySQLBranchManager,
-    GitManager,
 )
 from app.llm.prompts import get_step_update_prompt
 
