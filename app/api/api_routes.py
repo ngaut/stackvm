@@ -250,7 +250,6 @@ def dynamic_update(task_id):
 
     commit_hash = data.get("commit_hash")
     suggestion = data.get("suggestion")
-    steps = int(data.get("steps", 20))
 
     if not all([commit_hash, suggestion]):
         return log_and_return_error("Missing required parameters", "error", 400)
@@ -270,9 +269,8 @@ def dynamic_update(task_id):
                 "new_branch_name": branch_name,
                 "commit_hash": commit_hash,
                 "suggestion": suggestion,
-                "steps": steps,
             },
-            task.dynamic_update,
+            task.update,
             datetime.utcnow(),
         )
         return (

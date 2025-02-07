@@ -4,6 +4,7 @@ import datetime
 
 def get_plan_update_prompt(
     goal,
+    metadata,
     vm_program_counter,
     vm_spec_content,
     tools_instruction_content,
@@ -19,6 +20,9 @@ Analyze the current VM execution state and update the plan based on suggestions 
 
 Goal:
 {goal}
+
+The supplementary information for Goal:
+{metadata.get('response_format')}
 
 Current Plan:
 {json.dumps(plan, indent=2)}
@@ -99,67 +103,6 @@ Ensure the plan is a valid JSON and is properly formatted and encapsulated withi
 ```"""
 
     return prompt
-
-
-def get_should_update_plan_prompt(
-    goal, vm_program_counter, plan, vm_variables, suggestion
-):
-    """
-    Get the prompt for determining if the plan should be updated.
-    """
-
-    json_format = """
-    {{
-        "should_update": boolean,
-        "explanation": string,
-        "key_factors": [
-            {{
-                "factor": string,
-                "impact": string
-            }}
-        ]
-    }}
-    """
-
-    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
-Analyze the current VM execution state and determine if the plan needs to be updated.
-
-Goal:
-{goal}
-
-User Suggestion for plan update:
-{suggestion}
-
-Current Plan:
-{json.dumps(plan, indent=2)}
-
-Current Program Counter:
-{vm_program_counter}
-
-Last Executed Step:
-{json.dumps(plan[vm_program_counter - 1], indent=2) if vm_program_counter > 0 else "No steps executed yet"}
-
-Current Variables:
-{json.dumps(vm_variables, indent=2)}
-
-Evaluate the following aspects:
-1. Goal Alignment: Is the current plan still effectively working towards the goal?
-2. New Information: Have any variables changed in a way that affects the plan's validity?
-3. Efficiency: Based on the current state, is there a more optimal approach to achieve the goal?
-4. Potential Obstacles: Are there any foreseeable issues in the upcoming steps?
-5. Completeness: Does the plan address all necessary aspects of the goal?
-6. Adaptability: Can the current plan handle any new circumstances that have arisen?
-
-MUST Provide your analysis in JSON format:
-{json_format}
-
-Set "should_update" to true if the plan requires modification, false otherwise.
-In the "explanation", provide a concise rationale for your decision.
-List the most significant factors influencing your decision in "key_factors",
-including how each factor impacts the need for a plan update.
-
-Ensure your response is thorough yet concise, focusing on the most critical aspects of the decision.
-"""
 
 
 def get_step_update_prompt(
