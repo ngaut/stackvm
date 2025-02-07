@@ -11,13 +11,13 @@ from app.services import (
     parse_plan,
 )
 from app.services import PlanExecutionVM
-from app.services import (
-    LLMInterface,
+from app.llm.prompts import (
     get_plan_update_prompt,
     get_should_update_plan_prompt,
     get_generate_plan_prompt,
 )
 from app.instructions import global_tools_hub
+from app.llm.interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

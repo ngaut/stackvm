@@ -3,16 +3,13 @@ import logging
 import copy
 from typing import List, Dict, Tuple, Optional, Any
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-from collections import defaultdict
 import uuid
 
-from app.services.prompts import (
+from app.llm.prompts import (
     get_label_classification_prompt,
     get_label_classification_prompt_wo_description,
 )
-from app.services.llm_interface import LLMInterface
+from app.llm.interface import LLMInterface
 from app.models.label import Label
 from app.database import SessionLocal
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
@@ -27,7 +24,6 @@ def get_label_path(label: Label) -> List[str]:
     Retrieves the label path from the given label up to the root label.
 
     Args:
-        session (Session): SQLAlchemy session.
         label (Label): The label for which to retrieve the path.
 
     Returns:

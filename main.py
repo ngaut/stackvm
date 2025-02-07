@@ -5,7 +5,7 @@ import click
 from datetime import datetime
 
 from app.controller.api_routes import api_blueprint, main_blueprint
-from app.services import LLMInterface
+from app.llm.interface import LLMInterface
 from app.controller.task import TaskService
 from app.instructions import global_tools_hub
 from app.database import SessionLocal

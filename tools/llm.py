@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.instructions.tools import tool
 from app.config.settings import LLM_PROVIDER, LLM_MODEL
-from app.services import LLMInterface
+from app.llm.interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from app.controller.task import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
-from app.services.llm_interface import LLMInterface
+from app.llm.interface import LLMInterface
 from app.services.utils import parse_commit_message
 
 # Add project root to Python path

@@ -11,7 +11,7 @@ from app.services.step import Step, StepStatus
 from app.services.branch_manager import GitManager
 from app.services.variable_manager import VariableManager
 from app.services.branch_manager import BranchManager
-from app.services.llm_interface import LLMInterface
+from app.llm.interface import LLMInterface
 
 # Constants
 VARIABLE_PREVIEW_LENGTH = 50
