@@ -177,66 +177,59 @@ Below is an example where the calling type is configured to use the `llm_generat
 ```
 
 ### 3.4 reasoning
-- **Purpose**: Provides essential analysis framework for understanding problem essence and solution design.
+- **Purpose**: Document the core analytical process and technical decision logic
+
+**Implementation Notes**:
+> While structured formatting helps ensure completeness, focus on capturing the **authentic technical reasoning process**. Treat formatting elements as thinking aids, not rigid constraints. A good chain_of_oughts should:
+> - Reflect how an expert engineer would analyze the problem
+> - Show clear technical decision-making pathways
+> - Reveal the 'why' behind tool selections
+> - Prioritize depth of analysis over rigid template adherence
+
 - **Parameters**:
-  - `chain_of_oughts`: Structured analysis containing:
 
-    **1. Problem Deconstruction** (30% focus)
-    - Core question identification (What is really being asked?)
-    - Implicit requirements analysis (What's unstated but necessary?)
-    - Problem categorization matrix:
-      ```
-      [ ] Technical troubleshooting
-      [ ] Knowledge retrieval
-      [ ] Comparative analysis
-      [ ] Best practices guidance
-      [ ] Complex task planning
-      ```
+  **1. chain_of_oughts** (string):
+  Structured technical rationale containing:
+  ```text
+  a) Problem Essence:
+     - Core technical challenge identification
+     - Critical implicit assumptions
+     - Solution archetype classification:
+       • Performance Optimization
+       • Knowledge Synthesis
+       • System Troubleshooting
 
-    **2. Solution Architecture** (60% focus)
-    - Key technical focal points (3-5 critical elements)
-    - Information retrieval strategy:
-      - Primary sources (e.g. official docs)
-      - LLM prior knowledge
-      - Cross-validation plan
-    - Information processing pipeline: Raw data → Filtering criteria → Synthesis method
+  b) Technical Blueprint:
+     ■ Core Components (3-5 key elements)
+     → Data Flow: [KG]→[Vector]→[LLM]
+     ! Risk Hotspots: Mark high-stakes decisions
+     ▣ Version Strategy: Fallback plan handling
 
-    **3. Compliance Safeguards** (10% focus)
-    - [ ] No environment assumptions
-    - [ ] Language consistency
-    - [ ] Final answer variable set
-    - [ ] Valid variable references
+  c) Execution Map:
+     Variable Transformations: ${A}→${B}
+     Validation Checkpoints: [Must-pass criteria]
+  ```
 
-  - `dependency_analysis`: Execution critical path visualization
-    ```
-    [Knowledge Graph] → (version)
-                       ↘
-    [Vector Search] → [LLM Synthesis] → final_answer
-    ```
+  **2. dependency_analysis** (string):
+  Visual execution path representation using:
+  ```text
+  - Arrows for data flow: StepA → StepB
+  - Brackets for parallel steps: [Step1|Step2]
+  - Conditional branches: IF(condition)→Path
+  - Critical variables: ${var_name}
+  ```
 
-**Problem-Type Specific Guidance**:
+**Validation Rules**:
+1. Must contain at least one ■ Core Component
+2. Must identify at least one ! Risk Hotspot
 
-<details>
-<summary>Technical Troubleshooting Example</summary>
-
+**Optimized Example**:
 ```json
 {
-  "chain_of_oughts": "Problem Deconstruction:\n- Core: Identify why cluster experiences latency spikes\n- Implicit: Assume latest stable version\n\nSolution Architecture:\n1. Fault Tree:\n   - Network config\n   - Query optimization\n   - Hardware limits\n2. Retrieval Strategy:\n   - KG: Known latency issues in ${version}\n   - Vector: 'latency spike' troubleshooting\n3. Validation Chain:\n   Hypothesis → Data Retrieval → Verification",
-  "dependency_analysis": "Step1(isolate_issue) → Step2(validate_hypothesis)"
+  "chain_of_oughts":"Problem Essence:\n  - Core: Distributed lock optimization under high concurrency\n  - Assumptions: Using latest stable version\n  - Archetype: Version-specific best practices\n\n  Technical Blueprint:\n  ■ Lock Mechanism\n    → KG: lock_manager config in v${version}\n    → Vector: 'hotspot lock' case studies\n    ! Risk: AsyncCommit may delay visibility\n  \n  ▣ Version Fallback: Use v8.5 base if no v${version}\n  \n  Execution Map:\n  KG(config) → LLM(matrix_gen) → final_answer\n  Validation: Check QPS improvement ≥30%",
+  "dependency_analysis":"KG1 → LLM1 → IF valid → final_answer\n               ↘ ELSE → HumanReview"
 }
 ```
-</details>
-
-<details>
-<summary>Knowledge Retrieval Example</summary>
-
-```json
-{
-  "chain_of_oughts": "Problem Deconstruction:\n- Core: Compare TiDB vs MySQL sharding\n- Implicit: Focus on OLTP scenarios\n\nSolution Architecture:\n1. Comparison Dimensions:\n   - Horizontal scaling\n   - Distributed transactions\n2. Source Hierarchy:\n   - Primary: Official docs\n   - Secondary: Benchmarks\n3. Synthesis Plan:\n   Extract key metrics → Tabulate differences → Highlight tradeoffs",
-  "dependency_analysis": "KG(sharding_info) || Vector(sharding_case) → Synthesis"
-}
-```
-</details>
 
 ## 4. Parameters and Variable References
 Parameters can be either direct values or variable references. To reference a variable, use the format `${variable_name}`.
@@ -245,7 +238,7 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Variable References** are ideal for scenarios that require dynamic parameter value filling, enhancing the interconnectivity and data flow between instructions. By using variable references, parameters can be adjusted dynamically based on the results of previous steps, increasing the flexibility and automation of the workflow.
 
-- **Don’t Use Math Expressions in Parameters and tool_params**: The VM does not have the capability to compute or parse expressions within parameters. It can only perform simple reference substitutions. For example, avoid using expressions like value1 + value2 or value * 2 within parameters, and instead, calculate these values explicitly in a prior step and refer to the result in the parameter.
+- **Don't Use Math Expressions in Parameters and tool_params**: The VM does not have the capability to compute or parse expressions within parameters. It can only perform simple reference substitutions. For example, avoid using expressions like value1 + value2 or value * 2 within parameters, and instead, calculate these values explicitly in a prior step and refer to the result in the parameter.
 
 
 **Direct Value Example:**
