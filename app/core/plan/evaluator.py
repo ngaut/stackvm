@@ -20,7 +20,7 @@ I. ANSWER QUALITY ASSESSMENT (Primary Focus)
 1. Goal Resolution:
    - Does the Final Answer directly and completely address the user's Goal?
    - Are there any unresolved aspects of the Goal in the Final Answer?
-   - For non-TiDB goals: Does the answer politely decline while maintaining professionalism?
+   - For non-TiDB-related goals: Does the answer politely decline while maintaining professionalism?
 
 2. Answer Relevance:
    - Does the answer contain irrelevant information that doesn't directly contribute to solving the Goal?
