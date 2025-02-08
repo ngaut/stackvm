@@ -34,7 +34,7 @@ class LLMInterface:
         try:
             return self.provider.generate(prompt, context, **kwargs)
         except Exception as e:
-            print(f"LLM generation failed: {e}")
+            logger.error(f"LLM generation failed: {e}")
             raise e
 
     def evaluate_condition(

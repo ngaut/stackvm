@@ -29,12 +29,16 @@ from app.storage.branch_manager.commit import parse_commit_message
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-from app.core.plan.evaluator import evaulate_answer, reflect_step_on_final_answer
+from app.core.plan.evaluator import (
+    evaulate_answer,
+    reflect_step_on_final_answer,
+    evaluate_multiple_answers,
+)
 
 logger = logging.getLogger(__name__)
 
-reasoning_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
-evaluation_client = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
+reasoning_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+evaluation_llm = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
 llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 
@@ -218,7 +222,7 @@ class MCTSNode:
         try:
             # Get reflection from LLM
             reflection = reflect_step_on_final_answer(
-                evaluation_client,
+                evaluation_llm,
                 goal,
                 final_answer,
                 metadata,
@@ -431,7 +435,7 @@ class MCTSPlanOptimizer:
                 .options(joinedload(TaskORM.namespace))
                 .where(TaskORM.id == self.task_id)
             ).scalar_one()
-            task = Task(taskORM, llm_client, reasoning_client)
+            task = Task(taskORM, llm_client, reasoning_llm)
 
         res = task.update(
             new_branch_name=branch_name,
@@ -479,7 +483,7 @@ class MCTSPlanOptimizer:
 
             if node.state.final_answer is not None:
                 node.state.evaluation = evaulate_answer(
-                    evaluation_client,
+                    evaluation_llm,
                     self.goal,
                     self.metadata,
                     node.state.final_answer,
@@ -491,6 +495,12 @@ class MCTSPlanOptimizer:
                     node.state.seq_no,
                     node.state.evaluation,
                 )
+
+                if node.state.evaluation is None:
+                    return {
+                        "need_backprop": False,
+                        "reward": 0,
+                    }
 
                 # Convert evaluation result to a numerical score
                 base_score = 1.0 if node.state.evaluation.get("accept", False) else 0.0
@@ -553,6 +563,15 @@ class MCTSPlanOptimizer:
             )
             node = node.parent  # Move up to parent
 
+    def get_leaf_nodes(self, node: MCTSNode) -> List[MCTSNode]:
+        if not node.children:
+            return [node]
+
+        leaves = []
+        for child in node.children:
+            leaves.extend(self.get_leaf_nodes(child))
+        return leaves
+
     def optimize(self) -> List[MCTSNode]:
         """Run MCTS optimization"""
         start_time = datetime.now()
@@ -579,17 +598,8 @@ class MCTSPlanOptimizer:
                 self.backpropagate(new_node, reward)
             """
 
-        def get_leaf_nodes(node: MCTSNode) -> List[MCTSNode]:
-            if not node.children:
-                return [node]
-
-            leaves = []
-            for child in node.children:
-                leaves.extend(get_leaf_nodes(child))
-            return leaves
-
         # Get all leaf nodes
-        leaf_nodes = get_leaf_nodes(self.root)
+        leaf_nodes = self.get_leaf_nodes(self.root)
 
         # Filter visited leaf nodes and sort by score
         scored_leaves = sorted(
@@ -599,3 +609,18 @@ class MCTSPlanOptimizer:
         )
 
         return scored_leaves
+
+    def sort_final_answers(self) -> List[Dict]:
+        """Sort final answers by score"""
+        leaf_nodes = self.get_leaf_nodes(self.root)
+        final_answers = [
+            {
+                "commit_hash": node.state.commit_hash,
+                "final_answer": node.state.final_answer,
+            }
+            for node in leaf_nodes
+            if node.state.final_answer
+        ]
+        return evaluate_multiple_answers(
+            evaluation_llm, self.goal, self.metadata, final_answers
+        )

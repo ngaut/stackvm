@@ -97,7 +97,7 @@ Now Let's think step by step! Do you best on this evaluation task!
         json_response = extract_json(response)
         return json.loads(json_response)
     except Exception as e:
-        logger.error(f"Error evaluating task answer: {e}")
+        logger.error(f"Error evaluating task answer: {e}", exc_info=True)
         return None
 
 
@@ -170,8 +170,73 @@ def reflect_step_on_final_answer(
 
         return reflection
     except Exception as e:
-        logger.error("Error during reflection: %s, %s", e, response)
+        logger.error("Error during reflection: %s, %s", e, response, exc_info=True)
         return {
             "should_optimize": False,
             "suggestion": f"Error during reflection: {str(e)}, {response}",
         }
+
+
+def evaluate_multiple_answers(
+    llm_client: LLMInterface,
+    goal: str,
+    metadata: dict,
+    answers_list: List[Dict[str, str]],
+) -> List[Dict]:
+    """Evaluate and rank multiple answers based on their quality.
+
+    Args:
+        answers_list: List of answers with commit_hash and final_answer
+        Example: [{"commit_hash": "abc123", "final_answer": "..."}, ...]
+
+    Returns:
+        Sorted list by score descending: [{"commit_hash": "abc123", "score": 9.5}, ...]
+    """
+    evaluation_prompt = f"""Evaluate and score multiple answers (0-10) based on their quality. 
+Higher scores indicate better alignment with the goal. Consider:
+1. Goal resolution completeness
+2. Answer relevance and accuracy
+3. Actionability of solutions
+4. Technical correctness (for TiDB-related goals)
+
+Goal: {goal}
+Supplementary Information: {metadata.get('response_format', 'N/A')}
+
+Answers to evaluate:
+{json.dumps([{"commit_hash": a["commit_hash"], "answer": a["final_answer"]} 
+            for a in answers_list], indent=2)}
+
+Score each answer 0-10 following these rules:
+- 9-10: Perfectly solves goal with optimal solution
+- 7-8: Solves goal with minor improvements possible
+- 5-6: Partially solves but misses key aspects
+- 3-4: Contains major flaws
+- 0-2: Completely irrelevant/invalid
+
+Return JSON array with scores in this format:
+[
+  {{"commit_hash": "hash1", "score": score1}},
+  {{"commit_hash": "hash2", "score": score2}}
+]"""
+
+    try:
+        response = llm_client.generate(evaluation_prompt)
+        scores = json.loads(extract_json(response))
+        # Create mapping for quick lookup
+        answer_map = {a["commit_hash"]: a["final_answer"] for a in answers_list}
+
+        return sorted(
+            [
+                {
+                    "commit_hash": s["commit_hash"],
+                    "score": float(s["score"]),
+                    "final_answer": answer_map.get(s["commit_hash"], "N/A"),
+                }
+                for s in scores
+            ],
+            key=lambda x: x["score"],
+            reverse=True,
+        )
+    except Exception as e:
+        logger.error(f"Error evaluating multiple answers: {e}", exc_info=True)
+        return []
