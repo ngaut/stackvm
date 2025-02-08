@@ -41,9 +41,9 @@ def generate_plan(
     plan_response = llm_interface.generate(prompt)
 
     if not plan_response:
-        logger.error("LLM failed to generate a response: %s", plan_response)
+        logger.error(f"LLM failed to generate a response: {plan_response}")
         raise ValueError(
-            "LLM failed to generate a response for your question. Please try again later."
+            f"LLM failed to generate a response for your question: {plan_response}. Please try again later."
         )
 
     plan = parse_plan(plan_response)
@@ -52,6 +52,6 @@ def generate_plan(
         return plan
     else:
         logger.error(
-            "Failed to parse the generated plan: %s for goal: %s", plan_response, goal
+            f"Failed to parse the generated plan: {plan_response} for goal: {goal}"
         )
         raise PlanUnavailableError(plan_response)

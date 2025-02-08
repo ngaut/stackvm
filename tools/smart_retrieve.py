@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 
 from app.utils import extract_json
-from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL, EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
 from app.llm.interface import LLMInterface
 from app.instructions.tools import tool
 
@@ -184,13 +184,9 @@ class KnowledgeGraphClient:
 
 knowledge_client = KnowledgeGraphClient(f"{AUTOFLOW_BASE_URL}/api/v1", KB_ID)
 llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
-if os.getenv("GOOGLE_API_KEY", None):
-    eval_llm_client = LLMInterface("gemini", "gemini-2.0-flash")
-    logger.info("Using Gemini 2.0 Flash Evaluation LLM")
-else:
-    eval_llm_client = llm_client
-    logger.info(f"Using {REASON_LLM_MODEL} Evaluation LLM")
-
+logger.info(f"Using {REASON_LLM_MODEL} Reasoning LLM")
+evaluation_client = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
+logger.info(f"Using {EVALUATION_LLM_MODEL} Evaluation LLM")
 
 class MetaGraph:
     def __init__(self, llm_client, query):
@@ -512,7 +508,7 @@ def smart_retrieve(
         # Step 3: evaluate the retrieval results
         start_time = time.time()
         analysis = evaluation_retrieval_results(
-            eval_llm_client,
+            evaluation_client,
             query,
             actions_history,
             {"entities": entities, "relationships": relationships},

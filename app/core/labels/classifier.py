@@ -310,8 +310,11 @@ class LabelClassifier:
     Service responsible for generating and validating label paths based on task goals.
     """
 
-    def __init__(self):
-        self.llm_interface = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+    def __init__(self, llm_interface: Optional[LLMInterface] = None):
+        if llm_interface is None:
+            self.llm_interface = LLMInterface(provider=LLM_PROVIDER, model=LLM_MODEL)
+        else:
+            self.llm_interface = llm_interface
         self.label_tree = LabelTree()
 
     def generate_label_path(
@@ -326,7 +329,6 @@ class LabelClassifier:
         Returns:
             List[str]: A list of label names from root to leaf.
         """
-        logger.info(f"Using {LLM_MODEL} for label classification")
         # Generate enhanced classification prompt
         prompt = get_label_classification_prompt_wo_description(
             task_goal,

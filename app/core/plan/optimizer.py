@@ -90,7 +90,7 @@ Ensure the plan is a valid JSON and is properly formatted and encapsulated withi
             return plan
 
         raise ValueError(
-            "Failed to parse the updated plan: %s for goal: %s", plan_response, goal
+            f"Failed to parse the updated plan: {plan_response} for goal: {goal}"
         )
     except Exception as e:
         logger.error(f"Error optimizing plan: {e}")
@@ -127,7 +127,7 @@ def optimize_partial_plan(
             return plan
 
         raise ValueError(
-            "Failed to parse the updated plan: %s for goal: %s", plan_response, goal
+            f"Failed to parse the updated plan: {plan_response} for goal: {goal}"
         )
     except Exception as e:
         logger.error(f"Error optimizing partial plan: {e}")

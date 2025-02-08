@@ -37,6 +37,9 @@ class OpenAIProvider(BaseLLMProvider):
             ],
             **self._update_kwargs(kwargs),
         )
+        if response.choices is None:
+            raise Exception(f"LLM response is None: {response.error}")
+
         return response.choices[0].message.content.strip()
 
     def generate_stream(

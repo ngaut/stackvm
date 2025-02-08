@@ -14,7 +14,14 @@ from app.storage.models import Branch, Commit, Task as TaskORM
 from app.core.task.manager import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.config.settings import (
+    REASON_LLM_PROVIDER,
+    REASON_LLM_MODEL,
+    EVALUATION_LLM_PROVIDER,
+    EVALUATION_LLM_MODEL,
+    LLM_PROVIDER,
+    LLM_MODEL,
+)
 from app.llm.interface import LLMInterface
 from app.storage.branch_manager.commit import parse_commit_message
 
@@ -22,11 +29,17 @@ from app.storage.branch_manager.commit import parse_commit_message
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-from notebooks.plan_optimization_chat import evaulate_task_answer
+from app.core.plan.evaluator import (
+    evaulate_answer,
+    reflect_step_on_final_answer,
+    evaluate_multiple_answers,
+)
 
 logger = logging.getLogger(__name__)
 
-llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+reasoning_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+evaluation_llm = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
+llm_client = LLMInterface(LLM_PROVIDER, LLM_MODEL)
 
 
 def get_branch(task_id: str, head_commit_hash: str) -> str:
@@ -179,7 +192,12 @@ class MCTSNode:
         return exploitation + exploration
 
     def reflect_on_final_answer(
-        self, goal: str, final_answer: str, metadata: Dict, branch_name: str
+        self,
+        goal: str,
+        final_answer: str,
+        metadata: Dict,
+        branch_name: str,
+        feedback: Optional[str] = None,
     ) -> Dict:
         """Reflect on the current step and suggest optimizations for remaining steps.
 
@@ -201,47 +219,18 @@ class MCTSNode:
                 "suggestion": "No current step to analyze",
             }
 
-        # Prepare the reflection prompt
-        prompt = f"""
-        Goal: {goal} 
-
-        The supplementary information for Goal:
-        {metadata.get('response_format')}
-
-        Final Answer: {final_answer}
-        
-        Current Step ({current_step_no}):
-        {json.dumps(self.state.plan[current_step_no], indent=2)}
-
-        Current Execution State:
-        {json.dumps(self.state.vm_state, indent=2)}
-
-        Remaining Steps:
-        {json.dumps(self.state.plan[current_step_no + 1:], indent=2)}
-
-        Analyze the current execution and final answer:
-        1. Could the remaining steps be improved to generate a better final answer? Answer with yes or no.
-        2. If yes, suggest specific improvements focusing on:
-           - Adding new steps that could provide additional relevant information
-           - Modifying existing steps to gather more comprehensive or accurate data
-           - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
-
-        Note: Focus on improving answer quality rather than execution efficiency.
-
-        Format your response as JSON:
-        ```json
-        {{
-            "should_optimize": boolean,
-            "suggestion": "string",
-        }}
-        ```
-        """
-
         try:
             # Get reflection from LLM
-            response = llm_client.generate(prompt)
-            response_json_str = extract_json(response)
-            reflection = json.loads(response_json_str)
+            reflection = reflect_step_on_final_answer(
+                evaluation_llm,
+                goal,
+                final_answer,
+                metadata,
+                current_step_no,
+                self.state.plan,
+                self.state.vm_state["variables"],
+                feedback,
+            )
 
             if reflection.get("should_optimize", False):
                 reflection["suggestion"] = (
@@ -352,9 +341,13 @@ class MCTSPlanOptimizer:
                     child_node.state.seq_no,
                 )
 
-                need_backprop, reward = self.simulate(child_node)
-                if need_backprop:
-                    self.backpropagate(child_node, reward)
+                result = self.simulate(child_node)
+                if result.get("need_backprop", False):
+                    self.backpropagate(
+                        child_node,
+                        result.get("reward", 0),
+                        result.get("feedback", None),
+                    )
 
                 # Recursively build tree for this child
                 self._build_tree_recursive(child_node, child_hash, commits_dict)
@@ -442,7 +435,7 @@ class MCTSPlanOptimizer:
                 .options(joinedload(TaskORM.namespace))
                 .where(TaskORM.id == self.task_id)
             ).scalar_one()
-            task = Task(taskORM, llm_client)
+            task = Task(taskORM, llm_client, reasoning_llm)
 
         res = task.update(
             new_branch_name=branch_name,
@@ -489,7 +482,8 @@ class MCTSPlanOptimizer:
         try:
 
             if node.state.final_answer is not None:
-                eval_response = evaulate_task_answer(
+                node.state.evaluation = evaulate_answer(
+                    evaluation_llm,
                     self.goal,
                     self.metadata,
                     node.state.final_answer,
@@ -499,30 +493,48 @@ class MCTSPlanOptimizer:
                     "evaluate answer: %s(%s) response: %s",
                     node.state.commit_hash,
                     node.state.seq_no,
-                    eval_response,
+                    node.state.evaluation,
                 )
-                response_json_str = extract_json(eval_response)
-                node.state.evaluation = json.loads(response_json_str)
+
+                if node.state.evaluation is None:
+                    return {
+                        "need_backprop": False,
+                        "reward": 0,
+                    }
 
                 # Convert evaluation result to a numerical score
                 base_score = 1.0 if node.state.evaluation.get("accept", False) else 0.0
 
                 # TODO: Add bonus for other quality assessment
 
-                return True, base_score
+                return {
+                    "need_backprop": True,
+                    "feedback": node.state.evaluation.get(
+                        "plan_adjustment_suggestion", None
+                    ),
+                    "reward": base_score,
+                }
             elif not node.children:
-                return True, 0
+                return {
+                    "need_backprop": True,
+                    "reward": 0,
+                }
         except Exception as e:
             logger.error("Error evaluating state: %s", e)
 
-        return False, 0
+        return {
+            "need_backprop": False,
+            "reward": 0,
+        }
 
-    def simulate(self, node: MCTSNode) -> Tuple[bool, float]:
+    def simulate(self, node: MCTSNode) -> Dict:
         """Simulate from node to get a reward"""
         # For now, directly evaluate the state
         return self.evaluate_state(node)
 
-    def backpropagate(self, node: MCTSNode, reward: float):
+    def backpropagate(
+        self, node: MCTSNode, reward: float, feedback: Optional[str] = None
+    ):
         """Backpropagate reward through tree.
 
         Updates visit counts and accumulated values for all nodes
@@ -547,9 +559,18 @@ class MCTSPlanOptimizer:
             node.visits += 1  # Increment visit count
             node.value += reward  # Accumulate reward value
             node.reflect_on_final_answer(
-                self.goal, final_answer, self.metadata, branch_name
+                self.goal, final_answer, self.metadata, branch_name, feedback
             )
             node = node.parent  # Move up to parent
+
+    def get_leaf_nodes(self, node: MCTSNode) -> List[MCTSNode]:
+        if not node.children:
+            return [node]
+
+        leaves = []
+        for child in node.children:
+            leaves.extend(self.get_leaf_nodes(child))
+        return leaves
 
     def optimize(self) -> List[MCTSNode]:
         """Run MCTS optimization"""
@@ -577,17 +598,8 @@ class MCTSPlanOptimizer:
                 self.backpropagate(new_node, reward)
             """
 
-        def get_leaf_nodes(node: MCTSNode) -> List[MCTSNode]:
-            if not node.children:
-                return [node]
-
-            leaves = []
-            for child in node.children:
-                leaves.extend(get_leaf_nodes(child))
-            return leaves
-
         # Get all leaf nodes
-        leaf_nodes = get_leaf_nodes(self.root)
+        leaf_nodes = self.get_leaf_nodes(self.root)
 
         # Filter visited leaf nodes and sort by score
         scored_leaves = sorted(
@@ -597,3 +609,18 @@ class MCTSPlanOptimizer:
         )
 
         return scored_leaves
+
+    def sort_final_answers(self) -> List[Dict]:
+        """Sort final answers by score"""
+        leaf_nodes = self.get_leaf_nodes(self.root)
+        final_answers = [
+            {
+                "commit_hash": node.state.commit_hash,
+                "final_answer": node.state.final_answer,
+            }
+            for node in leaf_nodes
+            if node.state.final_answer
+        ]
+        return evaluate_multiple_answers(
+            evaluation_llm, self.goal, self.metadata, final_answers
+        )

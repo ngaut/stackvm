@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Generator, Any, List, Dict
 from dataclasses import dataclass
 from app.llm.interface import LLMInterface
-from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL
+from app.config.settings import EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
 from app.core.plan.evaluator import evaulate_answer
 from app.core.plan.optimizer import optimize_whole_plan
 
@@ -25,8 +25,10 @@ assert stackvm_host is not None, "STACKVM_HOST environment variable is not set."
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
 assert OPENAI_API_KEY is not None, "OPENAI_API_KEY environment variable is not set."
 
-fc_llm = openai.OpenAI(api_key=OPENAI_API_KEY)
-eval_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+fc_llm = openai.OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
+eval_llm = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
 
 
 def get_task_answer(task_id: str, branch_name: str) -> dict:

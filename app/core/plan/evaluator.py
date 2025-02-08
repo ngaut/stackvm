@@ -1,5 +1,6 @@
 import logging
 import json
+from typing import Dict, List, Optional
 
 from app.llm.interface import LLMInterface
 from app.utils import extract_json
@@ -13,54 +14,64 @@ def evaulate_answer(
     evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
 
 ------------------------------------
-KEY POINTS TO CONSIDER IN YOUR EVALUATION:
-1. Deep Analysis of the User's Problem:
-  - Does the Plan demonstrate a sufficient understanding of the user's overall background, constraints, and specific questions?
-  - Has the Plan identified the critical context that shapes the user's goal (e.g., large data volumes, performance constraints, GC usage, version details, etc.)?
+REVISED EVALUATION FRAMEWORK:
 
-2. Instructions Context & Coverage:
-  - For each instruction in the Plan (including steps like searching for relevant data or generating partial solutions), verify whether it explicitly or implicitly incorporates the "specific problem background + user's question."
-  - Do the instructions effectively handle the sub-questions or concerns raised by the user? Are any key points missing or glossed over?
+I. ANSWER QUALITY ASSESSMENT (Primary Focus)
+1. Goal Resolution:
+   - Does the Final Answer directly and completely address the user's Goal?
+   - Are there any unresolved aspects of the Goal in the Final Answer?
+   - For non-TiDB-related goals: Does the answer politely decline while maintaining professionalism?
 
-3. Verification of Problem Decomposition and Factual Information Retrieval for TiDB-Related Goals
-  - Problem Decomposition - If the Goal is TiDB-related, verify whether the Plan has effectively broken down the Goal into distinct sub-questions.
-  - Individual Retrieval Methods for Each Sub-Question - For each sub-question, verify wheter the plan has applied the following retrieval methods independently:
-    - retrieve_knowledge_graph + vector_search: to fetch background knowledge or technical details relevant to TiDB.
-    - llm_generate: after obtaining the above retrieval information, use it as the basis for reasoning and extracting the most relevant information.
-  - Ensuring Relevance and Separation:
-    - Confirm that each sub-question is handled separately, ensuring that the retrieval process targets the most relevant data for that specific sub-question.
-    - Ensure that retrieval operations for different sub-questions are not combined, preventing the mixing of data across sub-questions.
+2. Answer Relevance:
+   - Does the answer contain irrelevant information that doesn't directly contribute to solving the Goal?
+   - Are all technical references (e.g., TiDB documentation) directly applicable to the problem?
 
-4. Completeness of the Plan:
-   • Does the Plan address all major aspects of the user's problem or goal?
-   • Are there any unanswered questions or issues that the user might still have after following the Plan?
+3. Actionability:
+   - If needed, does the answer provide clear, executable steps or concrete solutions?
+   - For complex problems: Does the answer demonstrate proper prioritization of issues?
 
-5. Cohesion of Plan Steps:
-   • Assess whether the Plan's instructions flow logically from one step to the next, and whether they form a coherent end-to-end workflow.
-   • Consider whether the Plan's approach to searching for data, filtering out irrelevant information, and eventually generating a final integrated solution is clearly articulated and consistent with the user's context.
+II. PLAN VALIDATION (Secondary Check)
+1. Logical Foundation:
+   - Does the Plan structure logically lead to the Final Answer?
+   - Are there missing steps that could improve answer quality?
 
-When providing your evaluation, reference these points and also consider the following general guidelines:
+2. Risk Detection:
+   - Does the Plan contain steps that could lead to:
+     * Irrelevant information inclusion
+     * Technical inaccuracies
+     * Overlooking critical aspects of the Goal
 
-- Direct Problem Resolution: The Plan and Final Answer should yield a clear, actionable solution or next step.
-- Clarification of User Intent: If the Goal is unclear or missing details, verify if the Plan seeks clarification properly, clarification is enough for this kind of goa, no other process is needed.
-- Unrelated to TiDB: If the Goal is not TiDB-related, ensure the Plan provides a polite response indicating the capability to assist with TiDB-related queries only.
-- Providing Relevant Information: Ensure the solution or Plan steps remain focused on the user's needs, without extraneous or off-topic content.
-- Maintaining Conversational Flow: The explanation or solution should guide the user logically from their question to the solution, smoothly transitioning between steps.
+3. Efficiency Check:
+   - Are there redundant steps that don't contribute to the Final Answer?
+   - Could the Plan be simplified while maintaining answer quality?
+
+III. INTEGRATION CHECK
+- If the Answer is good but the Plan has issues: Can we accept the answer while flagging Plan improvements?
+- If the Answer is bad but the Plan seems good: Require deeper analysis of execution
+
+------------------------------------
+DECISION LOGIC:
+1. First evaluate Answer Quality:
+   - If Answer fully resolves Goal → Accept (even with Plan imperfections)
+   - If Answer partially resolves → Reject and request improvements
+   - If Answer is irrelevant → Reject regardless of Plan quality
+
+2. Then validate Plan:
+   - For accepted Answers: Note Plan improvements for future optimizations
+   - For rejected Answers: Specify whether issues stem from Plan flaws or execution errors
 
 ------------------------------------
 YOUR OUTPUT FORMAT:
 You must return a JSON object with the following keys:
 1. "accept": Boolean value (true or false) indicating whether the Final Answer effectively resolves the Goal.
-2. "answer_quality_assessment_explanation": A detailed explanation justifying why the final answer does or does not meet the goal, referencing any guidelines or key points above.
-3. "plan_adjustment_suggestion": If "accept" is false, provide a comprehensive analysis of how the Plan could be improved to fully address the user's context and questions. Propose modifications or additional steps in detail.
-4. "goal_classification": (Optional) A categorization of the goal type based on the guidelines (e.g., "Direct Problem Resolution", "Clarification Needed").
+2. "plan_adjustment_suggestion": Provide a comprehensive analysis of how the Plan could be improved to fully address the user's goal.
+3. "goal_classification": (Optional) A categorization of the goal type based on the guidelines (e.g., "Direct Problem Resolution", "Execution Error").
 
 ------------------------------------
 EXAMPLE OUTPUT:
 {{
-  "accept": false,
-  "answer_quality_assessment_explanation": "...",
-  "plan_adjustment_suggestion": "...",
+  "accept": true,
+  "plan_adjustment_suggestion": "While the answer is acceptable, the Plan could be improved by...",
   "goal_classification": "Direct Problem Resolution"
 }}
 
@@ -86,5 +97,146 @@ Now Let's think step by step! Do you best on this evaluation task!
         json_response = extract_json(response)
         return json.loads(json_response)
     except Exception as e:
-        logger.error(f"Error evaluating task answer: {e}")
+        logger.error(f"Error evaluating task answer: {e}", exc_info=True)
         return None
+
+
+def reflect_step_on_final_answer(
+    llm_client: LLMInterface,
+    goal: str,
+    final_answer: str,
+    metadata: Dict,
+    current_step_no: int,
+    plan: List[Dict],
+    vm_state: Dict,
+    feedback: Optional[str] = None,
+) -> Dict:
+    """Reflect on the current step and suggest optimizations for remaining steps.
+
+    Args:
+        goal: The original task goal
+        final_answer: The final answer produced by the plan
+        metadata: Additional task metadata
+
+    Returns:
+        {
+            "should_optimize": bool,  # Whether optimization is possible
+            "suggestion": str,     # Optimization suggestion explanation
+        }
+    """
+    # Prepare the reflection prompt
+    prompt = f"""
+    Goal: {goal} 
+
+    The supplementary information for Goal:
+    {metadata.get('response_format')}
+
+    Final Answer: {final_answer}
+
+    Feedback: {feedback}
+    
+    Current Step ({current_step_no}):
+    {json.dumps(plan[current_step_no], indent=2)}
+
+    Current Execution State:
+    {json.dumps(vm_state, indent=2)}
+
+    Remaining Steps:
+    {json.dumps(plan[current_step_no + 1:], indent=2)}
+
+    Analyze final answer, and the feedback (if provided):
+    1. Could the remaining steps be improved to generate a better final answer? Answer with true or false.
+    2. If true, suggest specific improvements focusing on:
+        - Adding new steps that could provide additional relevant information
+        - Modifying existing steps to gather more comprehensive or accurate data
+        - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
+
+    Note: Focus on improving answer quality rather than execution efficiency.
+
+    Format your response as JSON:
+    ```json
+    {{
+        "should_optimize": true/false,
+        "suggestion": string,
+    }}
+    ```
+    """
+
+    try:
+        # Get reflection from LLM
+        response = llm_client.generate(prompt)
+        response_json_str = extract_json(response)
+        reflection = json.loads(response_json_str)
+
+        return reflection
+    except Exception as e:
+        logger.error("Error during reflection: %s, %s", e, response, exc_info=True)
+        return {
+            "should_optimize": False,
+            "suggestion": f"Error during reflection: {str(e)}, {response}",
+        }
+
+
+def evaluate_multiple_answers(
+    llm_client: LLMInterface,
+    goal: str,
+    metadata: dict,
+    answers_list: List[Dict[str, str]],
+) -> List[Dict]:
+    """Evaluate and rank multiple answers based on their quality.
+
+    Args:
+        answers_list: List of answers with commit_hash and final_answer
+        Example: [{"commit_hash": "abc123", "final_answer": "..."}, ...]
+
+    Returns:
+        Sorted list by score descending: [{"commit_hash": "abc123", "score": 9.5}, ...]
+    """
+    evaluation_prompt = f"""Evaluate and score multiple answers (0-10) based on their quality. 
+Higher scores indicate better alignment with the goal. Consider:
+1. Goal resolution completeness
+2. Answer relevance and accuracy
+3. Actionability of solutions
+4. Technical correctness (for TiDB-related goals)
+
+Goal: {goal}
+Supplementary Information: {metadata.get('response_format', 'N/A')}
+
+Answers to evaluate:
+{json.dumps([{"commit_hash": a["commit_hash"], "answer": a["final_answer"]} 
+            for a in answers_list], indent=2)}
+
+Score each answer 0-10 following these rules:
+- 9-10: Perfectly solves goal with optimal solution
+- 7-8: Solves goal with minor improvements possible
+- 5-6: Partially solves but misses key aspects
+- 3-4: Contains major flaws
+- 0-2: Completely irrelevant/invalid
+
+Return JSON array with scores in this format:
+[
+  {{"commit_hash": "hash1", "score": score1}},
+  {{"commit_hash": "hash2", "score": score2}}
+]"""
+
+    try:
+        response = llm_client.generate(evaluation_prompt)
+        scores = json.loads(extract_json(response))
+        # Create mapping for quick lookup
+        answer_map = {a["commit_hash"]: a["final_answer"] for a in answers_list}
+
+        return sorted(
+            [
+                {
+                    "commit_hash": s["commit_hash"],
+                    "score": float(s["score"]),
+                    "final_answer": answer_map.get(s["commit_hash"], "N/A"),
+                }
+                for s in scores
+            ],
+            key=lambda x: x["score"],
+            reverse=True,
+        )
+    except Exception as e:
+        logger.error(f"Error evaluating multiple answers: {e}", exc_info=True)
+        return []
