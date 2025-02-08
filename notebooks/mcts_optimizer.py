@@ -22,7 +22,7 @@ from app.storage.branch_manager.commit import parse_commit_message
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-from notebooks.plan_optimization_chat import evaulate_task_answer
+from app.core.plan.evaluator import evaulate_answer
 
 logger = logging.getLogger(__name__)
 
@@ -489,7 +489,8 @@ class MCTSPlanOptimizer:
         try:
 
             if node.state.final_answer is not None:
-                eval_response = evaulate_task_answer(
+                node.state.evaluation = evaulate_answer(
+                    llm_client,
                     self.goal,
                     self.metadata,
                     node.state.final_answer,
@@ -499,10 +500,8 @@ class MCTSPlanOptimizer:
                     "evaluate answer: %s(%s) response: %s",
                     node.state.commit_hash,
                     node.state.seq_no,
-                    eval_response,
+                    node.state.evaluation,
                 )
-                response_json_str = extract_json(eval_response)
-                node.state.evaluation = json.loads(response_json_str)
 
                 # Convert evaluation result to a numerical score
                 base_score = 1.0 if node.state.evaluation.get("accept", False) else 0.0
