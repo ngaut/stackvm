@@ -177,30 +177,66 @@ Below is an example where the calling type is configured to use the `llm_generat
 ```
 
 ### 3.4 reasoning
-- **Purpose**: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
+- **Purpose**: Provides essential analysis framework for understanding problem essence and solution design.
 - **Parameters**:
-  - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
-    - The overall strategy for approaching the problem
-    - Key decision points and rationale for choices made
-    - compliance_check: A structured analysis of how the plan adheres to best practices and avoids common errors.
-    - Assumptions and their justifications
-    - Potential alternative approaches considered
-    - Expected outcomes of each major step
-    - How different pieces of information are intended to be combined
-    - Any limitations or potential issues with the chosen approach
-  - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
+  - `chain_of_oughts`: Structured analysis containing:
 
-**Example:**
+    **1. Problem Deconstruction** (30% focus)
+    - Core question identification (What is really being asked?)
+    - Implicit requirements analysis (What's unstated but necessary?)
+    - Problem categorization matrix:
+      ```
+      [ ] Technical troubleshooting
+      [ ] Knowledge retrieval
+      [ ] Comparative analysis
+      [ ] Best practices guidance
+      [ ] Complex task planning
+      ```
+
+    **2. Solution Architecture** (60% focus)
+    - Key technical focal points (3-5 critical elements)
+    - Information retrieval strategy:
+      - Primary sources (e.g. official docs)
+      - LLM prior knowledge
+      - Cross-validation plan
+    - Information processing pipeline: Raw data → Filtering criteria → Synthesis method
+
+    **3. Compliance Safeguards** (10% focus)
+    - [ ] No environment assumptions
+    - [ ] Language consistency
+    - [ ] Final answer variable set
+    - [ ] Valid variable references
+
+  - `dependency_analysis`: Execution critical path visualization
+    ```
+    [Knowledge Graph] → (version)
+                       ↘
+    [Vector Search] → [LLM Synthesis] → final_answer
+    ```
+
+**Problem-Type Specific Guidance**:
+
+<details>
+<summary>Technical Troubleshooting Example</summary>
+
 ```json
 {
-  "seq_no": 0,
-  "type": "reasoning",
-  "parameters": {
-    "chain_of_thoughts": "To provide recommendations for the query, we'll follow this approach:\n\n1. Overall Strategy:\n   - Step 1: Gather initial information\n   - Step 2: Process and analyze data\n   - Step 3: Generate final recommendations\n\n2. Key Decision Points:\n   - Using multiple data sources for comprehensive coverage\n   - Implementing error handling for edge cases\n\n3. Limitations:\n   - Dependent on data freshness\n   - May require refinement based on specific use cases\n\n4. Compliance Checks:\n   - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)\n   - ✓ All responses will maintain consistent language (English)\n   - ✓ Final recommendations will be stored in final_answer\n   - ✓ All variable references use correct ${var} syntax\n...",
-    "dependency_analysis": "Step 2 depends on Step 1\nStep 2 depends on Step 2"
-  }
+  "chain_of_oughts": "Problem Deconstruction:\n- Core: Identify why cluster experiences latency spikes\n- Implicit: Assume latest stable version\n\nSolution Architecture:\n1. Fault Tree:\n   - Network config\n   - Query optimization\n   - Hardware limits\n2. Retrieval Strategy:\n   - KG: Known latency issues in ${version}\n   - Vector: 'latency spike' troubleshooting\n3. Validation Chain:\n   Hypothesis → Data Retrieval → Verification",
+  "dependency_analysis": "Step1(isolate_issue) → Step2(validate_hypothesis)"
 }
 ```
+</details>
+
+<details>
+<summary>Knowledge Retrieval Example</summary>
+
+```json
+{
+  "chain_of_oughts": "Problem Deconstruction:\n- Core: Compare TiDB vs MySQL sharding\n- Implicit: Focus on OLTP scenarios\n\nSolution Architecture:\n1. Comparison Dimensions:\n   - Horizontal scaling\n   - Distributed transactions\n2. Source Hierarchy:\n   - Primary: Official docs\n   - Secondary: Benchmarks\n3. Synthesis Plan:\n   Extract key metrics → Tabulate differences → Highlight tradeoffs",
+  "dependency_analysis": "KG(sharding_info) || Vector(sharding_case) → Synthesis"
+}
+```
+</details>
 
 ## 4. Parameters and Variable References
 Parameters can be either direct values or variable references. To reference a variable, use the format `${variable_name}`.
@@ -295,12 +331,12 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Best Practices for Utilizing Knowledge Graph Search**:
   - Retrieve Structured Data: Use the Knowledge Graph Search tool to obtain relevant structured knowledge data and their interrelationships.
-  - Refine and Summarize: After retrieval, employ an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s query.
+  - Refine and Summarize: After retrieval, employ an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user's query.
 
 - **Best Practices for Utilizing Vector Search**:
   - Combine Multiple Searches: Enhance response depth and clarity by combining multiple Vector Search calls with different queries. Start by using Vector Search to gather extensive, context-rich document fragments related to the query.
   - Synthesize with LLM: Feed the gathered snippets into an LLM generation tool to synthesize and generate comprehensive answers.
-  - Batch Processing: Limit multiple Vector Search operations to batches of three. After every three vector_search calls, use an LLM generation tool to summarize the aggregated results. This approach prevents exceeding the LLM’s token window limit and reduces the likelihood of token overflow errors.
+  - Batch Processing: Limit multiple Vector Search operations to batches of three. After every three vector_search calls, use an LLM generation tool to summarize the aggregated results. This approach prevents exceeding the LLM's token window limit and reduces the likelihood of token overflow errors.
 
 - **Best Practices for Information Retrieval - Combining Knowledge Graph Search and Vector Search**:
   - Dual Retrieval: When retrieving information, utilize both Knowledge Graph Search and Vector Search simultaneously. This combination enhances the richness of the information by leveraging the structured data from the knowledge graph and the detailed insights from vector search.
@@ -352,7 +388,7 @@ Parameters can be either direct values or variable references. To reference a va
 
 **Error Explanation**:
 
-- **Not allowed to execute SQL**：Please do not use any tools, such as llm_generate, to attempt to obtain SQL execution results.
+- **Not allowed to execute SQL**: Please do not use any tools, such as llm_generate, to attempt to obtain SQL execution results.
 - **Do Not Assume Specific Environment Information**: Do not make assumptions about (or generate) specific details of the environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed specific environment information.
 - **Avoid Obtain Specific Data with General Tools**: General tools like `retrieve_knowledge_graph`, `vector_search` and `llm_generate` can only access public documentation and general knowledge. They cannot access:
   - Current system configuration
