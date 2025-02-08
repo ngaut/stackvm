@@ -1,5 +1,6 @@
 import logging
 import json
+from typing import Dict, List
 
 from app.llm.interface import LLMInterface
 from app.utils import extract_json
@@ -88,3 +89,76 @@ Now Let's think step by step! Do you best on this evaluation task!
     except Exception as e:
         logger.error(f"Error evaluating task answer: {e}")
         return None
+
+
+def reflect_step_on_final_answer(
+    llm_client: LLMInterface,
+    goal: str,
+    final_answer: str,
+    metadata: Dict,
+    current_step_no: int,
+    plan: List[Dict],
+    vm_state: Dict,
+) -> Dict:
+    """Reflect on the current step and suggest optimizations for remaining steps.
+
+    Args:
+        goal: The original task goal
+        final_answer: The final answer produced by the plan
+        metadata: Additional task metadata
+
+    Returns:
+        {
+            "should_optimize": bool,  # Whether optimization is possible
+            "suggestion": str,     # Optimization suggestion explanation
+        }
+    """
+    # Prepare the reflection prompt
+    prompt = f"""
+    Goal: {goal} 
+
+    The supplementary information for Goal:
+    {metadata.get('response_format')}
+
+    Final Answer: {final_answer}
+    
+    Current Step ({current_step_no}):
+    {json.dumps(plan[current_step_no], indent=2)}
+
+    Current Execution State:
+    {json.dumps(vm_state, indent=2)}
+
+    Remaining Steps:
+    {json.dumps(plan[current_step_no + 1:], indent=2)}
+
+    Analyze the current execution and final answer:
+    1. Could the remaining steps be improved to generate a better final answer? Answer with yes or no.
+    2. If yes, suggest specific improvements focusing on:
+        - Adding new steps that could provide additional relevant information
+        - Modifying existing steps to gather more comprehensive or accurate data
+        - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
+
+    Note: Focus on improving answer quality rather than execution efficiency.
+
+    Format your response as JSON:
+    ```json
+    {{
+        "should_optimize": boolean,
+        "suggestion": "string",
+    }}
+    ```
+    """
+
+    try:
+        # Get reflection from LLM
+        response = llm_client.generate(prompt)
+        response_json_str = extract_json(response)
+        reflection = json.loads(response_json_str)
+
+        return reflection
+    except Exception as e:
+        logger.error("Error during reflection: %s", e)
+        return {
+            "should_optimize": False,
+            "suggestion": f"Error during reflection: {str(e)}",
+        }
