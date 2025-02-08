@@ -162,10 +162,14 @@ LLM_MODEL=gpt-4o
 
 # Reasoning Model Configuration (Optional)
 REASON_LLM_PROVIDER=openai
-REASON_LLM_MODEL=o3-mini
+REASON_LLM_MODEL=deepseek/deepseek-r1
+
+# Evaluation Model Configuration (Optional)
+EVALUATION_LLM_PROVIDER=gemini
+EVALUATION_LLM_MODEL=gemini-2.0-flash
 ```
 
-If `REASON_LLM_PROVIDER` and `REASON_LLM_MODEL` are not set, they will default to the standard LLM configuration values.
+If `REASON_LLM_PROVIDER`, `REASON_LLM_MODEL`, `EVALUATION_LLM_PROVIDER`, `EVALUATION_LLM_MODEL` are not set, they will default to the standard LLM configuration values.
 
 The reasoning model is specifically used for:
 - Plan generation

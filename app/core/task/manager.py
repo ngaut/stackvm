@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.storage.models import Task as TaskORM, TaskStatus, EvaluationStatus, Namespace
 from app.config.settings import (
+    LLM_PROVIDER,
+    LLM_MODEL,
     REASON_LLM_PROVIDER,
     REASON_LLM_MODEL,
     TASK_QUEUE_WORKERS,
@@ -41,7 +43,8 @@ class Task:
     def __init__(
         self,
         task_orm: TaskORM,
-        llm_interface: LLMInterface,
+        llm: LLMInterface,
+        reasoning_llm: LLMInterface,
     ):
         self.task_orm = task_orm
         if task_orm.status == TaskStatus.deleted:
@@ -53,7 +56,8 @@ class Task:
         else:
             self.branch_manager = MySQLBranchManager(task_orm.id)
 
-        self.llm_interface = llm_interface
+        self.llm = llm
+        self.reasoning_llm = reasoning_llm
         self._lock = threading.Lock()
 
     @property
@@ -117,9 +121,7 @@ class Task:
         self.save()
 
     def create_vm(self):
-        return PlanExecutionVM(
-            self.task_orm.goal, self.branch_manager, self.llm_interface
-        )
+        return PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
 
     def generate_plan(self):
         """Generate a plan for the task."""
@@ -195,7 +197,7 @@ class Task:
                 goal,
             )
             plan = generate_plan(
-                self.llm_interface,
+                self.reasoning_llm,
                 goal,
                 example=example_str,
                 best_practices=best_practices,
@@ -237,9 +239,7 @@ class Task:
                 if not plan:
                     raise ValueError("Failed to generate plan")
 
-                vm = PlanExecutionVM(
-                    self.task_orm.goal, self.branch_manager, self.llm_interface
-                )
+                vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
                 vm.set_plan(plan)
                 logger.info(
                     "Generated Plan:%s", json.dumps(plan, indent=2, ensure_ascii=False)
@@ -270,7 +270,7 @@ class Task:
                         )
 
                     vm = PlanExecutionVM(
-                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                        self.task_orm.goal, self.branch_manager, self.llm
                     )
                 else:
                     hashes = self.branch_manager.get_commit_hashes()
@@ -305,7 +305,7 @@ class Task:
                         )
 
                     vm = PlanExecutionVM(
-                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                        self.task_orm.goal, self.branch_manager, self.llm
                     )
                     vm.set_plan(plan)
 
@@ -347,7 +347,7 @@ class Task:
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
         updated_plan = optimize_partial_plan(
-            self.llm_interface,
+            self.reasoning_llm,
             self.task_orm.goal,
             self.task_orm.meta,
             vm.state["program_counter"],
@@ -433,9 +433,7 @@ class Task:
                         f"Failed to create or checkout branch '{new_branch_name}'"
                     )
 
-                vm = PlanExecutionVM(
-                    self.task_orm.goal, self.branch_manager, self.llm_interface
-                )
+                vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
 
                 logger.info(
                     f"Update plan for Task ID {self.task_orm.id} from commit hash: {commit_hash} to address the suggestion: {suggestion}"
@@ -464,9 +462,7 @@ class Task:
     ) -> Dict[str, Any]:
         with self._lock:
             try:
-                vm = PlanExecutionVM(
-                    self.task_orm.goal, self.branch_manager, self.llm_interface
-                )
+                vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
 
                 if not vm.set_state(commit_hash):
                     raise ValueError(
@@ -480,7 +476,7 @@ class Task:
                     global_tools_hub.get_tools_description(self.get_allowed_tools()),
                     suggestion,
                 )
-                updated_step_response = self.llm_interface.generate(prompt)
+                updated_step_response = self.reasoning_llm.generate(prompt)
 
                 if not updated_step_response:
                     raise ValueError("Failed to generate updated step")
@@ -507,7 +503,7 @@ class Task:
                     branch_name, previous_commit_hash
                 ):
                     vm = PlanExecutionVM(
-                        self.task_orm.goal, self.branch_manager, self.llm_interface
+                        self.task_orm.goal, self.branch_manager, self.llm
                     )
                     vm.state["current_plan"][seq_no] = updated_step
                     vm.state["program_counter"] = seq_no
@@ -585,7 +581,8 @@ class Task:
 
 class TaskService:
     def __init__(self):
-        self.llm_interface = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
+        self.llm = LLMInterface(LLM_PROVIDER, LLM_MODEL)
+        self.reasoning_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
         self.task_queue = TaskQueue(max_concurrent_tasks=TASK_QUEUE_WORKERS)
         self.task_queue.start_workers()
 
@@ -622,7 +619,7 @@ class TaskService:
             session.commit()
             session.refresh(task_orm, ["namespace"])
             logger.info(f"Created new task with ID {task_orm.id}")
-            return Task(task_orm, self.llm_interface)
+            return Task(task_orm, self.llm, self.reasoning_llm)
         except Exception as e:
             logger.error(f"Failed to create task: {str(e)}", exc_info=True)
             raise e
@@ -645,7 +642,7 @@ class TaskService:
                     logger.warning(f"Task with ID {task_id} is deleted.")
                     return None
 
-                return Task(task_orm, self.llm_interface)
+                return Task(task_orm, self.llm, self.reasoning_llm)
             else:
                 logger.warning(f"Task with ID {task_id} not found.")
                 return None

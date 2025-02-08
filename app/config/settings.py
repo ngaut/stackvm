@@ -39,6 +39,13 @@ if REASON_LLM_PROVIDER is None or REASON_LLM_MODEL is None:
     REASON_LLM_PROVIDER = LLM_PROVIDER
     REASON_LLM_MODEL = LLM_MODEL
 
+# Evaluation model settings (fallback to legacy settings if not set)
+EVALUATION_LLM_PROVIDER = os.environ.get("EVALUATION_LLM_PROVIDER", None)
+EVALUATION_LLM_MODEL = os.environ.get("EVALUATION_LLM_MODEL", None)
+if EVALUATION_LLM_PROVIDER is None or EVALUATION_LLM_MODEL is None:
+    EVALUATION_LLM_PROVIDER = LLM_PROVIDER
+    EVALUATION_LLM_MODEL = LLM_MODEL
+
 # Common LLM provider settings
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1/")
