@@ -74,7 +74,7 @@ Now, let's generate the plan.
    - Ensure that the "tool_params" object contains all necessary parameters for the specific tool being called.
 
 The final step of the plan must be assign the final output result to the 'final_answer' variable.
-Please provide only the JSON array for the action plan without any additional text, explanations, or markdown. 
+Please provide only the valid JSON array for the action plan without any additional text, explanations, or markdown.
 Ensure the JSON is properly formatted and encapsulated within a ```json code block.
 
     ```json

@@ -4,119 +4,184 @@
 ```json
 [
   {
-    "seq_no": 0,
-    "type": "reasoning",
     "parameters": {
-      "chain_of_thoughts": "To provide best practices for optimizing TiDB performance for a high-volume e-commerce application, we're adopting a multi-step approach:\n\n      1. **Overall Strategy**:\n         We'll follow these steps:\n         1. Determine the latest stable version of TiDB\n         2. Gather version-specific information\n         3. Collect general TiDB information (if needed)\n         4. Gather performance optimization techniques\n         5. Collect e-commerce-specific optimizations\n         6. Synthesize gathered information into actionable recommendations\n\n      2. **Key Decision Points and Rationale**:\n         a. **Using both knowledge graph and vector search**: This allows us to leverage structured relationships (knowledge graph) and semantic similarity (vector search) for comprehensive information gathering.\n         b. **Conditional logic for version determination**: This helps us handle cases where the exact version might not be clear from the knowledge graph data.\n\n      3. **Assumptions**:\n         - The latest stable version of TiDB is the most relevant for current optimization practices.\n         - E-commerce applications have specific performance requirements that may differ from general use cases.\n\n      4. Compliance Checks:\n       - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)\n       - ✓ All responses will maintain consistent language (English)\n       - ✓ Final recommendations will be stored in final_answer\n       - ✓ All variable references use correct ${var} syntax\n\n      5. **Alternative Approaches Considered**:\n         - We could have used only vector search, but this might miss important structured relationships in the data.\n         - We could have skipped version-specific information, but this would likely result in less accurate and relevant recommendations.\n\n      6. **Expected Outcomes**:\n         - **Steps 1-2**: Identification of the latest TiDB version\n         - **Steps 3-6**: Gathering of version-specific and general TiDB information\n         - **Steps 7-8**: Collection of performance techniques and e-commerce-specific optimizations\n         - **Steps 9-10**: Synthesis of gathered information into actionable recommendations\n\n      7. **Information Combination**:\n         The LLM will synthesize the version-specific features, general performance techniques, and e-commerce considerations to create a comprehensive set of recommendations.\n\n      8. **Limitations**:\n         - The accuracy of our recommendations depends on the freshness of the knowledge graph and vector database.\n         - If no specific version is found, our recommendations may be more general and less tailored.\n\n      This approach allows us to provide version-specific, relevant, and comprehensive optimization recommendations for TiDB in an e-commerce context.",
-      "dependency_analysis": "Step 2 depends on Step 1.\nStep 3 depends on Step 2.\nStep 4 depends on Step 3 (if condition is true).\nStep 5 depends on Step 4 when condition is true (to skip Step 6).\nStep 6 depends on Step 3 (if condition is false).\nStep 7 depends on Step 4 or Step 6.\nStep 8 depends on Step 7.\nStep 9 depends on Step 8.\nStep 10 depends on Step 9."
-    }
+      "chain_of_thoughts": "Problem Essence:\n  - Core: Performance optimization for high-concurrency e-commerce workloads\n  - Assumptions: Using latest stable TiDB version\n  - Archetype: Version-specific configuration optimization\n\nTechnical Blueprint:\n■ Version Establishment\n  → KG Query: 'TiDB latest stable release'\n■ Schema Optimization\n  → Vector: 'TiDB e-commerce schema design'\n■ Transaction Handling\n  → Vector: 'distributed transaction patterns'\n■ Monitoring Configuration\n  → KG: 'Performance monitoring parameters'\n\nExecution Map:\nValidate Version → Load Config Presets → Analyze Workload Patterns → Generate Recommendations\n\n! Risk: Validate async_commit compatibility with application requirements",
+      "dependency_analysis": "Step1 → Step2 → [Step3|Step4] → Step5 → [Step6|Step7] → Step8 → [Step9|Step10] → Step11 → Step12 → Step13"
+    },
+    "seq_no": 0,
+    "type": "reasoning"
   },
   {
-    "seq_no": 1,
-    "type": "calling",
     "parameters": {
+      "output_vars": [
+        "version_info"
+      ],
       "tool_name": "retrieve_knowledge_graph",
       "tool_params": {
-        "query": "TiDB latest stable version"
-      },
-      "output_vars": ["latest_tidb_version_info"]
-    }
+        "query": "TiDB latest stable version release information"
+      }
+    },
+    "seq_no": 1,
+    "type": "calling"
   },
   {
+    "parameters": {
+      "output_vars": [
+        "tidb_version",
+        "release_date"
+      ],
+      "tool_name": "llm_generate",
+      "tool_params": {
+        "context": null,
+        "prompt": "Extract the latest stable TiDB version number from the knowledge graph data in ${version_info}. Respond with JSON: {\"version\": \"x.y.z\", \"release_date\": \"YYYY-MM-DD\"}\n\nPlease ensure that the generated text uses English."
+      }
+    },
     "seq_no": 2,
-    "type": "calling",
-    "parameters": {
-      "tool_name": "llm_generate",
-      "tool_params": {
-        "prompt": "Analyze the provided knowledge graph data to extract the latest stable version number of TiDB and its release date.\n\n- Focus specifically on entities related to 'Release Notes'.\n- If multiple version numbers are found, select the one with the most recent release date.\n- Version numbers may be in the format 'vX.Y.Z' or 'vX.Y.Z-suffix' (e.g., 'v8.3.0-DMR').\n\n- Respond only in JSON format with keys [\"latest_stable_tidb_version\", \"release_date\"], (e.g., {\"latest_stable_tidb_version\"': \"v8.1.1\", \"release_date\": \"2024-08-27\"})\n- If no specific stable version number is found, respond exactly {\"latest_stable_tidb_version\": \"latest stable version tidb\", \"release_date\": null}.",
-        "context": "the retrieved knowledge graph data:\n${latest_tidb_version_info}"
-      },
-      "output_vars": ["latest_stable_tidb_version", "release_date"]
-    }
+    "type": "calling"
   },
   {
+    "parameters": {
+      "output_vars": [
+        "general_optimizations_kg"
+      ],
+      "tool_name": "retrieve_knowledge_graph",
+      "tool_params": {
+        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce"
+      }
+    },
     "seq_no": 3,
-    "type": "jmp",
-    "parameters": {
-      "condition_prompt": "Was a specific latest stable version of TiDB found? Respond with a JSON object in the following format:\n{\n  \"result\": boolean,\n  \"explanation\": string\n}\nWhere 'result' is true if a specific version was found, false otherwise, and 'explanation' provides a brief reason for the result.",
-      "context": "Latest TiDB version: ${latest_stable_tidb_version}",
-      "jump_if_true": 4,
-      "jump_if_false": 6
-    }
+    "type": "calling"
   },
   {
+    "parameters": {
+      "output_vars": [
+        "general_optimizations_chunks"
+      ],
+      "tool_name": "vector_search",
+      "tool_params": {
+        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce",
+        "top_k": 10
+      }
+    },
     "seq_no": 4,
-    "type": "calling",
-    "parameters": {
-      "tool_name": "vector_search",
-      "tool_params": {
-        "query": "What are the key features and improvements in TiDB version ${latest_stable_tidb_version}?",
-        "top_k": 10
-      },
-      "output_vars": ["tidb_key_features_and_improvements"]
-    }
+    "type": "calling"
   },
   {
-    "seq_no": 5,
-    "type": "jmp",
     "parameters": {
-      "target_seq": 7
-    }
-  },
-  {
-    "seq_no": 6,
-    "type": "calling",
-    "parameters": {
-      "tool_name": "vector_search",
-      "tool_params": {
-        "query": "Latest TiDB version and its key features",
-        "top_k": 10
-      },
-      "output_vars": ["tidb_key_features_and_improvements"]
-    }
-  },
-  {
-    "seq_no": 7,
-    "type": "calling",
-    "parameters": {
-      "tool_name": "vector_search",
-      "tool_params": {
-        "query": "TiDB ${latest_stable_tidb_version} performance optimization techniques",
-        "top_k": 10
-      },
-      "output_vars": ["performance_techniques"]
-    }
-  },
-  {
-    "seq_no": 8,
-    "type": "calling",
-    "parameters": {
-      "tool_name": "vector_search",
-      "tool_params": {
-        "query": "What are specific considerations for optimizing TiDB ${latest_stable_tidb_version} for e-commerce applications?",
-        "top_k": 10
-      },
-      "output_vars": ["ecommerce_optimizations"]
-    }
-  },
-  {
-    "seq_no": 9,
-    "type": "calling",
-    "parameters": {
+      "output_vars": [
+        "general_optimizations"
+      ],
       "tool_name": "llm_generate",
       "tool_params": {
-        "prompt": "Provide a comprehensive list of best practices for optimizing TiDB performance for a high-volume e-commerce application. Organize the recommendations into categories such as schema design, indexing, query optimization, and infrastructure scaling. Ensure that all recommendations are applicable to TiDB version ${latest_stable_tidb_version}, response in text.\n\n Please ensure that the generated text uses English. And if (and only if) reference specific information from the context to construct your answer, include the corresponding reference source_uri link(s) clearly. Ensure the references are formatted properly to enable direct indexing to the source for further details.",
-        "context": "Based on the following information for TiDB version ${latest_stable_tidb_version}:\n1. TiDB Overview: ${tidb_key_features_and_improvements}\n2. Performance Techniques: ${performance_techniques}\n3. E-commerce Optimizations: ${ecommerce_optimizations}"
-      },
-      "output_vars": ["final_recommendations"]
-    }
+        "context": "the retrieved knowledge graph data:\n${general_optimizations_kg}\n\n the retrieved chunks:\n${general_optimizations_chunks}",
+        "prompt": "Extract the general optimization best practices for e-commerce from the knowledge graph data and chunks. Please include source citations from chunks source_uri."
+      }
+    },
+    "seq_no": 5,
+    "type": "calling"
   },
   {
-    "seq_no": 10,
-    "type": "assign",
     "parameters": {
-      "final_answer": "Best practices for optimizing TiDB ${latest_stable_tidb_version} (released on ${release_date}) performance for a high-volume e-commerce application:\n\n${final_recommendations}"
-    }
+      "output_vars": [
+        "transaction_patterns_kg"
+      ],
+      "tool_name": "retrieve_knowledge_graph",
+      "tool_params": {
+        "query": "High-volume transaction patterns in TiDB e-commerce applications"
+      }
+    },
+    "seq_no": 6,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "transaction_patterns_chunks"
+      ],
+      "tool_name": "vector_search",
+      "tool_params": {
+        "query": "High-volume transaction patterns in TiDB e-commerce applications",
+        "top_k": 5
+      }
+    },
+    "seq_no": 7,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "transaction_patterns"
+      ],
+      "tool_name": "llm_generate",
+      "tool_params": {
+        "context": "the retrieved knowledge graph data:\n${transaction_patterns_kg}\n\n the retrieved chunks:\n${transaction_patterns_chunks}",
+        "prompt": "Extract the TiDB transaction patterns for high-volume e-commerce applications from the knowledge graph data and chunks. Please include source citations from chunks source_uri."
+      }
+    },
+    "seq_no": 8,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "config_parameters_kg"
+      ],
+      "tool_name": "retrieve_knowledge_graph",
+      "tool_params": {
+        "query": "TiDB ${tidb_version} configuration parameters for high concurrency"
+      }
+    },
+    "seq_no": 9,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "config_parameters_chunks"
+      ],
+      "tool_name": "vector_search",
+      "tool_params": {
+        "query": "TiDB ${tidb_version} configuration parameters for high concurrency",
+        "top_k": 5
+      }
+    },
+    "seq_no": 10,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "config_parameters"
+      ],
+      "tool_name": "llm_generate",
+      "tool_params": {
+        "context": "the retrieved knowledge graph data:\n${config_parameters_kg}\n\n the retrieved chunks:\n${config_parameters_chunks}",
+        "prompt": "Extract the TiDB configuration parameters for high concurrency from the knowledge graph data and chunks. Please include source citations from chunks source_uri."
+      }
+    },
+    "seq_no": 11,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "output_vars": [
+        "optimization_report"
+      ],
+      "tool_name": "llm_generate",
+      "tool_params": {
+        "context": null,
+        "prompt": "Synthesize comprehensive optimization recommendations from these resources:\n1. General Optimizations: ${general_optimizations}\n2. Transaction Patterns: ${transaction_patterns}\n3. Configuration: ${config_parameters}\n\nOrganize into categories: Schema Design, Indexing Strategy, Transaction Handling, Monitoring. Include specific parameter recommendations for version ${tidb_version}. Format using markdown sections.\n\nPlease ensure that the generated text uses English. Please include source citations from chunks source_uri."
+      }
+    },
+    "seq_no": 12,
+    "type": "calling"
+  },
+  {
+    "parameters": {
+      "final_answer": "TiDB ${tidb_version} Optimization Best Practices (Release Date: ${release_date})\n\n${optimization_report}"
+    },
+    "seq_no": 13,
+    "type": "assign"
   }
 ]
-
+```

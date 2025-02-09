@@ -177,28 +177,57 @@ Below is an example where the calling type is configured to use the `llm_generat
 ```
 
 ### 3.4 reasoning
-- **Purpose**: Provides a detailed explanation of the plan's reasoning process, analysis, and steps.
-- **Parameters**:
-  - `chain_of_thoughts`: A string containing a comprehensive breakdown of the reasoning process.
-    - The overall strategy for approaching the problem
-    - Key decision points and rationale for choices made
-    - compliance_check: A structured analysis of how the plan adheres to best practices and avoids common errors.
-    - Assumptions and their justifications
-    - Potential alternative approaches considered
-    - Expected outcomes of each major step
-    - How different pieces of information are intended to be combined
-    - Any limitations or potential issues with the chosen approach
-  - `dependency_analysis`: A string or structured data describing the dependencies between different steps or sub-queries in the plan.
+- **Purpose**: Document the core analytical process and technical decision logic
 
-**Example:**
+**Implementation Notes**:
+> While structured formatting helps ensure completeness, focus on capturing the **authentic technical reasoning process**. Treat formatting elements as thinking aids, not rigid constraints. A good chain_of_oughts should:
+> - Reflect how an expert engineer would analyze the problem
+> - Show clear technical decision-making pathways
+> - Reveal the 'why' behind tool selections
+> - Prioritize depth of analysis over rigid template adherence
+
+- **Parameters**:
+
+  **1. chain_of_oughts** (string):
+  Structured technical rationale containing:
+  ```text
+  a) Problem Essence:
+     - Core technical challenge identification
+     - Critical implicit assumptions
+     - Solution archetype classification:
+       • Performance Optimization
+       • Knowledge Synthesis
+       • System Troubleshooting
+
+  b) Technical Blueprint:
+     ■ Core Components (3-5 key elements)
+     → Data Flow: [KG]→[Vector]→[LLM]
+     ! Risk Hotspots: Mark high-stakes decisions
+     ▣ Version Strategy: Fallback plan handling
+
+  c) Execution Map:
+     Variable Transformations: ${A}→${B}
+     Validation Checkpoints: [Must-pass criteria]
+  ```
+
+  **2. dependency_analysis** (string):
+  Visual execution path representation using:
+  ```text
+  - Arrows for data flow: StepA → StepB
+  - Brackets for parallel steps: [Step1|Step2]
+  - Conditional branches: IF(condition)→Path
+  - Critical variables: ${var_name}
+  ```
+
+**Validation Rules**:
+1. Must contain at least one ■ Core Component
+2. Must identify at least one ! Risk Hotspot
+
+**Optimized Example**:
 ```json
 {
-  "seq_no": 0,
-  "type": "reasoning",
-  "parameters": {
-    "chain_of_thoughts": "To provide recommendations for the query, we'll follow this approach:\n\n1. Overall Strategy:\n   - Step 1: Gather initial information\n   - Step 2: Process and analyze data\n   - Step 3: Generate final recommendations\n\n2. Key Decision Points:\n   - Using multiple data sources for comprehensive coverage\n   - Implementing error handling for edge cases\n\n3. Limitations:\n   - Dependent on data freshness\n   - May require refinement based on specific use cases\n\n4. Compliance Checks:\n   - ✓ No user-specific queries planned (will not attempt to detect current version/configuration)\n   - ✓ All responses will maintain consistent language (English)\n   - ✓ Final recommendations will be stored in final_answer\n   - ✓ All variable references use correct ${var} syntax\n...",
-    "dependency_analysis": "Step 2 depends on Step 1\nStep 2 depends on Step 2"
-  }
+  "chain_of_oughts":"Problem Essence:\n  - Core: Distributed lock optimization under high concurrency\n  - Assumptions: Using latest stable version\n  - Archetype: Version-specific best practices\n\n  Technical Blueprint:\n  ■ Lock Mechanism\n    → KG: lock_manager config in v${version}\n    → Vector: 'hotspot lock' case studies\n    ! Risk: AsyncCommit may delay visibility\n  \n  ▣ Version Fallback: Use v8.5 base if no v${version}\n  \n  Execution Map:\n  KG(config) → LLM(matrix_gen) → final_answer\n  Validation: Check QPS improvement ≥30%",
+  "dependency_analysis":"KG1 → LLM1 → IF valid → final_answer\n               ↘ ELSE → HumanReview"
 }
 ```
 
@@ -209,7 +238,7 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Variable References** are ideal for scenarios that require dynamic parameter value filling, enhancing the interconnectivity and data flow between instructions. By using variable references, parameters can be adjusted dynamically based on the results of previous steps, increasing the flexibility and automation of the workflow.
 
-- **Don’t Use Math Expressions in Parameters and tool_params**: The VM does not have the capability to compute or parse expressions within parameters. It can only perform simple reference substitutions. For example, avoid using expressions like value1 + value2 or value * 2 within parameters, and instead, calculate these values explicitly in a prior step and refer to the result in the parameter.
+- **Don't Use Math Expressions in Parameters and tool_params**: The VM does not have the capability to compute or parse expressions within parameters. It can only perform simple reference substitutions. For example, avoid using expressions like value1 + value2 or value * 2 within parameters, and instead, calculate these values explicitly in a prior step and refer to the result in the parameter.
 
 
 **Direct Value Example:**
@@ -295,12 +324,12 @@ Parameters can be either direct values or variable references. To reference a va
 
 - **Best Practices for Utilizing Knowledge Graph Search**:
   - Retrieve Structured Data: Use the Knowledge Graph Search tool to obtain relevant structured knowledge data and their interrelationships.
-  - Refine and Summarize: After retrieval, employ an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user’s query.
+  - Refine and Summarize: After retrieval, employ an LLM generation tool to refine and summarize the knowledge graph results. This ensures the information is precise, relevant, and tailored to the user's query.
 
 - **Best Practices for Utilizing Vector Search**:
   - Combine Multiple Searches: Enhance response depth and clarity by combining multiple Vector Search calls with different queries. Start by using Vector Search to gather extensive, context-rich document fragments related to the query.
   - Synthesize with LLM: Feed the gathered snippets into an LLM generation tool to synthesize and generate comprehensive answers.
-  - Batch Processing: Limit multiple Vector Search operations to batches of three. After every three vector_search calls, use an LLM generation tool to summarize the aggregated results. This approach prevents exceeding the LLM’s token window limit and reduces the likelihood of token overflow errors.
+  - Batch Processing: Limit multiple Vector Search operations to batches of three. After every three vector_search calls, use an LLM generation tool to summarize the aggregated results. This approach prevents exceeding the LLM's token window limit and reduces the likelihood of token overflow errors.
 
 - **Best Practices for Information Retrieval - Combining Knowledge Graph Search and Vector Search**:
   - Dual Retrieval: When retrieving information, utilize both Knowledge Graph Search and Vector Search simultaneously. This combination enhances the richness of the information by leveraging the structured data from the knowledge graph and the detailed insights from vector search.
@@ -352,7 +381,7 @@ Parameters can be either direct values or variable references. To reference a va
 
 **Error Explanation**:
 
-- **Not allowed to execute SQL**：Please do not use any tools, such as llm_generate, to attempt to obtain SQL execution results.
+- **Not allowed to execute SQL**: Please do not use any tools, such as llm_generate, to attempt to obtain SQL execution results.
 - **Do Not Assume Specific Environment Information**: Do not make assumptions about (or generate) specific details of the environment, such as their current system configuration, current versions of tidb, current tiup version, or private data. Plans should be designed to be adaptable and not rely on presumed specific environment information.
 - **Avoid Obtain Specific Data with General Tools**: General tools like `retrieve_knowledge_graph`, `vector_search` and `llm_generate` can only access public documentation and general knowledge. They cannot access:
   - Current system configuration
