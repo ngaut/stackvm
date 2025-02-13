@@ -10,7 +10,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 
 from app.utils import extract_json
-from app.config.settings import REASON_LLM_PROVIDER, REASON_LLM_MODEL, EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
+from app.config.settings import (
+    REASON_LLM_PROVIDER,
+    REASON_LLM_MODEL,
+    EVALUATION_LLM_PROVIDER,
+    EVALUATION_LLM_MODEL,
+)
 from app.llm.interface import LLMInterface
 from app.instructions.tools import tool
 
@@ -90,6 +95,12 @@ class KnowledgeGraphClient:
             logger.error("Max retries exceeded for retrieve_knowledge: %s", str(e))
             raise
         except requests.exceptions.RequestException as e:
+            if e.response is not None and e.response.status_code == 404:
+                logger.warning("No knowledge found for query: %s", query)
+                return {
+                    "entities": [],
+                    "relationships": [],
+                }
             logger.error("Request to retrieve_knowledge failed: %s", str(e))
             raise
         except ValueError as e:
@@ -128,6 +139,16 @@ class KnowledgeGraphClient:
             logger.error("Max retries exceeded for retrieve_neighbors: %s", str(e))
             raise
         except requests.exceptions.RequestException as e:
+            if e.response is not None and e.response.status_code == 404:
+                logger.warning(
+                    "No neighbors found for entities_ids: %s, query: %s",
+                    entities_ids,
+                    query,
+                )
+                return {
+                    "entities": [],
+                    "relationships": [],
+                }
             if e.response is not None:
                 logger.error(
                     "Request to retrieve_neighbors failed with status code %s, response content: %s",
@@ -149,6 +170,7 @@ class KnowledgeGraphClient:
     def retrieve_chunks(self, relationships_ids: List[int]):
         """
         Retrieve chunks associated with given relationship IDs.
+        Returns empty list if no chunks found.
         """
         url = (
             f"{self.base_url}/admin/knowledge_bases/{self.kb_id}/graph/knowledge/chunks"
@@ -163,6 +185,11 @@ class KnowledgeGraphClient:
             logger.error("Max retries exceeded for retrieve_chunks: %s", str(e))
             raise
         except requests.exceptions.RequestException as e:
+            if e.response is not None and e.response.status_code == 404:
+                logger.warning(
+                    "No chunks found for relationships_ids: %s", relationships_ids
+                )
+                return []
             if e.response is not None:
                 logger.error(
                     "Request to retrieve_chunks failed with status code %s, response content: %s",
@@ -187,6 +214,7 @@ llm_client = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 logger.info(f"Using {REASON_LLM_MODEL} Reasoning LLM")
 evaluation_client = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
 logger.info(f"Using {EVALUATION_LLM_MODEL} Evaluation LLM")
+
 
 class MetaGraph:
     def __init__(self, llm_client, query):
@@ -415,7 +443,13 @@ def evaluation_retrieval_results(
     try:
         analysis = json.loads(res_str)
     except Exception as e:
-        logger.error("Error processing evaluation result decoding %s:%s, %s", e, res_str, response, exc_info=True)
+        logger.error(
+            "Error processing evaluation result decoding %s:%s, %s",
+            e,
+            res_str,
+            response,
+            exc_info=True,
+        )
         raise e
 
     return analysis
