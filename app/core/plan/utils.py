@@ -28,7 +28,7 @@ def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
 
         return plan
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error("Failed to parse plan: %s", e)
+        logger.error("Failed to parse plan: %s. Data %s", e, plan_response)
         return None
 
 

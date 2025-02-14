@@ -307,7 +307,7 @@ class InstructionHandlers:
 
         if not isinstance(chain_of_thoughts, str):
             return False, {
-                "error_message": "Invalid parameters for 'reasoning'.",
+                "error_message": f"Invalid parameters for 'reasoning': chain_of_thoughts {chain_of_thoughts}({type(chain_of_thoughts)}) is not a string.",
                 "instruction": "reasoning",
                 "params": params,
             }

@@ -40,10 +40,18 @@ II. PLAN VALIDATION (Secondary Check)
      * Irrelevant information inclusion
      * Technical inaccuracies
      * Overlooking critical aspects of the Goal
+     * Raw data not processed by LLM generation tool
 
 3. Efficiency Check:
    - Are there redundant steps that don't contribute to the Final Answer?
    - Could the Plan be simplified while maintaining answer quality?
+
+4. Retrieval Best Practices Check:
+   - Does the Plan implement dual retrieval (use both retrieve_knowledge_graph and vector_search tools) for each query?
+   - After each dual retrieval, does the Plan immediately process combined results through LLM generation tool to:
+     * Extract key insights specific to the query
+     * Present a coherent, summarized narrative
+   - Does the Plan avoid passing raw retrieved data to non-LLM tools?
 
 III. INTEGRATION CHECK
 - If the Answer is good but the Plan has issues: Can we accept the answer while flagging Plan improvements?
