@@ -607,23 +607,22 @@ def smart_retrieve(
 @tool
 def retrieve_knowledge_graph(query):
     """
-    Retrieves TiDB related information from a knowledge graph based on a query, returning nodes and relationships between those nodes.
+    Retrieves TiDB related information from a knowledge graph, returning nodes and relationships between those nodes.
+
+    This tool is designed to extract structured knowledge about TiDB from a knowledge graph. It excels at identifying entities and relationships, providing a rich context of interconnected information.
 
     Arguments:
-    - `query`: The query string. Can be a direct string or a variable reference.
+      - `query`: The query string. This should be a question or statement about TiDB entities, concepts, or their relationships. Can be a direct string or a variable reference.
 
     Output:
-    - Returns a single value representing the retrieved knowledge graph data.
+      - Returns a single dictionary (`Dict`) representing the retrieved knowledge graph data. This dictionary contains a complex structure representing nodes and the relationships between them, extracted from the knowledge graph. 
+        **Important:** The raw output of this tool, a complex dictionary representing graph data, is **not intended for direct use in the final answer.**  The knowledge graph data is returned in a structured format that requires further processing to be presented in a user-friendly and coherent manner.
 
 
     Best practices:
-    - Focus on Structured Knowledge: Use the retrieve_knowledge_graph tool to retrieve structured and relational knowledge that is relevant to the query. This tool excels in identifying fine-grained knowledge points and understanding their connections.
-    - Combine with LLM for Refinement:
-        - Knowledge Graph Search may return extensive data, including numerous nodes and complex relationships.
-        - Always follow up with an LLM generation tool to refine and summarize the results. This ensures the output is concise, precise, and tailored to the user's question.
-
-    Strict Restriction:
-    - Avoid User-Specific Queries: Do not use this tool to retrieve data that is specific to a user's environment, such as configurations, current versions, or private data. This tool is designed to handle general, shared knowledge within the graph.
+    - **Prioritize for Information Retrieval:** For most information retrieval tasks related to TiDB knowledge, the `retrieve_knowledge_graph` tool should be your **first choice**.  Consider using `retrieve_knowledge_graph` and `vector_search` together with the **same query** to retrieve complementary information and increase the richness of results.  `vector_search` can be used as a secondary option when graph-based knowledge is insufficient.
+    - **Refine and Synthesize with `llm_generate`:** After retrieving information using `retrieve_knowledge_graph` (and optionally `vector_search`), **always** process the raw output using the `llm_generate` tool.  Use `llm_generate` to refine, summarize, and synthesize the retrieved knowledge graph data (and document snippets if using `vector_search` as well) into a concise and user-friendly answer. Do **not** directly use the raw output in the `final_answer`.
+    - **Focus Queries on General TiDB Knowledge:**  Target your queries towards general, shared knowledge about TiDB concepts and relationships.  Avoid queries that are specific to a user's environment or seek private data like configurations or versions, which is out of scope of this tool.
     """
 
     return smart_retrieve(query)

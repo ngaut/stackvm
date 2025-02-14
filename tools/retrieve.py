@@ -114,14 +114,17 @@ def get_chunk_content(chunk):
 @tool
 def vector_search(query, top_k=10):
     """
-    Retrieves the most relevant TiDB Document data chunks based on embedding similarity to the query.
+    Retrieves the most relevant snippets of TiDB documentation based on embedding similarity to your query.
+
+    This tool leverages vector embeddings to find document fragments from TiDB documentation that are most semantically similar to your query. It excels at finding relevant document snippets that provide rich context and detailed information.
 
     Arguments:
-    - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective.
-    - `top_k`: The number of top chunks to retrieve. Can be a direct integer or a variable reference.
+      - `query`: The query string. It should be a clear and simple statement or question, focusing on a single objective for best results.
+      - `top_k`: The number of top document snippets to retrieve. Must be an integer or a variable referencing an integer.
 
     Output:
-    - Returns a single value containing the concatenated top `k` document chunks, stored in a unique variable. It does not return a JSON or dictionary object.
+      - Returns a list of dictionaries (`List[Dict]`). Each dictionary represents a retrieved document chunk and contains information about the chunk (e.g., content, source). **Important:** The raw output of this tool, a list of dictionaries, is **not intended for direct use in the final answer.** The document chunks are returned as individual fragments and require further processing to form a coherent response.
+
 
     Example to call this tool:
 
@@ -142,9 +145,8 @@ def vector_search(query, top_k=10):
     ```
 
     Best practices:
-    - Use the Vector Search tool to retrieve data that is most similar to your query based on embedding distance. This tool excels at finding relevant document snippets that provide rich context and detailed information.
-    - **Ensure your query is clear and focused on a single objective or aspect.** Avoid queries with multiple purposes to achieve the most accurate and relevant results.
-    - Do not insert the raw results from vector_search directly into the final_answer. The vector search tool returns arrays or multiple document fragments that may not be immediately suitable for a coherent final response. Instead, first use an LLM generation step to summarize, refine, and unify the language of these fragments. Once processed into a concise and well-structured text in the target language, then integrate this refined output into the final_answer.
+      - **Process Output with `llm_generate`:**  The `vector_search` tool returns a list of document chunks. **Always** process this raw output using the `llm_generate` tool to summarize, synthesize, and refine the information into a coherent answer before using it in the final response.  Do **not** directly use the raw `vector_search` output in the `final_answer`.
+      - **Use Clear, Focused Queries:** For the best search results, ensure your query is clear, concise, and focuses on a **single**, specific question or objective. Avoid multi-part or ambiguous queries.
     """
 
     # Initialize the tokenizer for the specified model at module level
