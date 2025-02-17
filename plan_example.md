@@ -1,28 +1,7 @@
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
 
-**The plan:**
-<think>
-Problem Essence:
-  - Core: Performance optimization for high-concurrency e-commerce workloads
-  - Assumptions: Using latest stable TiDB version
-  - Archetype: Version-specific configuration optimization
-
-Technical Blueprint:
-■ Version Establishment
-  → KG Query: 'TiDB latest stable release'
-■ Schema Optimization
-  → Vector: 'TiDB e-commerce schema design'
-■ Transaction Handling
-  → Vector: 'distributed transaction patterns'
-■ Monitoring Configuration
-  → KG: 'Performance monitoring parameters'
-
-Execution Map:
-Validate Version → Load Config Presets → Analyze Workload Patterns → Generate Recommendations
-
-! Risk: Validate async_commit compatibility with application requirements
-</think>
-<plan>
+**The plan:** (ignore the think and answer tags)
+```json
 [
   {
     "parameters": {
@@ -40,7 +19,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
   {
     "parameters": {
       "output_vars": [
-        "tidb_version",
+        "latest_tidb_version",
         "release_date"
       ],
       "tool_name": "llm_generate",
@@ -59,7 +38,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
       ],
       "tool_name": "retrieve_knowledge_graph",
       "tool_params": {
-        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce"
+        "query": "TiDB ${latest_tidb_version} performance optimization best practices for e-commerce"
       }
     },
     "seq_no": 3,
@@ -72,7 +51,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
       ],
       "tool_name": "vector_search",
       "tool_params": {
-        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce",
+        "query": "TiDB ${latest_tidb_version} performance optimization best practices for e-commerce",
         "top_k": 10
       }
     },
@@ -141,7 +120,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
       ],
       "tool_name": "retrieve_knowledge_graph",
       "tool_params": {
-        "query": "TiDB ${tidb_version} configuration parameters for high concurrency"
+        "query": "TiDB ${latest_tidb_version} configuration parameters for high concurrency"
       }
     },
     "seq_no": 9,
@@ -154,7 +133,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
       ],
       "tool_name": "vector_search",
       "tool_params": {
-        "query": "TiDB ${tidb_version} configuration parameters for high concurrency",
+        "query": "TiDB ${latest_tidb_version} configuration parameters for high concurrency",
         "top_k": 5
       }
     },
@@ -183,7 +162,7 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
       "tool_name": "llm_generate",
       "tool_params": {
         "context": null,
-        "prompt": "Synthesize comprehensive optimization recommendations from these resources:\n1. General Optimizations: ${general_optimizations}\n2. Transaction Patterns: ${transaction_patterns}\n3. Configuration: ${config_parameters}\n\nOrganize into categories: Schema Design, Indexing Strategy, Transaction Handling, Monitoring. Include specific parameter recommendations for version ${tidb_version}. Format using markdown sections.\n\nPlease ensure that the generated text uses English. Please include source citations from chunks source_uri."
+        "prompt": "Synthesize comprehensive optimization recommendations from these resources:\n1. General Optimizations: ${general_optimizations}\n2. Transaction Patterns: ${transaction_patterns}\n3. Configuration: ${config_parameters}\n\nOrganize into categories: Schema Design, Indexing Strategy, Transaction Handling, Monitoring. Include specific parameter recommendations for version ${latest_tidb_version}. Format using markdown sections.\n\nPlease ensure that the generated text uses English. Please include source citations from chunks source_uri."
       }
     },
     "seq_no": 12,
@@ -191,10 +170,10 @@ Validate Version → Load Config Presets → Analyze Workload Patterns → Gener
   },
   {
     "parameters": {
-      "final_answer": "TiDB ${tidb_version} Optimization Best Practices (Release Date: ${release_date})\n\n${optimization_report}"
+      "final_answer": "TiDB ${latest_tidb_version} Optimization Best Practices (Release Date: ${release_date})\n\n${optimization_report}"
     },
     "seq_no": 13,
     "type": "assign"
   }
 ]
-</plan>
+```

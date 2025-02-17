@@ -29,21 +29,23 @@ def extract_reasoning_and_plan(
     """
     try:
         # Extract reasoning
-        reasoning = None
         think_match = re.search(r"<think>(.*?)</think>", plan_response, re.DOTALL)
+        reasoning_content = None
         if think_match:
             reasoning_content = think_match.group(1).strip()
 
         # Extract plan
         answer_match = re.search(r"<answer>(.*?)</answer>", plan_response, re.DOTALL)
         if not answer_match:
-            return reasoning, None
+            # If no answer is found, return the reasoning content and the original response
+            return reasoning_content, plan_response
 
         answer_content = answer_match.group(1).strip()
         return reasoning_content, answer_content
     except (json.JSONDecodeError, ValueError) as e:
+        # If the response is not in the expected format, return the original response
         logger.error("Failed to parse plan: %s. Data %s", e, plan_response)
-        return None, None
+        return None, plan_response
 
 
 def parse_plan(response: str) -> Dict:

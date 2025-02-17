@@ -44,7 +44,6 @@ class Branch(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     task_id = Column(String(36), nullable=False)
-    plan = Column(JSON, nullable=False)
     head_commit_hash = Column(String(40), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

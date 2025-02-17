@@ -350,7 +350,7 @@ class Task:
         suggestion: str,
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
-        reasoning, updated_plan = optimize_partial_plan(
+        updated_plan = optimize_partial_plan(
             self.reasoning_llm,
             self.task_orm.goal,
             self.task_orm.meta,
@@ -361,7 +361,7 @@ class Task:
         )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
-        vm.set_plan(reasoning, updated_plan)
+        vm.set_plan(updated_plan.get("reasoning"), updated_plan.get("plan"))
         vm.recalculate_variable_refs()
         vm.save_state()
         new_commit_hash = vm.branch_manager.commit_changes(

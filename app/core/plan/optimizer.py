@@ -130,5 +130,7 @@ def optimize_partial_plan(
             f"Failed to parse the updated plan: {plan_response} for goal: {goal}"
         )
     except Exception as e:
-        logger.error(f"Error optimizing partial plan: {e}")
+        logger.error(
+            "Error optimizing partial plan: %s. Response: %s", e, plan_response
+        )
         return None

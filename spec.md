@@ -227,7 +227,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Control Flow**: Use the `jmp` instruction for branching logic and conditional loops.
 
 ## 7. Best Practices
-- **Sequence Numbering**: Ensure that `seq_no` values are unique and sequential within the plan.
+- **Sequence Numbering**: Ensure that `seq_no` values are unique, sequential integers within the plan.
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
