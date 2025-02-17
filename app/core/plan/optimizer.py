@@ -85,9 +85,9 @@ Ensure the plan is a valid JSON and is properly formatted and encapsulated withi
 
     try:
         plan_response = llm_client.generate(updated_prompt)
-        plan = parse_plan(plan_response)
-        if plan:
-            return plan
+        plan_data = parse_plan(plan_response)
+        if plan_data:
+            return plan_data
 
         raise ValueError(
             f"Failed to parse the updated plan: {plan_response} for goal: {goal}"

@@ -1,35 +1,67 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.utils import find_first_json_object, extract_json
 
 logger = logging.getLogger(__name__)
 
 
-def parse_plan(plan_response: str) -> Optional[List[Dict[str, Any]]]:
+def extract_reasoning_and_plan(
+    plan_response: str,
+) -> Tuple[Optional[str], Optional[List[Dict[str, Any]]]]:
+    """Extract reasoning and plan from the response.
+
+    The response format is:
+    <think>reasoning content</think>
+    <answer>
+    ```json
+    [
+      {
+        "seq_no": 0,
+        ...
+      },
+      ...
+    ]
+    ```
+    </answer>
+    """
+    try:
+        # Extract reasoning
+        reasoning = None
+        think_match = re.search(r"<think>(.*?)</think>", plan_response, re.DOTALL)
+        if think_match:
+            reasoning_content = think_match.group(1).strip()
+
+        # Extract plan
+        answer_match = re.search(r"<answer>(.*?)</answer>", plan_response, re.DOTALL)
+        if not answer_match:
+            return reasoning, None
+
+        answer_content = answer_match.group(1).strip()
+        return reasoning_content, answer_content
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("Failed to parse plan: %s. Data %s", e, plan_response)
+        return None, None
+
+
+def parse_plan(response: str) -> Dict:
     """Parse the plan response to extract a list of steps."""
     try:
-        json_str = extract_json(plan_response)
-
+        reasoning_content, plan_content = extract_reasoning_and_plan(response)
+        json_str = extract_json(plan_content)
         plan = json.loads(json_str)
 
         if not isinstance(plan, list):
             raise ValueError("Parsed plan is not a list.")
 
-        # Modify specific steps if necessary
-        for step in plan:
-            if (
-                step.get("type") == "assign"
-                and step.get("parameters", {}).get("var_name") == "final_summary"
-            ):
-                step["parameters"]["var_name"] = "result"
-
-        return plan
+        return {
+            "reasoning": reasoning_content,
+            "plan": plan,
+        }
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error("Failed to parse plan: %s. Data %s", e, plan_response)
-        return None
+        raise ValueError("Failed to parse plan: %s. Data %s", e, response)
 
 
 def parse_step(step_response: str) -> Optional[Dict[str, Any]]:

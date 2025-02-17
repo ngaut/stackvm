@@ -32,13 +32,22 @@ class OpenAIProvider(BaseLLMProvider):
             self.client.chat.completions.create,
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                # {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": full_prompt},
             ],
             **self._update_kwargs(kwargs),
         )
         if response.choices is None:
             raise Exception(f"LLM response is None: {response.error}")
+
+        if hasattr(response.choices[0].message, "reasoning_content"):
+            return (
+                "<reasoning>"
+                + response.choices[0].message.reasoning_content
+                + "</reasoning>\n<answer>"
+                + response.choices[0].message.content
+                + "</answer>"
+            )
 
         return response.choices[0].message.content.strip()
 

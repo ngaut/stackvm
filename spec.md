@@ -176,61 +176,6 @@ Below is an example where the calling type is configured to use the `llm_generat
 }
 ```
 
-### 3.4 reasoning
-- **Purpose**: Document the core analytical process and technical decision logic
-
-**Implementation Notes**:
-> While structured formatting helps ensure completeness, focus on capturing the **authentic technical reasoning process**. Treat formatting elements as thinking aids, not rigid constraints. A good chain_of_oughts should:
-> - Reflect how an expert engineer would analyze the problem
-> - Show clear technical decision-making pathways
-> - Reveal the 'why' behind tool selections
-> - Prioritize depth of analysis over rigid template adherence
-
-- **Parameters**:
-
-  **1. chain_of_oughts** (string):
-  Structured technical rationale containing:
-  ```text
-  a) Problem Essence:
-     - Core technical challenge identification
-     - Critical implicit assumptions
-     - Solution archetype classification:
-       • Performance Optimization
-       • Knowledge Synthesis
-       • System Troubleshooting
-
-  b) Technical Blueprint:
-     ■ Core Components (3-5 key elements)
-     → Data Flow: [KG]→[Vector]→[LLM]
-     ! Risk Hotspots: Mark high-stakes decisions
-     ▣ Version Strategy: Fallback plan handling
-
-  c) Execution Map:
-     Variable Transformations: ${A}→${B}
-     Validation Checkpoints: [Must-pass criteria]
-  ```
-
-  **2. dependency_analysis** (string):
-  Visual execution path representation using:
-  ```text
-  - Arrows for data flow: StepA → StepB
-  - Brackets for parallel steps: [Step1|Step2]
-  - Conditional branches: IF(condition)→Path
-  - Critical variables: ${var_name}
-  ```
-
-**Validation Rules**:
-1. Must contain at least one ■ Core Component
-2. Must identify at least one ! Risk Hotspot
-
-**Optimized Example**:
-```json
-{
-  "chain_of_oughts":"Problem Essence:\n  - Core: Distributed lock optimization under high concurrency\n  - Assumptions: Using latest stable version\n  - Archetype: Version-specific best practices\n\n  Technical Blueprint:\n  ■ Lock Mechanism\n    → KG: lock_manager config in v${version}\n    → Vector: 'hotspot lock' case studies\n    ! Risk: AsyncCommit may delay visibility\n  \n  ▣ Version Fallback: Use v8.5 base if no v${version}\n  \n  Execution Map:\n  KG(config) → LLM(matrix_gen) → final_answer\n  Validation: Check QPS improvement ≥30%",
-  "dependency_analysis":"KG1 → LLM1 → IF valid → final_answer\n               ↘ ELSE → HumanReview"
-}
-```
-
 ## 4. Parameters and Variable References
 Parameters can be either direct values or variable references. To reference a variable, use the format `${variable_name}`.
 
@@ -288,7 +233,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
 - **Language Consistency**: All the instructions (e.g. `llm_generate`) that directly contribute to generating the `final_answer` must be written in the same language as the goal. This ensures the final output is consistent with the intended language.
 
-- **Instruction type selection**: Available instruction types:[assign, reasoning, jmp, calling]. The type of first instruction is always "reasoning" and 'seq_no' starts from 0.
+- **Instruction type selection**: Available instruction types:[assign, jmp, calling].
 
 - **Avoid variable dependencies within a single "assign" instruction**：Since the order of variable assignments within an "assign" instruction is not defined, do not rely on one variable being assigned before another within the same instruction. Instead, split assignments across multiple instructions if one depends on another. For example, this is incorrect:
 

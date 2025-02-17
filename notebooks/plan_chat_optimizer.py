@@ -1,10 +1,14 @@
+import os
+import sys
+
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(project_root)
+
 import logging
 import enum
 import openai
 import requests
 import json
-import os
-import datetime
 from pydantic import BaseModel, Field
 from typing import Generator, Any, List, Dict
 from dataclasses import dataclass

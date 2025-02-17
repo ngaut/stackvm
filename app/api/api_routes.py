@@ -852,7 +852,7 @@ def stream_execute_vm():
         try:
             current_app.logger.info(f"Starting VM execution with goal: {clean_goal}")
             # Generate Plan
-            plan = task.generate_plan()
+            reasoning, plan = task.generate_plan()
             if not plan:
                 error_message = "Failed to generate plan."
                 current_app.logger.error(error_message)
@@ -861,7 +861,7 @@ def stream_execute_vm():
                 return
 
             vm = task.create_vm()
-            vm.set_plan(plan)
+            vm.set_plan(reasoning, plan)
 
             current_app.logger.info(
                 "Generated Plan: %s", json.dumps(plan, ensure_ascii=False)

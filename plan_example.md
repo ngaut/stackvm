@@ -1,16 +1,29 @@
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
 
 **The plan:**
-```json
+<think>
+Problem Essence:
+  - Core: Performance optimization for high-concurrency e-commerce workloads
+  - Assumptions: Using latest stable TiDB version
+  - Archetype: Version-specific configuration optimization
+
+Technical Blueprint:
+■ Version Establishment
+  → KG Query: 'TiDB latest stable release'
+■ Schema Optimization
+  → Vector: 'TiDB e-commerce schema design'
+■ Transaction Handling
+  → Vector: 'distributed transaction patterns'
+■ Monitoring Configuration
+  → KG: 'Performance monitoring parameters'
+
+Execution Map:
+Validate Version → Load Config Presets → Analyze Workload Patterns → Generate Recommendations
+
+! Risk: Validate async_commit compatibility with application requirements
+</think>
+<plan>
 [
-  {
-    "parameters": {
-      "chain_of_thoughts": "Problem Essence:\n  - Core: Performance optimization for high-concurrency e-commerce workloads\n  - Assumptions: Using latest stable TiDB version\n  - Archetype: Version-specific configuration optimization\n\nTechnical Blueprint:\n■ Version Establishment\n  → KG Query: 'TiDB latest stable release'\n■ Schema Optimization\n  → Vector: 'TiDB e-commerce schema design'\n■ Transaction Handling\n  → Vector: 'distributed transaction patterns'\n■ Monitoring Configuration\n  → KG: 'Performance monitoring parameters'\n\nExecution Map:\nValidate Version → Load Config Presets → Analyze Workload Patterns → Generate Recommendations\n\n! Risk: Validate async_commit compatibility with application requirements",
-      "dependency_analysis": "Step1 → Step2 → [Step3|Step4] → Step5 → [Step6|Step7] → Step8 → [Step9|Step10] → Step11 → Step12 → Step13"
-    },
-    "seq_no": 0,
-    "type": "reasoning"
-  },
   {
     "parameters": {
       "output_vars": [
@@ -184,4 +197,4 @@
     "type": "assign"
   }
 ]
-```
+</plan>
