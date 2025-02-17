@@ -302,27 +302,7 @@ class InstructionHandlers:
         self, params: Dict[str, Any], **kwargs
     ) -> Tuple[bool, Dict[str, Any]]:
         """Handle reasoning steps."""
-        chain_of_thoughts = params.get("chain_of_thoughts")
-        dependency_analysis = params.get("dependency_analysis")
+        self.vm.logger.info("Reasoning step:chain_of_thoughts: %s", params)
 
-        if not isinstance(chain_of_thoughts, str):
-            return False, {
-                "error_message": f"Invalid parameters for 'reasoning': chain_of_thoughts {chain_of_thoughts}({type(chain_of_thoughts)}) is not a string.",
-                "instruction": "reasoning",
-                "params": params,
-            }
-
-        self.vm.logger.info(
-            f"Reasoning step:chain_of_thoughts: {chain_of_thoughts}\n{dependency_analysis}"
-        )
-
-        self.vm.set_state_msg(
-            json.dumps(
-                {
-                    "chain_of_thoughts": chain_of_thoughts,
-                    "dependency_analysis": dependency_analysis,
-                },
-                ensure_ascii=False,
-            )
-        )
+        self.vm.set_state_msg(json.dumps(params, ensure_ascii=False))
         return True, None
