@@ -67,21 +67,22 @@ Now, let's update the plan.
 1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
 2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
 
-Ensure the plan is a valid JSON and is properly formatted and encapsulated within a ```json code block.
+You should response in the following format:
 
+<think>...</think>
+<answer>
 ```json
 [
-    {{
+  {{
     "seq_no": 0,
-    "type": "reasoning",
-    "parameters": {{
-        "chain_of_thoughts": "...",
-        "dependency_analysis": "..."
-    }}
-    }},
     ...
+  }},
+  ...
 ]
-```"""
+```
+</answer>
+
+where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan."""
 
     try:
         plan_response = llm_client.generate(updated_prompt)

@@ -326,6 +326,7 @@ def re_execute_task(task_id):
 
     data = request.json
     commit_hash = data.get("commit_hash", None) if data else None
+    reasoning = data.get("reasoning", None) if data else None
     plan = data.get("plan", None) if data else None
 
     task = None
@@ -338,7 +339,7 @@ def re_execute_task(task_id):
 
     try:
         current_app.logger.info(f"re-execute task {task_id}")
-        result = task.re_execute(commit_hash, plan)
+        result = task.re_execute(reasoning, commit_hash, plan)
         if result.get("completed"):
             if result.get("final_answer"):
                 return (

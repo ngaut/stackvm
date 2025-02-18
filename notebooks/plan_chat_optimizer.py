@@ -10,10 +10,15 @@ import openai
 import requests
 import json
 from pydantic import BaseModel, Field
-from typing import Generator, Any, List, Dict
+from typing import Generator, Any, List, Dict, Optional
 from dataclasses import dataclass
 from app.llm.interface import LLMInterface
-from app.config.settings import EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
+from app.config.settings import (
+    EVALUATION_LLM_PROVIDER,
+    EVALUATION_LLM_MODEL,
+    REASON_LLM_PROVIDER,
+    REASON_LLM_MODEL,
+)
 from app.core.plan.evaluator import evaulate_answer
 from app.core.plan.optimizer import optimize_whole_plan
 
@@ -33,6 +38,7 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 fc_llm = openai.OpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL)
 eval_llm = LLMInterface(EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL)
+reason_llm = LLMInterface(REASON_LLM_PROVIDER, REASON_LLM_MODEL)
 
 
 def get_task_answer(task_id: str, branch_name: str) -> dict:
@@ -80,7 +86,9 @@ def get_task_answer(task_id: str, branch_name: str) -> dict:
         raise e
 
 
-def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) -> dict:
+def execute_task_using_new_plan(
+    task_id: str, new_plan: List[Dict[str, Any]], reasoning: Optional[str] = None
+) -> dict:
     """
     Updates a task with a new suggestion and sets the task to be re-run from scratch.
     """
@@ -90,6 +98,7 @@ def execute_task_using_new_plan(task_id: str, new_plan: List[Dict[str, Any]]) ->
         new_plan = json.loads(new_plan)
 
     payload = {
+        "reasoning": reasoning,
         "plan": new_plan,
     }
 
@@ -136,8 +145,9 @@ def update_plan(goal: str, metadata: dict, plan: str, suggestion: str | Dict):
   - Check that the sequence of instructions (seq_no) flows logically and forms a coherent, end-to-end solution.
   - Pay attention to the final assignment to “final_answer”, ensuring it incorporates all relevant information from the prior steps.
 """
+
     return optimize_whole_plan(
-        eval_llm, goal, metadata, plan, suggestion, user_instructions
+        reason_llm, goal, metadata, plan, suggestion, user_instructions
     )
 
 

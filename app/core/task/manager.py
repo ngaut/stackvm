@@ -267,6 +267,7 @@ class Task:
 
     def re_execute(
         self,
+        reasoning: Optional[str] = None,
         commit_hash: Optional[str] = None,
         plan: Optional[List[Dict[str, Any]]] = None,
     ):
@@ -287,7 +288,7 @@ class Task:
                     )
                 else:
                     hashes = self.branch_manager.get_commit_hashes()
-                    if len(hashes) <= 1:
+                    if len(hashes) < 1:
                         raise ValueError(
                             "Please choose the existing branch with plan to re-execute"
                         )
@@ -301,13 +302,13 @@ class Task:
                         details = self.branch_manager.get_commit(hashes[0])
                         if details is None:
                             raise ValueError(
-                                "Not found state from commit hash %s", hashes[0]
+                                f"Not found state from commit hash {hashes[0]}"
                             )
 
                         plan = details.get("vm_state", {}).get("current_plan", None)
                         if not plan:
                             raise ValueError(
-                                "Not found plan from commit hash %s", hashes[0]
+                                f"Not found plan from commit hash {hashes[0]}"
                             )
 
                     if not self.branch_manager.checkout_branch_from_commit(
@@ -320,7 +321,7 @@ class Task:
                     vm = PlanExecutionVM(
                         self.task_orm.goal, self.branch_manager, self.llm
                     )
-                    vm.set_plan(plan)
+                    vm.set_plan(reasoning, plan)
 
                 self._run(vm)
                 if vm.state.get("goal_completed"):
