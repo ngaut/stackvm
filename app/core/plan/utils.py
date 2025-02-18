@@ -44,7 +44,7 @@ def extract_reasoning_and_plan(
         return reasoning_content, answer_content
     except (json.JSONDecodeError, ValueError) as e:
         # If the response is not in the expected format, return the original response
-        logger.error("Failed to parse plan: %s. Data %s", e, plan_response)
+        logger.error(f"Failed to extract reasoning and plan: {e}. Data {plan_response}")
         return None, plan_response
 
 
@@ -53,7 +53,14 @@ def parse_plan(response: str) -> Dict:
     try:
         reasoning_content, plan_content = extract_reasoning_and_plan(response)
         json_str = extract_json(plan_content)
-        plan = json.loads(json_str)
+
+        try:
+            plan = json.loads(json_str)
+        except json.JSONDecodeError:
+            json_str = re.sub(
+                r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), json_str
+            )
+            plan = json.loads(json_str)
 
         if not isinstance(plan, list):
             raise ValueError("Parsed plan is not a list.")
@@ -63,7 +70,7 @@ def parse_plan(response: str) -> Dict:
             "plan": plan,
         }
     except (json.JSONDecodeError, ValueError) as e:
-        raise ValueError("Failed to parse plan: %s. Data %s", e, response)
+        raise ValueError(f"Failed to parse plan: {e}. Data {response}")
 
 
 def parse_step(step_response: str) -> Optional[Dict[str, Any]]:

@@ -110,16 +110,6 @@ class Task:
         self.task_orm.logs = "Plan execution completed."
         self.save()
 
-    def mark_evaluation(self, eval_status: EvaluationStatus, eval_reason: str):
-        self.task_orm.evaluation_status = eval_status
-        self.task_orm.evaluation_reason = eval_reason
-        self.save()
-
-    def mark_human_evaluation(self, eval_status: EvaluationStatus, feedback: str):
-        self.task_orm.human_evaluation_status = eval_status
-        self.task_orm.human_feedback = feedback
-        self.save()
-
     def create_vm(self):
         return PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
 
