@@ -50,7 +50,7 @@ class OpenAIProvider(BaseLLMProvider):
                 self.client.chat.completions.create,
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
+                    # {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": full_prompt},
                 ],
                 stream=True,  # Enable streaming

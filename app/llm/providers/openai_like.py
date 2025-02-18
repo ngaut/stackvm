@@ -38,9 +38,9 @@ class OpenAILikeProvider(BaseLLMProvider):
 
         if hasattr(response.choices[0].message, "reasoning_content"):
             return (
-                "<reasoning>"
+                "<think>"
                 + response.choices[0].message.reasoning_content
-                + "</reasoning>\n<answer>"
+                + "</think>\n<answer>"
                 + response.choices[0].message.content
                 + "</answer>"
             )
@@ -56,7 +56,7 @@ class OpenAILikeProvider(BaseLLMProvider):
                 self.client.chat.completions.create,
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
+                    # {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": full_prompt},
                 ],
                 stream=True,  # Enable streaming
