@@ -116,6 +116,7 @@ def optimize_partial_plan(
         suggestion,
     )
 
+    plan_response = None
     try:
         plan_response = llm_interface.generate(prompt)
         if not plan_response:
@@ -133,4 +134,4 @@ def optimize_partial_plan(
         logger.error(
             "Error optimizing partial plan: %s. Response: %s", e, plan_response
         )
-        return None
+        raise e

@@ -39,15 +39,6 @@ class OpenAIProvider(BaseLLMProvider):
         if response.choices is None:
             raise Exception(f"LLM response is None: {response.error}")
 
-        if hasattr(response.choices[0].message, "reasoning_content"):
-            return (
-                "<reasoning>"
-                + response.choices[0].message.reasoning_content
-                + "</reasoning>\n<answer>"
-                + response.choices[0].message.content
-                + "</answer>"
-            )
-
         return response.choices[0].message.content.strip()
 
     def generate_stream(
