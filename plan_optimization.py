@@ -13,7 +13,11 @@ from notebooks.plan_chat_optimizer import (
     update_plan,
     execute_task_using_new_plan,
 )
-from notebooks.tasks import get_evaluation_pending_tasks, record_evaluation, record_human_evaluation
+from notebooks.tasks import (
+    get_evaluation_pending_tasks,
+    record_evaluation,
+    record_human_evaluation,
+)
 from notebooks.plan_mcts_optimizer import MCTSPlanOptimizer
 from notebooks.tasks import save_best_plan_from_url
 
@@ -91,17 +95,19 @@ def optimize_plan(task_id: str, branch_name: Optional[str] = "main", max_iterati
                 break
 
     if error_message is None:
-        error_message = "Still failed after two evaluations round."
+        error_message = f"Still failed after {max_iteration} evaluations round."
     logger.info(f"Failed to evaluate plan for task(id={task_id}): {error_message}")
     return "WAITING_FOR_EVALUATION"
 
 
 def print_node(node):
     logger.info("*" * 100)
-    logger.info(node.state.seq_no, node.state.commit_hash, node.visits, node.value)
+    logger.info(
+        f"seq_no: {node.state.seq_no}, commit_hash: {node.state.commit_hash}, visits: {node.visits}, value: {node.value}"
+    )
     for suggestion in node.optimization_suggestions:
-        logger.info(suggestion["branch_name"])
-        logger.info(suggestion["suggestion"])
+        logger.info(f"branch_name: {suggestion['branch_name']}")
+        logger.info(f"suggestion: {suggestion['suggestion']}")
     for child in node.children:
         print_node(child)
 
@@ -125,7 +131,7 @@ if __name__ == "__main__":
             continue
 
         try:
-            logger.info("optimizing task", task_id)
+            logger.info("optimizing task %s", task_id)
             optimizer = MCTSPlanOptimizer(
                 task_id=task_id, max_iterations=3, time_limit_seconds=900
             )
