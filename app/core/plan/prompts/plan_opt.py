@@ -9,6 +9,7 @@ def get_plan_update_prompt(
     vm_spec_content,
     tools_instruction_content,
     plan,
+    reasoning,
     suggestion,
     key_factors=None,
 ):
@@ -23,6 +24,9 @@ Goal:
 
 The supplementary information for Goal:
 {metadata.get('response_format')}
+
+Reasoning for the current plan:
+{reasoning}
 
 Current Plan:
 {json.dumps(plan, indent=2)}

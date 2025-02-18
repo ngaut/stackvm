@@ -103,6 +103,7 @@ def optimize_partial_plan(
     metadata,
     vm_program_counter,
     plan,
+    reasoning,
     suggestion: str | Dict,
     allowed_tools=None,
 ):
@@ -113,6 +114,7 @@ def optimize_partial_plan(
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(allowed_tools),
         plan,
+        reasoning,
         suggestion,
     )
 

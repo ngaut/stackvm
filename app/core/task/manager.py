@@ -246,7 +246,16 @@ class Task:
                 vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
                 vm.set_plan(reasoning, plan)
                 logger.info(
-                    "Generated Plan:%s", json.dumps(plan, indent=2, ensure_ascii=False)
+                    "Generated Plan:%s",
+                    json.dumps(
+                        {
+                            "goal": self.task_orm.goal,
+                            "plan": plan,
+                            "reasoning": reasoning,
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
                 )
                 self._run(vm)
             except Exception as e:
@@ -349,6 +358,7 @@ class Task:
         branch_name: str,
         suggestion: str,
         plan: Optional[List[Dict[str, Any]]] = None,
+        reasoning: Optional[str] = None,
     ):
         updated_plan = optimize_partial_plan(
             self.reasoning_llm,
@@ -356,6 +366,7 @@ class Task:
             self.task_orm.meta,
             vm.state["program_counter"],
             plan or vm.state["current_plan"],
+            reasoning,
             suggestion,
             self.get_allowed_tools(),
         )
@@ -413,17 +424,19 @@ class Task:
                     raise ValueError(error_message)
 
                 plan = None
+                reasoning = None
                 if source_branch:
                     if not self.branch_manager.checkout_branch(source_branch):
                         raise ValueError(f"Failed to checkout branch '{source_branch}'")
 
                     plan = self.branch_manager.current_state.get("current_plan", None)
+                    reasoning = self.branch_manager.current_state.get("reasoning", None)
                 else:
-                    plan = (
-                        self.branch_manager.get_commit(commit_hash)
-                        .get("vm_state", {})
-                        .get("current_plan", None)
+                    commit_state = self.branch_manager.get_commit(commit_hash).get(
+                        "vm_state", {}
                     )
+                    plan = commit_state.get("current_plan", None)
+                    reasoning = commit_state.get("reasoning", None)
 
                 if not plan:
                     raise ValueError(
@@ -444,7 +457,7 @@ class Task:
                 )
 
                 new_commit_hash = self.update_plan(
-                    vm, new_branch_name, suggestion, plan=plan
+                    vm, new_branch_name, suggestion, plan=plan, reasoning=reasoning
                 )
                 if not new_commit_hash:
                     raise ValueError("Failed to commit updated plan")
