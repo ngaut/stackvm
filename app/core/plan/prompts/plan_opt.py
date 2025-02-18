@@ -9,6 +9,7 @@ def get_plan_update_prompt(
     vm_spec_content,
     tools_instruction_content,
     plan,
+    reasoning,
     suggestion,
     key_factors=None,
 ):
@@ -23,6 +24,9 @@ Goal:
 
 The supplementary information for Goal:
 {metadata.get('response_format')}
+
+Reasoning for the current plan:
+{reasoning}
 
 Current Plan:
 {json.dumps(plan, indent=2)}
@@ -86,21 +90,22 @@ Now, let's update the plan.
 1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
 2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
 
-Ensure the plan is a valid JSON and is properly formatted and encapsulated within a ```json code block.
+You should response in the following format:
 
+<think>...</think>
+<answer>
 ```json
 [
-    {{
+  {{
     "seq_no": 0,
-    "type": "reasoning",
-    "parameters": {{
-        "chain_of_thoughts": "...",
-        "dependency_analysis": "..."
-    }}
-    }},
     ...
+  }},
+  ...
 ]
-```"""
+```
+</answer>
+
+where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan."""
 
     return prompt
 
@@ -140,5 +145,20 @@ Now, let's update the step.
 3. Ensure the updated step is consistent with the VM's current state and does not introduce redundancy.
 
 **Output**:
-Provide only the updated step in JSON format.
+You should response in the following format:
+
+<think>...</think>
+<answer>
+```json
+[
+  {{
+    "seq_no": 0,
+    ...
+  }},
+  ...
+]
+```
+</answer>
+
+where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan.
 """

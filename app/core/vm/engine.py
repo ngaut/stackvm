@@ -33,6 +33,7 @@ class PlanExecutionVM:
             "errors": [],
             "goal": None,
             "current_plan": [],
+            "reasoning": [],
             "program_counter": 0,
             "goal_completed": False,
             "msgs": [],
@@ -92,9 +93,10 @@ class PlanExecutionVM:
         )
         self.logger.info("Registered handler for instruction: %s", instruction_name)
 
-    def set_plan(self, plan: List[Dict[str, Any]]) -> None:
+    def set_plan(self, reasoning: str, plan: List[Dict[str, Any]]) -> None:
         """Set the plan for the VM and save the state."""
         self.state["current_plan"] = plan
+        self.state["reasoning"] = reasoning
         self.save_state()
 
     def resolve_parameter(self, param: Any) -> Any:

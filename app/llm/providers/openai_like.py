@@ -9,19 +9,16 @@ from app.llm.base import BaseLLMProvider
 logger = logging.getLogger(__name__)
 
 
-class OpenAIProvider(BaseLLMProvider):
+class OpenAILikeProvider(BaseLLMProvider):
     """
     Provider for OpenAI.
     """
 
     def __init__(self, model: str, **kwargs):
         super().__init__(model, **kwargs)
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError(
-                "OpenAI API key not set. Please set the OPENAI_API_KEY environment variable."
-            )
-        self.client = openai.OpenAI(api_key=api_key)
+        api_key = os.getenv("OPENAI_LIKE_API_KEY")
+        base_url = os.getenv("OPENAI_LIKE_BASE_URL")
+        self.client = openai.OpenAI(api_key=api_key, base_url=base_url)
 
     def generate(
         self, prompt: str, context: Optional[str] = None, **kwargs
@@ -38,6 +35,15 @@ class OpenAIProvider(BaseLLMProvider):
         )
         if response.choices is None:
             raise Exception(f"LLM response is None: {response.error}")
+
+        if hasattr(response.choices[0].message, "reasoning_content"):
+            return (
+                "<think>"
+                + response.choices[0].message.reasoning_content
+                + "</think>\n<answer>"
+                + response.choices[0].message.content
+                + "</answer>"
+            )
 
         return response.choices[0].message.content.strip()
 

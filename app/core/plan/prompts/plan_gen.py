@@ -56,7 +56,7 @@ Now, let's generate the plan.
 
 4. **Tool Usage Guidelines**:
    - When using a tool, always wrap it in a "calling" instruction.
-   - For calling instruction, Only select tools listed in the “Available Tools” section. Using tools outside this list will cause the plan to fail.
+   - For calling instruction, Only select tools listed in the "Available Tools" section. Using tools outside this list will cause the plan to fail.
    - The "calling" instruction should have the following structure:
      ```json
      {{
@@ -74,20 +74,20 @@ Now, let's generate the plan.
    - Ensure that the "tool_params" object contains all necessary parameters for the specific tool being called.
 
 The final step of the plan must be assign the final output result to the 'final_answer' variable.
-Please provide only the valid JSON array for the action plan without any additional text, explanations, or markdown.
-Ensure the JSON is properly formatted and encapsulated within a ```json code block.
+You should response in the following format:
 
-    ```json
-    [
-      {{
-        "seq_no": 0,
-        "type": "reasoning",
-        "parameters": {{
-          "chain_of_thoughts": "...",
-          "dependency_analysis": "..."
-        }}
-      }},
-      ...
-    ]
-    ```
+<think>...</think>
+<answer>
+```json
+[
+  {{
+    "seq_no": 0,
+    ...
+  }},
+  ...
+]
+```
+</answer>
+
+where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan.
 """

@@ -127,6 +127,7 @@ class Task:
         """Generate a plan for the task."""
         example_str = None
         plan = None
+        reasoning = None
         best_practices = None
         response_format = (
             self.task_orm.meta.get("response_format") if self.task_orm.meta else None
@@ -196,15 +197,18 @@ class Task:
                 REASON_LLM_MODEL,
                 goal,
             )
-            plan = generate_plan(
+            plan_data = generate_plan(
                 self.reasoning_llm,
                 goal,
                 example=example_str,
                 best_practices=best_practices,
                 allowed_tools=self.get_allowed_tools(),
             )
+            if plan_data:
+                plan = plan_data.get("plan")
+                reasoning = plan_data.get("reasoning")
 
-        return plan
+        return reasoning, plan
 
     def _run(self, vm: PlanExecutionVM):
         """Execute the plan for the task."""
@@ -235,14 +239,23 @@ class Task:
     def execute(self):
         with self._lock:
             try:
-                plan = self.generate_plan()
+                reasoning, plan = self.generate_plan()
                 if not plan:
                     raise ValueError("Failed to generate plan")
 
                 vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
-                vm.set_plan(plan)
+                vm.set_plan(reasoning, plan)
                 logger.info(
-                    "Generated Plan:%s", json.dumps(plan, indent=2, ensure_ascii=False)
+                    "Generated Plan:%s",
+                    json.dumps(
+                        {
+                            "goal": self.task_orm.goal,
+                            "plan": plan,
+                            "reasoning": reasoning,
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
                 )
                 self._run(vm)
             except Exception as e:
@@ -345,6 +358,7 @@ class Task:
         branch_name: str,
         suggestion: str,
         plan: Optional[List[Dict[str, Any]]] = None,
+        reasoning: Optional[str] = None,
     ):
         updated_plan = optimize_partial_plan(
             self.reasoning_llm,
@@ -352,12 +366,13 @@ class Task:
             self.task_orm.meta,
             vm.state["program_counter"],
             plan or vm.state["current_plan"],
+            reasoning,
             suggestion,
             self.get_allowed_tools(),
         )
         logger.info("Generated updated plan: %s", json.dumps(updated_plan, indent=2))
 
-        vm.set_plan(updated_plan)
+        vm.set_plan(updated_plan.get("reasoning"), updated_plan.get("plan"))
         vm.recalculate_variable_refs()
         vm.save_state()
         new_commit_hash = vm.branch_manager.commit_changes(
@@ -409,17 +424,19 @@ class Task:
                     raise ValueError(error_message)
 
                 plan = None
+                reasoning = None
                 if source_branch:
                     if not self.branch_manager.checkout_branch(source_branch):
                         raise ValueError(f"Failed to checkout branch '{source_branch}'")
 
                     plan = self.branch_manager.current_state.get("current_plan", None)
+                    reasoning = self.branch_manager.current_state.get("reasoning", None)
                 else:
-                    plan = (
-                        self.branch_manager.get_commit(commit_hash)
-                        .get("vm_state", {})
-                        .get("current_plan", None)
+                    commit_state = self.branch_manager.get_commit(commit_hash).get(
+                        "vm_state", {}
                     )
+                    plan = commit_state.get("current_plan", None)
+                    reasoning = commit_state.get("reasoning", None)
 
                 if not plan:
                     raise ValueError(
@@ -440,7 +457,7 @@ class Task:
                 )
 
                 new_commit_hash = self.update_plan(
-                    vm, new_branch_name, suggestion, plan=plan
+                    vm, new_branch_name, suggestion, plan=plan, reasoning=reasoning
                 )
                 if not new_commit_hash:
                     raise ValueError("Failed to commit updated plan")

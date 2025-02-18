@@ -46,12 +46,12 @@ def generate_plan(
             f"LLM failed to generate a response for your question: {plan_response}. Please try again later."
         )
 
-    plan = parse_plan(plan_response)
+    plan_data = parse_plan(plan_response)
 
-    if plan:
-        return plan
-    else:
-        logger.error(
-            f"Failed to parse the generated plan: {plan_response} for goal: {goal}"
-        )
-        raise PlanUnavailableError(plan_response)
+    if plan_data:
+        return plan_data
+
+    logger.error(
+        f"Failed to parse the generated plan: {plan_response} for goal: {goal}"
+    )
+    raise PlanUnavailableError(plan_response)

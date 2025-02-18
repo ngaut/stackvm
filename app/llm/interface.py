@@ -7,6 +7,7 @@ from app.llm.providers import (
     OllamaProvider,
     GeminiProvider,
     BedrockProvider,
+    OpenAILikeProvider,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,8 @@ class LLMInterface:
     def _get_provider(self, provider: str, model: str, **kwargs) -> BaseLLMProvider:
         if provider == "openai":
             return OpenAIProvider(model, **kwargs)
+        elif provider == "openai_like":
+            return OpenAILikeProvider(model, **kwargs)
         elif provider == "ollama":
             return OllamaProvider(model, **kwargs)
         elif provider == "gemini":

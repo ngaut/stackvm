@@ -85,9 +85,9 @@ Ensure the plan is a valid JSON and is properly formatted and encapsulated withi
 
     try:
         plan_response = llm_client.generate(updated_prompt)
-        plan = parse_plan(plan_response)
-        if plan:
-            return plan
+        plan_data = parse_plan(plan_response)
+        if plan_data:
+            return plan_data
 
         raise ValueError(
             f"Failed to parse the updated plan: {plan_response} for goal: {goal}"
@@ -103,6 +103,7 @@ def optimize_partial_plan(
     metadata,
     vm_program_counter,
     plan,
+    reasoning,
     suggestion: str | Dict,
     allowed_tools=None,
 ):
@@ -113,9 +114,11 @@ def optimize_partial_plan(
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(allowed_tools),
         plan,
+        reasoning,
         suggestion,
     )
 
+    plan_response = None
     try:
         plan_response = llm_interface.generate(prompt)
         if not plan_response:
@@ -130,5 +133,7 @@ def optimize_partial_plan(
             f"Failed to parse the updated plan: {plan_response} for goal: {goal}"
         )
     except Exception as e:
-        logger.error(f"Error optimizing partial plan: {e}")
-        return None
+        logger.error(
+            "Error optimizing partial plan: %s. Response: %s", e, plan_response
+        )
+        raise e

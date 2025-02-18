@@ -1,16 +1,8 @@
 **Goal**: Provide best practices for optimizing TiDB performance for a high-volume e-commerce application, considering the latest stable version of TiDB.
 
-**The plan:**
+**The plan:** (ignore the think and answer tags)
 ```json
 [
-  {
-    "parameters": {
-      "chain_of_thoughts": "Problem Essence:\n  - Core: Performance optimization for high-concurrency e-commerce workloads\n  - Assumptions: Using latest stable TiDB version\n  - Archetype: Version-specific configuration optimization\n\nTechnical Blueprint:\n■ Version Establishment\n  → KG Query: 'TiDB latest stable release'\n■ Schema Optimization\n  → Vector: 'TiDB e-commerce schema design'\n■ Transaction Handling\n  → Vector: 'distributed transaction patterns'\n■ Monitoring Configuration\n  → KG: 'Performance monitoring parameters'\n\nExecution Map:\nValidate Version → Load Config Presets → Analyze Workload Patterns → Generate Recommendations\n\n! Risk: Validate async_commit compatibility with application requirements",
-      "dependency_analysis": "Step1 → Step2 → [Step3|Step4] → Step5 → [Step6|Step7] → Step8 → [Step9|Step10] → Step11 → Step12 → Step13"
-    },
-    "seq_no": 0,
-    "type": "reasoning"
-  },
   {
     "parameters": {
       "output_vars": [
@@ -27,7 +19,7 @@
   {
     "parameters": {
       "output_vars": [
-        "tidb_version",
+        "latest_tidb_version",
         "release_date"
       ],
       "tool_name": "llm_generate",
@@ -46,7 +38,7 @@
       ],
       "tool_name": "retrieve_knowledge_graph",
       "tool_params": {
-        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce"
+        "query": "TiDB ${latest_tidb_version} performance optimization best practices for e-commerce"
       }
     },
     "seq_no": 3,
@@ -59,7 +51,7 @@
       ],
       "tool_name": "vector_search",
       "tool_params": {
-        "query": "TiDB ${tidb_version} performance optimization best practices for e-commerce",
+        "query": "TiDB ${latest_tidb_version} performance optimization best practices for e-commerce",
         "top_k": 10
       }
     },
@@ -128,7 +120,7 @@
       ],
       "tool_name": "retrieve_knowledge_graph",
       "tool_params": {
-        "query": "TiDB ${tidb_version} configuration parameters for high concurrency"
+        "query": "TiDB ${latest_tidb_version} configuration parameters for high concurrency"
       }
     },
     "seq_no": 9,
@@ -141,7 +133,7 @@
       ],
       "tool_name": "vector_search",
       "tool_params": {
-        "query": "TiDB ${tidb_version} configuration parameters for high concurrency",
+        "query": "TiDB ${latest_tidb_version} configuration parameters for high concurrency",
         "top_k": 5
       }
     },
@@ -170,7 +162,7 @@
       "tool_name": "llm_generate",
       "tool_params": {
         "context": null,
-        "prompt": "Synthesize comprehensive optimization recommendations from these resources:\n1. General Optimizations: ${general_optimizations}\n2. Transaction Patterns: ${transaction_patterns}\n3. Configuration: ${config_parameters}\n\nOrganize into categories: Schema Design, Indexing Strategy, Transaction Handling, Monitoring. Include specific parameter recommendations for version ${tidb_version}. Format using markdown sections.\n\nPlease ensure that the generated text uses English. Please include source citations from chunks source_uri."
+        "prompt": "Synthesize comprehensive optimization recommendations from these resources:\n1. General Optimizations: ${general_optimizations}\n2. Transaction Patterns: ${transaction_patterns}\n3. Configuration: ${config_parameters}\n\nOrganize into categories: Schema Design, Indexing Strategy, Transaction Handling, Monitoring. Include specific parameter recommendations for version ${latest_tidb_version}. Format using markdown sections.\n\nPlease ensure that the generated text uses English. Please include source citations from chunks source_uri."
       }
     },
     "seq_no": 12,
@@ -178,7 +170,7 @@
   },
   {
     "parameters": {
-      "final_answer": "TiDB ${tidb_version} Optimization Best Practices (Release Date: ${release_date})\n\n${optimization_report}"
+      "final_answer": "TiDB ${latest_tidb_version} Optimization Best Practices (Release Date: ${release_date})\n\n${optimization_report}"
     },
     "seq_no": 13,
     "type": "assign"
