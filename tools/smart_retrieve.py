@@ -279,7 +279,7 @@ class MetaGraph:
 
         # Generate graph components using LLM
         response = self.llm_client.generate(prompt)
-        graph_components = json.loads(extract_json(response))
+        graph_components = extract_json(response)
 
         for entity in graph_components["entities"]:
             self.add_entity(entity)
@@ -435,18 +435,13 @@ def evaluation_retrieval_results(
     ```
     """
     response = llm_client.generate(prompt)
-    res_str = extract_json(response)
-    if res_str is None:
-        logger.error("Error extracting JSON from LLM response: %s", response)
-        return None
-
     try:
-        analysis = json.loads(res_str)
+        analysis = extract_json(response)
     except Exception as e:
         logger.error(
             "Error processing evaluation result decoding %s:%s, %s",
             e,
-            res_str,
+            response,
             response,
             exc_info=True,
         )

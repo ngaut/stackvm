@@ -451,7 +451,7 @@ class MCTSPlanOptimizer:
         commits_dict[current_commit_hash] = {"children": [root_commit_hash]}
 
         # Build tree recursively
-        self._build_tree_recursive(node, root_commit_hash, commits_dict)
+        self._build_tree_recursive(node, current_commit_hash, commits_dict)
 
         return None
 
