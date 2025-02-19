@@ -2,6 +2,7 @@ import json
 import logging
 from typing import Optional
 from datetime import datetime, timedelta
+import time
 
 from app.core.plan.evaluator import evaulate_answer
 from app.llm.interface import LLMInterface
@@ -113,38 +114,61 @@ def print_node(node):
 
 
 if __name__ == "__main__":
-    end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=12)
+    last_run_time = datetime.utcnow() - timedelta(hours=2)  # Initial start time
 
-    logger.info("Round started at %s", end_time)
-
-    pending_tasks = get_evaluation_pending_tasks(start_time=start_time)
-
-    logger.info("Found %d pending tasks", len(pending_tasks))
-    for task in pending_tasks:
-        task_id = task["id"]
-        status = optimize_plan(task_id, "main", max_iteration=1)
-        logger.info("Task %s status: %s", task_id, status)
-
-        if status != "WAITING_FOR_EVALUATION":
-            logger.info("Task %s is not waiting for evaluation, skip", task_id)
-            continue
+    while True:  # Run forever
+        current_time = datetime.utcnow()
+        logger.info("Round started at %s", current_time)
 
         try:
-            logger.info("optimizing task %s", task_id)
-            optimizer = MCTSPlanOptimizer(
-                task_id=task_id, max_iterations=3, time_limit_seconds=900
-            )
-            print_node(optimizer.root)
-            optimizer.optimize()
-            answers = optimizer.sort_final_answers()
-            logger.info("Answer benchmark: %s", answers)
-            save_best_plan_from_url(task_id, answers[0]["final_answer"])
-            if len(answers) > 0:
-                save_best_plan_from_url(
-                    task_id=task_id, commit_hash=answers[0]["commit_hash"]
-                )
-                logger.info("Save best plan from url %s", answers[0]["commit_hash"])
+            pending_tasks = get_evaluation_pending_tasks(start_time=last_run_time)
+            logger.info("Found %d pending tasks", len(pending_tasks))
+
+            for task in pending_tasks:
+                task_id = task["id"]
+                status = optimize_plan(task_id, "main", max_iteration=1)
+                logger.info("Task %s status: %s", task_id, status)
+
+                if status != "WAITING_FOR_EVALUATION":
+                    logger.info("Task %s is not waiting for evaluation, skip", task_id)
+                    continue
+
+                try:
+                    logger.info("optimizing task %s", task_id)
+                    optimizer = MCTSPlanOptimizer(
+                        task_id=task_id, max_iterations=3, time_limit_seconds=900
+                    )
+                    print_node(optimizer.root)
+                    optimizer.optimize()
+                    answers = optimizer.sort_final_answers()
+                    logger.info("Answer benchmark: %s", answers)
+                    if len(answers) > 0:
+                        save_best_plan_from_url(
+                            task_id=task_id, commit_hash=answers[0]["commit_hash"]
+                        )
+                        logger.info(
+                            "Save best plan from url %s", answers[0]["commit_hash"]
+                        )
+                        record_evaluation(
+                            task_id,
+                            "APPROVED",
+                            f"The plan is optimized by the LLM, and choose the best answer among {len(answers)} answers.",
+                        )
+                    else:
+                        record_evaluation(task_id, "REJECTED", "No plan found")
+                        record_human_evaluation(
+                            task_id,
+                            "WAITING_FOR_EVALUATION",
+                            "The plan is optimized by the LLM, but no better answer is found.",
+                        )
+                except Exception as e:
+                    record_human_evaluation(task_id, "WAITING_FOR_EVALUATION", str(e))
+                    logger.error("Failed to optimize task %s: %s", task_id, e)
+
+            # Update last run time and sleep
+            last_run_time = current_time
+            logger.info("Round completed. Sleeping for 1 minute...")
+            time.sleep(60)  # Sleep for 1 minute
         except Exception as e:
-            record_human_evaluation(task_id, "WAITING_FOR_EVALUATION", str(e))
-            logger.error("Failed to optimize task %s: %s", task_id, e)
+            logger.error("Error in main loop: %s", e)
+            time.sleep(60)  # Sleep even if there's an error
