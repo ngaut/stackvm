@@ -97,8 +97,7 @@ Now Let's think step by step! Do you best on this evaluation task!
 
     try:
         response = llm_client.generate(evaluation_prompt)
-        json_response = extract_json(response)
-        return json.loads(json_response)
+        return extract_json(response)
     except Exception as e:
         logger.error(f"Error evaluating task answer: {e}", exc_info=True)
         return None
@@ -163,9 +162,7 @@ Format your response as JSON:
     try:
         # Get reflection from LLM
         response = llm_client.generate(prompt)
-        response_json_str = extract_json(response)
-        reflection = json.loads(response_json_str)
-
+        reflection = extract_json(response)
         return reflection
     except Exception as e:
         logger.error("Error during reflection: %s, %s", e, response, exc_info=True)
@@ -218,7 +215,7 @@ Return JSON array with scores in this format:
 
     try:
         response = llm_client.generate(evaluation_prompt)
-        scores = json.loads(extract_json(response))
+        scores = extract_json(response)
         # Create mapping for quick lookup
         answer_map = {a["commit_hash"]: a["final_answer"] for a in answers_list}
 

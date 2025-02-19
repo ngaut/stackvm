@@ -1,5 +1,9 @@
+import json
 import re
-from typing import Optional, Tuple, Dict
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def extract_json(plan_response: str) -> str:
@@ -18,7 +22,24 @@ def extract_json(plan_response: str) -> str:
     json_code_block_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```", re.DOTALL)
     match = json_code_block_pattern.search(plan_response)
     if match:
-        return match.group(1).strip()
+        json_str = match.group(1).strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Failed to parse JSON use default pattern: %s, %s", json_str, e
+            )
+
+    # Then try to match JSON block between first ```json and last ```
+    first_marker = plan_response.find("```json")
+    last_marker = plan_response.rfind("```")
+
+    if first_marker != -1 and last_marker != -1 and first_marker < last_marker:
+        json_str = plan_response[first_marker + 7 : last_marker].strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse JSON between markers: %s, %s", json_str, e)
 
     # Then try to match JSON block with only opening markdown fence
     start_pattern = re.compile(r"```json\s*([\s\S]*)", re.DOTALL)
@@ -26,7 +47,12 @@ def extract_json(plan_response: str) -> str:
     if match:
         content = match.group(1).strip()
         if content:
-            return content
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    "Failed to parse JSON use start pattern: %s, %s", content, e
+                )
 
     # Finally try to parse the content as raw JSON
     content = plan_response.strip()
@@ -42,7 +68,12 @@ def extract_json(plan_response: str) -> str:
         raise ValueError("Content must start with '{' or '['")
 
     if json_str:
-        return json_str
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Failed to parse JSON use content pattern: %s, %s", content, e
+            )
 
     raise ValueError("No valid JSON content found in the response.")
 
