@@ -224,15 +224,26 @@ class Task:
                 vm.state.get("errors"),
             )
 
-    def execute(self):
+    def execute(self, commit_hash: Optional[str] = None):
         with self._lock:
             try:
-                reasoning, plan = self.generate_plan()
-                if not plan:
-                    raise ValueError("Failed to generate plan")
+                if commit_hash:
+                    vm = PlanExecutionVM(
+                        self.task_orm.goal, self.branch_manager, self.llm
+                    )
+                    vm.set_state(commit_hash)
+                    plan = vm.state.get("current_plan", None)
+                    reasoning = vm.state.get("reasoning", None)
+                else:
+                    reasoning, plan = self.generate_plan()
+                    if not plan:
+                        raise ValueError("Failed to generate plan")
 
-                vm = PlanExecutionVM(self.task_orm.goal, self.branch_manager, self.llm)
-                vm.set_plan(reasoning, plan)
+                    vm = PlanExecutionVM(
+                        self.task_orm.goal, self.branch_manager, self.llm
+                    )
+                    vm.set_plan(reasoning, plan)
+
                 logger.info(
                     "Generated Plan:%s",
                     json.dumps(
