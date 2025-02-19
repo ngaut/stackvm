@@ -8,9 +8,9 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.utils.json import extract_json
 from app.config.database import SessionLocal
 from app.storage.models import Branch, Commit, Task as TaskORM
+from app.core.task.utils import describe_goal
 from app.core.task.manager import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -99,7 +99,9 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
 
         # Build the commit dictionary and establish parent-child relationships
         for commit in commits:
-            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+            seq_no, description, details, commit_type = parse_commit_message(
+                commit.message
+            )
             commits_dict[commit.commit_hash] = {
                 "commit_hash": commit.commit_hash,
                 "parent_hash": commit.parent_hash,
@@ -107,7 +109,7 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
                 "committed_at": commit.committed_at.isoformat(),
                 "children": [],  # Will be populated in next step
                 "seq_no": seq_no,
-                "title": title,
+                "description": description,
                 "details": details,
                 "commit_type": commit_type,
             }
@@ -223,9 +225,8 @@ class MCTSNode:
             # Get reflection from LLM
             reflection = reflect_step_on_final_answer(
                 evaluation_llm,
-                goal,
+                describe_goal(goal, metadata),
                 final_answer,
-                metadata,
                 current_step_no,
                 self.state.plan,
                 self.state.vm_state["variables"],
@@ -248,7 +249,7 @@ class MCTSNode:
             )
             return reflection
         except Exception as e:
-            logger.error("Error during reflection: %s", e)
+            logger.error("Error during reflection: %s", e, exc_info=True)
             return {
                 "should_optimize": False,
                 "suggestion": f"Error during reflection: {str(e)}",
@@ -482,10 +483,10 @@ class MCTSPlanOptimizer:
         try:
 
             if node.state.final_answer is not None:
+                goal_description = describe_goal(self.goal, self.metadata)
                 node.state.evaluation = evaulate_answer(
                     evaluation_llm,
-                    self.goal,
-                    self.metadata,
+                    goal_description,
                     node.state.final_answer,
                     json.dumps(node.state.plan),
                 )
@@ -621,6 +622,7 @@ class MCTSPlanOptimizer:
             for node in leaf_nodes
             if node.state.final_answer
         ]
+        goal_description = describe_goal(self.goal, self.metadata)
         return evaluate_multiple_answers(
-            evaluation_llm, self.goal, self.metadata, final_answers
+            evaluation_llm, goal_description, final_answers
         )

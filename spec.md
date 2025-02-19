@@ -231,7 +231,7 @@ Parameters can be either direct values or variable references. To reference a va
 - **Variable Naming**: Use descriptive variable names to make the plan readable and maintainable.
 - **Control Flow**: Use `jmp` instructions to create conditional logic, manage execution flow, and implement loops effectively.
 - **Final answer**: The name of output var of The last instruction MUST be "final_answer".
-- **Language Consistency**: All the instructions (e.g. `llm_generate`) that directly contribute to generating the `final_answer` must be written in the same language as the goal. This ensures the final output is consistent with the intended language.
+- **Language Consistency**: All the instructions (e.g. `llm_generate`) that directly contribute to generating the `final_answer` must be written in the same language as the Response Language (if not specified, use the same language of the goal). This ensures the final output is consistent with the intended language.
 
 - **Instruction type selection**: Available instruction types:[assign, jmp, calling].
 

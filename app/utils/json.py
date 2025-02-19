@@ -1,5 +1,9 @@
+import json
 import re
-from typing import Optional, Tuple, Dict
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def extract_json(plan_response: str) -> str:
@@ -18,7 +22,24 @@ def extract_json(plan_response: str) -> str:
     json_code_block_pattern = re.compile(r"```json\s*([\s\S]*?)\s*```", re.DOTALL)
     match = json_code_block_pattern.search(plan_response)
     if match:
-        return match.group(1).strip()
+        json_str = match.group(1).strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Failed to parse JSON use default pattern: %s, %s", json_str, e
+            )
+
+    # Then try to match JSON block between first ```json and last ```
+    first_marker = plan_response.find("```json")
+    last_marker = plan_response.rfind("```")
+
+    if first_marker != -1 and last_marker != -1 and first_marker < last_marker:
+        json_str = plan_response[first_marker + 7 : last_marker].strip()
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning("Failed to parse JSON between markers: %s, %s", json_str, e)
 
     # Then try to match JSON block with only opening markdown fence
     start_pattern = re.compile(r"```json\s*([\s\S]*)", re.DOTALL)
@@ -26,7 +47,12 @@ def extract_json(plan_response: str) -> str:
     if match:
         content = match.group(1).strip()
         if content:
-            return content
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    "Failed to parse JSON use start pattern: %s, %s", content, e
+                )
 
     # Finally try to parse the content as raw JSON
     content = plan_response.strip()
@@ -42,7 +68,12 @@ def extract_json(plan_response: str) -> str:
         raise ValueError("Content must start with '{' or '['")
 
     if json_str:
-        return json_str
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "Failed to parse JSON use content pattern: %s, %s", content, e
+            )
 
     raise ValueError("No valid JSON content found in the response.")
 
@@ -79,83 +110,3 @@ def find_first_json_object(text: str) -> Optional[str]:
                 if not stack:
                     return text[start : i + 1]
     return None
-
-
-def parse_goal_response_format(goal: str) -> Tuple[str, Dict[str, str]]:
-    """
-    Extracts the main goal and its requirements from the input string.
-
-    Args:
-        question_str (str): The input question string with optional requirements.
-
-    Returns:
-        Tuple[str, Dict[str, str]]: A tuple containing the main goal and a dictionary of requirements.
-    """
-    # Initialize
-    clean_goal = goal.strip()
-    response_format = None
-
-    # Remove starting quote if present
-    if clean_goal.startswith('"'):
-        clean_goal = clean_goal[1:].strip()
-
-    # Remove ending quote if present
-    if clean_goal.endswith('"'):
-        clean_goal = clean_goal[:-1].strip()
-
-    # Function to find the last balanced parentheses by reverse traversal
-    def extract_last_parentheses(s: str) -> Tuple[str, str]:
-        """
-        Extracts the last balanced parentheses content from the string by traversing from the end.
-
-        Args:
-            s (str): The input string.
-
-        Returns:
-            Tuple[str, str]: A tuple containing the string without the last parentheses
-                             and the content within the last parentheses.
-        """
-        stack = []
-        last_close = s.rfind(")")
-        if last_close == -1:
-            return s, ""  # No closing parenthesis found
-
-        for i in range(last_close, -1, -1):
-            if s[i] == ")":
-                stack.append(i)
-            elif s[i] == "(":
-                if stack:
-                    stack.pop()
-                    if not stack:
-                        # Found the matching opening parenthesis
-                        return s[:i].strip(), s[i + 1 : last_close].strip()
-        return s, ""  # No matching opening parenthesis found
-
-    # Extract the last parentheses content
-    clean_goal, req_str = extract_last_parentheses(clean_goal)
-
-    if req_str:
-        response_format = _parse_response_format(req_str)
-
-    return clean_goal, response_format
-
-
-def _parse_response_format(response_format_str: str) -> Dict[str, str]:
-    """
-    Parses the requirements string into a dictionary.
-
-    Args:
-        req_str (str): The requirements string.
-
-    Returns:
-        Dict[str, str]: A dictionary of parsed requirements.
-    """
-    requirements = {}
-    parts = re.split(r",\s*(?=\w[\w\s]*:\s*[^,()]+)", response_format_str)
-    for part in parts:
-        if ":" in part:
-            key, value = part.split(":", 1)
-            requirements[key.strip()] = value.strip()
-        else:
-            requirements[part.strip()] = None
-    return requirements

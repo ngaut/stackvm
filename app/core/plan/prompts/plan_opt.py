@@ -2,9 +2,71 @@ import json
 import datetime
 
 
+def get_whole_plan_update_prompt(
+    goal,
+    plan,
+    suggestion,
+    user_instructions,
+    VM_SPEC_CONTENT,
+    allowed_tools,
+):
+    return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
+
+Here are the inputs:
+
+## Goal Input
+{goal}
+
+## Previous Plan:
+{plan}
+
+## **Evaluation Feedback**:
+{suggestion}
+
+------------------------------------
+
+As the evaluating feedback said, the previous plan has been rejected or found insufficient in fully addressing the goal. Please revise the previous plan based on these guidelines and the evaluation feedback.
+
+{user_instructions}
+
+------------------------------------
+Make sure the updated plan adheres to the Executable Plan Specifications:
+
+{VM_SPEC_CONTENT}
+
+------------------------------------
+
+Make sure only use these available tools in `calling` instruction:
+{allowed_tools}
+
+-------------------------------
+
+Now, let's update the plan.
+
+**Output**:
+1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
+2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
+
+You should response in the following format:
+
+<think>...</think>
+<answer>
+```json
+[
+  {{
+    "seq_no": 0,
+    ...
+  }},
+  ...
+]
+```
+</answer>
+
+where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan."""
+
+
 def get_plan_update_prompt(
     goal,
-    metadata,
     vm_program_counter,
     vm_spec_content,
     tools_instruction_content,
@@ -19,11 +81,8 @@ def get_plan_update_prompt(
     prompt = f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Analyze the current VM execution state and update the plan based on suggestions and the current execution results.
 
-Goal:
+Goal Input:
 {goal}
-
-The supplementary information for Goal:
-{metadata.get('response_format')}
 
 Reasoning for the current plan:
 {reasoning}
@@ -82,15 +141,15 @@ Last Executed Step: {json.dumps(plan[vm_program_counter - 1], indent=2) if vm_pr
 ## 9. Available Tools for `calling` instruction
 {tools_instruction_content}
 
+IMPORTANT: For calling instruction, Only select tools listed in the "Available Tools" section. Using tools outside this list will cause the plan to fail.
+
 -------------------------------
 
 Now, let's update the plan.
 
 **Output**:
-1. Provide the complete updated plan in JSON format, ensuring it adheres to the VM specification.
-2. Provide a summary of the changes made to the plan, including a diff with the previous plan.
 
-You should response in the following format:
+You should response your reasoning and the updated plan (a valid json array) in the following format:
 
 <think>...</think>
 <answer>
@@ -145,20 +204,12 @@ Now, let's update the step.
 3. Ensure the updated step is consistent with the VM's current state and does not introduce redundancy.
 
 **Output**:
-You should response in the following format:
-
-<think>...</think>
-<answer>
+Provide only the updated step in JSON format. For example:
 ```json
-[
-  {{
-    "seq_no": 0,
+{{
+    "seq_no": 2,
+    "type": "calling",
     ...
-  }},
-  ...
-]
+}}
 ```
-</answer>
-
-where <think> is your detailed reasoning process in text format and the JSON array inside the answer is a valid plan.
 """

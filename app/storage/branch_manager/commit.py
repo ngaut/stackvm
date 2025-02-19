@@ -21,16 +21,18 @@ def parse_commit_message(message) -> tuple:
             commit_info = message
         else:
             commit_info = json.loads(message)
-        title = commit_info.get("description", "No description")
+        description = commit_info.get("description", "No description")
         details = {
             "input_parameters": commit_info.get("input_parameters", {}),
             "output_variables": commit_info.get("output_variables", {}),
+            "execution_error": commit_info.get("execution_error", None),
         }
+
         commit_type = commit_info.get("type", "General")
         seq_no = commit_info.get("seq_no", "Unknown")
     except json.JSONDecodeError:
-        title = message
+        description = message
         details = {}
         commit_type = "General"
 
-    return seq_no, title, details, commit_type
+    return seq_no, description, details, commit_type

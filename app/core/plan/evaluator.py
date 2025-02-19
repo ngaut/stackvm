@@ -8,9 +8,7 @@ from app.utils import extract_json
 logger = logging.getLogger(__name__)
 
 
-def evaulate_answer(
-    llm_client: LLMInterface, goal: str, metadata: dict, final_answer: str, plan: str
-):
+def evaulate_answer(llm_client: LLMInterface, goal: str, final_answer: str, plan: str):
     evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
 
 ------------------------------------
@@ -88,9 +86,6 @@ Below are the inputs for your evaluation:
 ## Goal
 {goal}
 
-## Supplementary goal information
-{metadata.get('response_format')}
-
 ## Final Answer
 {final_answer}
 
@@ -102,8 +97,7 @@ Now Let's think step by step! Do you best on this evaluation task!
 
     try:
         response = llm_client.generate(evaluation_prompt)
-        json_response = extract_json(response)
-        return json.loads(json_response)
+        return extract_json(response)
     except Exception as e:
         logger.error(f"Error evaluating task answer: {e}", exc_info=True)
         return None
@@ -113,7 +107,6 @@ def reflect_step_on_final_answer(
     llm_client: LLMInterface,
     goal: str,
     final_answer: str,
-    metadata: Dict,
     current_step_no: int,
     plan: List[Dict],
     vm_state: Dict,
@@ -133,49 +126,43 @@ def reflect_step_on_final_answer(
         }
     """
     # Prepare the reflection prompt
-    prompt = f"""
-    Goal: {goal} 
+    prompt = f"""Goal Input:
+{goal}
 
-    The supplementary information for Goal:
-    {metadata.get('response_format')}
+Final Answer: {final_answer}
 
-    Final Answer: {final_answer}
+Feedback: {feedback}
 
-    Feedback: {feedback}
-    
-    Current Step ({current_step_no}):
-    {json.dumps(plan[current_step_no], indent=2)}
+Current Step ({current_step_no}):
+{json.dumps(plan[current_step_no], indent=2)}
 
-    Current Execution State:
-    {json.dumps(vm_state, indent=2)}
+Current Execution State:
+{json.dumps(vm_state, indent=2)}
 
-    Remaining Steps:
-    {json.dumps(plan[current_step_no + 1:], indent=2)}
+Remaining Steps:
+{json.dumps(plan[current_step_no + 1:], indent=2)}
 
-    Analyze final answer, and the feedback (if provided):
-    1. Could the remaining steps be improved to generate a better final answer? Answer with true or false.
-    2. If true, suggest specific improvements focusing on:
-        - Adding new steps that could provide additional relevant information
-        - Modifying existing steps to gather more comprehensive or accurate data
-        - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
+Analyze final answer, and the feedback (if provided):
+1. Could the remaining steps be improved to generate a better final answer? Answer with true or false.
+2. If true, suggest specific improvements focusing on:
+    - Adding new steps that could provide additional relevant information
+    - Modifying existing steps to gather more comprehensive or accurate data
+    - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
 
-    Note: Focus on improving answer quality rather than execution efficiency.
+Note: Focus on improving answer quality rather than execution efficiency.
 
-    Format your response as JSON:
-    ```json
-    {{
-        "should_optimize": true/false,
-        "suggestion": string,
-    }}
-    ```
-    """
+Format your response as JSON:
+```json
+{{
+    "should_optimize": true/false,
+    "suggestion": string,
+}}
+```"""
 
     try:
         # Get reflection from LLM
         response = llm_client.generate(prompt)
-        response_json_str = extract_json(response)
-        reflection = json.loads(response_json_str)
-
+        reflection = extract_json(response)
         return reflection
     except Exception as e:
         logger.error("Error during reflection: %s, %s", e, response, exc_info=True)
@@ -188,7 +175,6 @@ def reflect_step_on_final_answer(
 def evaluate_multiple_answers(
     llm_client: LLMInterface,
     goal: str,
-    metadata: dict,
     answers_list: List[Dict[str, str]],
 ) -> List[Dict]:
     """Evaluate and rank multiple answers based on their quality.
@@ -207,8 +193,8 @@ Higher scores indicate better alignment with the goal. Consider:
 3. Actionability of solutions
 4. Technical correctness (for TiDB-related goals)
 
-Goal: {goal}
-Supplementary Information: {metadata.get('response_format', 'N/A')}
+Goal Input:
+{goal}
 
 Answers to evaluate:
 {json.dumps([{"commit_hash": a["commit_hash"], "answer": a["final_answer"]} 
@@ -229,7 +215,7 @@ Return JSON array with scores in this format:
 
     try:
         response = llm_client.generate(evaluation_prompt)
-        scores = json.loads(extract_json(response))
+        scores = extract_json(response)
         # Create mapping for quick lookup
         answer_map = {a["commit_hash"]: a["final_answer"] for a in answers_list}
 

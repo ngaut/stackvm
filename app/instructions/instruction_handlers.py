@@ -56,8 +56,10 @@ class InstructionHandlers:
                         self.vm.logger.debug(f"Parsed JSON output: {parsed_output}")
                     except json.JSONDecodeError:
                         self.vm.logger.debug(
-                            "instruction_output is a string but not a valid JSON."
+                            "instruction_output is a string but not a valid JSON. %s",
+                            e,
                         )
+                        raise json.JSONDecodeError(f"{e}, data: {instruction_output}")
 
             if not parsed_output or not isinstance(parsed_output, dict):
                 raise ValueError(
@@ -73,9 +75,7 @@ class InstructionHandlers:
 
             return True, output_vars_record
         except Exception as e:
-            self.vm.logger.error(
-                f"Failed to set output_vars: {e} for {instruction_output}"
-            )
+            self.vm.logger.error(f"Failed to set output_vars: {e} for {output_vars}")
             return False, output_vars_record
 
     def unknown_handler(

@@ -340,8 +340,7 @@ class LabelClassifier:
         response = self.llm_interface.generate(prompt)
 
         try:
-            label_path_str = extract_json(response)
-            label_path = json.loads(label_path_str)
+            label_path = extract_json(response)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse label path JSON: {e}. Data {response}")
 
@@ -393,10 +392,8 @@ class LabelClassifier:
         # Call LLM to get classification
         response = self.llm_interface.generate(prompt)
         # Parse the LLM response to extract label path
-        label_path_str = extract_json(response)
-
         try:
-            label_path = json.loads(label_path_str)
+            label_path = extract_json(response)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse label path JSON: {e}")
 

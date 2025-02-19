@@ -26,11 +26,11 @@ from app.config.settings import (
     BACKEND_CORS_ORIGINS,
     GENERATED_FILES_DIR,
 )
-from app.utils import parse_goal_response_format
 from app.storage.models import TaskStatus, EvaluationStatus
 
 from .streaming_protocol import StreamingProtocol
 from app.core.task.manager import TaskService
+from app.core.task.utils import parse_goal_response_format
 from app.core.labels.classifier import get_label_path
 from app.core.plan.generator import PlanUnavailableError
 
@@ -402,130 +402,6 @@ def save_best_plan(task_id: str, commit_hash: str):
             f"Failed to save best plan for task {task_id} from commit hash {commit_hash}",
             "error",
             500,
-        )
-
-
-@api_blueprint.route("/tasks/<task_id>/evaluation", methods=["POST"])
-def record_evaluation(task_id):
-    """
-    API endpoint to record the evaluation result of a task.
-
-    Args:
-        task_id (str): The ID of the task to be evaluated.
-
-    Expects JSON payload with:
-        - evaluation_status (str): The evaluation status (e.g., "APPROVED", "REJECTED").
-        - evaluation_reason (str): The reason for the evaluation decision.
-
-    Returns:
-        JSON response indicating success or failure.
-    """
-    data = request.json
-    current_app.logger.info(f"Received evaluation data for task {task_id}: {data}")
-
-    evaluation_status_str = data.get("evaluation_status")
-    evaluation_reason = data.get("evaluation_reason", "")
-
-    if not evaluation_status_str:
-        return log_and_return_error(
-            "Missing 'evaluation_status' parameter.", "error", 400
-        )
-
-    # Validate and parse the evaluation_status
-    try:
-        evaluation_status = EvaluationStatus(evaluation_status_str)
-    except ValueError:
-        return log_and_return_error(
-            f"Invalid 'evaluation_status' value. Must be one of {[status.value for status in EvaluationStatus]}.",
-            "error",
-            400,
-        )
-
-    with SessionLocal() as session:
-        task = ts.get_task(session, task_id)
-        if not task:
-            return log_and_return_error(
-                f"Task with ID {task_id} not found.", "error", 404
-            )
-
-    try:
-        task.mark_evaluation(evaluation_status, evaluation_reason)
-        current_app.logger.info(
-            f"Task {task_id} evaluation updated to {evaluation_status.value}."
-        )
-        return (
-            jsonify({"success": True, "message": "Evaluation recorded successfully."}),
-            200,
-        )
-    except Exception as e:
-        current_app.logger.error(
-            f"Failed to record evaluation for task {task_id}: {str(e)}",
-            exc_info=True,
-        )
-        return log_and_return_error(
-            f"Failed to record evaluation: {str(e)}", "error", 500
-        )
-
-
-@api_blueprint.route("/tasks/<task_id>/human_evaluation", methods=["POST"])
-def record_human_evaluation(task_id):
-    """
-    API endpoint to record the human evaluation result of a task.
-
-    Args:
-        task_id (str): The ID of the task to be evaluated.
-
-    Expects JSON payload with:
-        - evaluation_status (str): The evaluation status (e.g., "APPROVED", "REJECTED").
-        - evaluation_reason (str): The reason for the evaluation decision.
-
-    Returns:
-        JSON response indicating success or failure.
-    """
-    data = request.json
-    current_app.logger.info(f"Received evaluation data for task {task_id}: {data}")
-
-    evaluation_status_str = data.get("evaluation_status")
-    feedback = data.get("feedback", "")
-
-    if not evaluation_status_str:
-        return log_and_return_error(
-            "Missing 'evaluation_status' parameter.", "error", 400
-        )
-
-    # Validate and parse the evaluation_status
-    try:
-        evaluation_status = EvaluationStatus(evaluation_status_str)
-    except ValueError:
-        return log_and_return_error(
-            f"Invalid 'evaluation_status' value. Must be one of {[status.value for status in EvaluationStatus]}.",
-            "error",
-            400,
-        )
-
-    with SessionLocal() as session:
-        task = ts.get_task(session, task_id)
-        if not task:
-            return log_and_return_error(
-                f"Task with ID {task_id} not found.", "error", 404
-            )
-
-    try:
-        task.mark_human_evaluation(evaluation_status, feedback)
-        current_app.logger.info(
-            f"Task {task_id} evaluation updated to {evaluation_status.value}."
-        )
-        return (
-            jsonify({"success": True, "message": "Evaluation recorded successfully."}),
-            200,
-        )
-    except Exception as e:
-        current_app.logger.error(
-            f"Failed to record human evaluation for task {task_id}: {str(e)}",
-            exc_info=True,
-        )
-        return log_and_return_error(
-            f"Failed to record human evaluation: {str(e)}", "error", 500
         )
 
 
