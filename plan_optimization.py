@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import time
 
 from app.core.plan.evaluator import evaulate_answer
+from app.core.task.utils import describe_goal
 from app.llm.interface import LLMInterface
 from app.config.settings import EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
 from app.instructions import global_tools_hub
@@ -56,7 +57,8 @@ def optimize_plan(task_id: str, branch_name: Optional[str] = "main", max_iterati
                 record_evaluation(task_id, "REJECTED", "No plan found")
                 return "REJECTED"
 
-            eval_res = evaulate_answer(eval_llm, goal, metadata, final_answer, plan)
+            goal_description = describe_goal(goal, metadata)
+            eval_res = evaulate_answer(eval_llm, goal_description, final_answer, plan)
             eval_status = (
                 "APPROVED"
                 if eval_res.get("accept", False)

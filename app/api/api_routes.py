@@ -26,11 +26,11 @@ from app.config.settings import (
     BACKEND_CORS_ORIGINS,
     GENERATED_FILES_DIR,
 )
-from app.utils import parse_goal_response_format
 from app.storage.models import TaskStatus, EvaluationStatus
 
 from .streaming_protocol import StreamingProtocol
 from app.core.task.manager import TaskService
+from app.core.task.utils import parse_goal_response_format
 from app.core.labels.classifier import get_label_path
 from app.core.plan.generator import PlanUnavailableError
 

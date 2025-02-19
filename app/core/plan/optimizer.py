@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 def optimize_whole_plan(
     llm_client: LLMInterface,
     goal: str,
-    metadata: dict,
     plan: str,
     suggestion: str | Dict,
     user_instructions: str,
@@ -29,7 +28,6 @@ def optimize_whole_plan(
 
     updated_prompt = get_whole_plan_update_prompt(
         goal,
-        metadata,
         plan,
         suggestion,
         user_instructions,
@@ -54,7 +52,6 @@ def optimize_whole_plan(
 def optimize_partial_plan(
     llm_interface: LLMInterface,
     goal,
-    metadata,
     vm_program_counter,
     plan,
     reasoning,
@@ -63,7 +60,6 @@ def optimize_partial_plan(
 ):
     prompt = get_plan_update_prompt(
         goal,
-        metadata,
         vm_program_counter,
         VM_SPEC_CONTENT,
         global_tools_hub.get_tools_description(allowed_tools),

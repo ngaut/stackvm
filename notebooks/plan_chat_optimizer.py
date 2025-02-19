@@ -21,6 +21,7 @@ from app.config.settings import (
 )
 from app.core.plan.evaluator import evaulate_answer
 from app.core.plan.optimizer import optimize_whole_plan
+from app.core.task.utils import describe_goal
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -147,7 +148,7 @@ def update_plan(goal: str, metadata: dict, plan: str, suggestion: str | Dict):
 """
 
     return optimize_whole_plan(
-        reason_llm, goal, metadata, plan, suggestion, user_instructions
+        reason_llm, describe_goal(goal, metadata), plan, suggestion, user_instructions
     )
 
 
@@ -322,10 +323,12 @@ class PlanOptimizationService:
                         elif tool_call.function.name == "evaulate_task_answer_object":
                             args = json.loads(tool_call.function.arguments)
                             answer_detail = get_task_answer(**args)
+                            goal_description = describe_goal(
+                                answer_detail["goal"], answer_detail["metadata"]
+                            )
                             eval_res = evaulate_answer(
                                 eval_llm,
-                                answer_detail["goal"],
-                                answer_detail["metadata"],
+                                goal_description,
                                 answer_detail["final_answer"],
                                 answer_detail["plan"],
                             )

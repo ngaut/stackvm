@@ -8,9 +8,9 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
-from app.utils.json import extract_json
 from app.config.database import SessionLocal
 from app.storage.models import Branch, Commit, Task as TaskORM
+from app.core.task.utils import describe_goal
 from app.core.task.manager import Task
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
@@ -224,8 +224,7 @@ class MCTSNode:
             reflection = reflect_step_on_final_answer(
                 evaluation_llm,
                 goal,
-                final_answer,
-                metadata,
+                describe_goal(goal, metadata),
                 current_step_no,
                 self.state.plan,
                 self.state.vm_state["variables"],
@@ -482,10 +481,10 @@ class MCTSPlanOptimizer:
         try:
 
             if node.state.final_answer is not None:
+                goal_description = describe_goal(self.goal, self.metadata)
                 node.state.evaluation = evaulate_answer(
                     evaluation_llm,
-                    self.goal,
-                    self.metadata,
+                    goal_description,
                     node.state.final_answer,
                     json.dumps(node.state.plan),
                 )
@@ -558,8 +557,9 @@ class MCTSPlanOptimizer:
         while node is not None:
             node.visits += 1  # Increment visit count
             node.value += reward  # Accumulate reward value
+            goal_description = describe_goal(self.goal, self.metadata)
             node.reflect_on_final_answer(
-                self.goal, final_answer, self.metadata, branch_name, feedback
+                goal_description, final_answer, branch_name, feedback
             )
             node = node.parent  # Move up to parent
 
@@ -621,6 +621,7 @@ class MCTSPlanOptimizer:
             for node in leaf_nodes
             if node.state.final_answer
         ]
+        goal_description = describe_goal(self.goal, self.metadata)
         return evaluate_multiple_answers(
-            evaluation_llm, self.goal, self.metadata, final_answers
+            evaluation_llm, goal_description, final_answers
         )

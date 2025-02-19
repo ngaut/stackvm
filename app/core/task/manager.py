@@ -18,21 +18,20 @@ from app.config.settings import (
 from app.storage.branch_manager import GitManager, MySQLBranchManager
 from app.core.vm.engine import PlanExecutionVM
 from app.core.plan.utils import parse_step
-
 from app.core.task.queue import TaskQueue
-
 from app.core.plan.prompts import get_step_update_prompt
-
 from app.llm.interface import LLMInterface
 from app.config.database import SessionLocal
 from app.instructions import global_tools_hub
 from app.config.settings import VM_SPEC_CONTENT
 from app.storage.branch_manager import CommitType
-
 from app.core.plan.generator import generate_plan
 from app.core.plan.optimizer import optimize_partial_plan
 from app.core.labels.classifier import LabelClassifier
+
 from .simple_cache import initialize_cache
+from .utils import describe_goal
+
 
 logger = logging.getLogger(__name__)
 classifier = LabelClassifier()
@@ -179,17 +178,16 @@ class Task:
         # generate plan if not found in cache
         if plan is None:
             goal = self.task_orm.goal
-            if response_format:
-                goal = f"{goal} {response_format}"
+            goal_description = describe_goal(goal, self.task_orm.meta)
 
             logger.info(
                 "Generating plan for goal using LLM Model %s: %s",
                 REASON_LLM_MODEL,
-                goal,
+                goal_description,
             )
             plan_data = generate_plan(
                 self.reasoning_llm,
-                goal,
+                goal_description,
                 example=example_str,
                 best_practices=best_practices,
                 allowed_tools=self.get_allowed_tools(),
@@ -353,8 +351,7 @@ class Task:
     ):
         updated_plan = optimize_partial_plan(
             self.reasoning_llm,
-            self.task_orm.goal,
-            self.task_orm.meta,
+            describe_goal(self.task_orm.goal, self.task_orm.meta),
             vm.state["program_counter"],
             plan or vm.state["current_plan"],
             reasoning,

@@ -15,7 +15,10 @@ def get_generate_plan_prompt(
 
     return f"""Today is {datetime.date.today().strftime("%Y-%m-%d")}
 Your task is to generate a detailed action plan to achieve the following goal:
-Goal: {goal}
+
+{goal}
+
+--------------------------------
 
 **MUST follow the Specification**:
 {vm_spec_content}

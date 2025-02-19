@@ -8,9 +8,7 @@ from app.utils import extract_json
 logger = logging.getLogger(__name__)
 
 
-def evaulate_answer(
-    llm_client: LLMInterface, goal: str, metadata: dict, final_answer: str, plan: str
-):
+def evaulate_answer(llm_client: LLMInterface, goal: str, final_answer: str, plan: str):
     evaluation_prompt = f"""You are tasked with evaluating and improving the effectiveness of a problem-solving workflow. Below is a description of a Goal, a Plan used to address it, and the Final Answer generated. Your task is to evaluate the quality of the answer and diagnose whether the Plan sufficiently aligns with the Goal.
 
 ------------------------------------
@@ -88,9 +86,6 @@ Below are the inputs for your evaluation:
 ## Goal
 {goal}
 
-## Supplementary goal information
-{metadata.get('response_format')}
-
 ## Final Answer
 {final_answer}
 
@@ -113,7 +108,6 @@ def reflect_step_on_final_answer(
     llm_client: LLMInterface,
     goal: str,
     final_answer: str,
-    metadata: Dict,
     current_step_no: int,
     plan: List[Dict],
     vm_state: Dict,
@@ -134,10 +128,8 @@ def reflect_step_on_final_answer(
     """
     # Prepare the reflection prompt
     prompt = f"""
-    Goal: {goal} 
-
-    The supplementary information for Goal:
-    {metadata.get('response_format')}
+    Goal Input:
+    {goal}
 
     Final Answer: {final_answer}
 
@@ -188,7 +180,6 @@ def reflect_step_on_final_answer(
 def evaluate_multiple_answers(
     llm_client: LLMInterface,
     goal: str,
-    metadata: dict,
     answers_list: List[Dict[str, str]],
 ) -> List[Dict]:
     """Evaluate and rank multiple answers based on their quality.
@@ -207,8 +198,8 @@ Higher scores indicate better alignment with the goal. Consider:
 3. Actionability of solutions
 4. Technical correctness (for TiDB-related goals)
 
-Goal: {goal}
-Supplementary Information: {metadata.get('response_format', 'N/A')}
+Goal Input:
+{goal}
 
 Answers to evaluate:
 {json.dumps([{"commit_hash": a["commit_hash"], "answer": a["final_answer"]} 
