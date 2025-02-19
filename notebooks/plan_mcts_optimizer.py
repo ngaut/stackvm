@@ -223,8 +223,8 @@ class MCTSNode:
             # Get reflection from LLM
             reflection = reflect_step_on_final_answer(
                 evaluation_llm,
-                goal,
                 describe_goal(goal, metadata),
+                final_answer,
                 current_step_no,
                 self.state.plan,
                 self.state.vm_state["variables"],
@@ -247,7 +247,7 @@ class MCTSNode:
             )
             return reflection
         except Exception as e:
-            logger.error("Error during reflection: %s", e)
+            logger.error("Error during reflection: %s", e, exc_info=True)
             return {
                 "should_optimize": False,
                 "suggestion": f"Error during reflection: {str(e)}",
@@ -557,9 +557,8 @@ class MCTSPlanOptimizer:
         while node is not None:
             node.visits += 1  # Increment visit count
             node.value += reward  # Accumulate reward value
-            goal_description = describe_goal(self.goal, self.metadata)
             node.reflect_on_final_answer(
-                goal_description, final_answer, branch_name, feedback
+                self.goal, final_answer, self.metadata, branch_name, feedback
             )
             node = node.parent  # Move up to parent
 

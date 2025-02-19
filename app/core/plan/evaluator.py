@@ -127,40 +127,38 @@ def reflect_step_on_final_answer(
         }
     """
     # Prepare the reflection prompt
-    prompt = f"""
-    Goal Input:
-    {goal}
+    prompt = f"""Goal Input:
+{goal}
 
-    Final Answer: {final_answer}
+Final Answer: {final_answer}
 
-    Feedback: {feedback}
-    
-    Current Step ({current_step_no}):
-    {json.dumps(plan[current_step_no], indent=2)}
+Feedback: {feedback}
 
-    Current Execution State:
-    {json.dumps(vm_state, indent=2)}
+Current Step ({current_step_no}):
+{json.dumps(plan[current_step_no], indent=2)}
 
-    Remaining Steps:
-    {json.dumps(plan[current_step_no + 1:], indent=2)}
+Current Execution State:
+{json.dumps(vm_state, indent=2)}
 
-    Analyze final answer, and the feedback (if provided):
-    1. Could the remaining steps be improved to generate a better final answer? Answer with true or false.
-    2. If true, suggest specific improvements focusing on:
-        - Adding new steps that could provide additional relevant information
-        - Modifying existing steps to gather more comprehensive or accurate data
-        - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
+Remaining Steps:
+{json.dumps(plan[current_step_no + 1:], indent=2)}
 
-    Note: Focus on improving answer quality rather than execution efficiency.
+Analyze final answer, and the feedback (if provided):
+1. Could the remaining steps be improved to generate a better final answer? Answer with true or false.
+2. If true, suggest specific improvements focusing on:
+    - Adding new steps that could provide additional relevant information
+    - Modifying existing steps to gather more comprehensive or accurate data
+    - Enhancing the reasoning process using llm_generate to produce a more complete or accurate answer
 
-    Format your response as JSON:
-    ```json
-    {{
-        "should_optimize": true/false,
-        "suggestion": string,
-    }}
-    ```
-    """
+Note: Focus on improving answer quality rather than execution efficiency.
+
+Format your response as JSON:
+```json
+{{
+    "should_optimize": true/false,
+    "suggestion": string,
+}}
+```"""
 
     try:
         # Get reflection from LLM

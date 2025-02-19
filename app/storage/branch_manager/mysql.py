@@ -188,7 +188,7 @@ class MySQLBranchManager(BranchManager):
             return False
 
     def delete_branch(self, branch_name: str) -> bool:
-        """Delete the specified branch."""
+        """Delete the specified branch and its unique commit path until a fork point."""
         try:
             with self.get_session() as session:
                 branch = self._get_branch(session, branch_name)
@@ -214,6 +214,58 @@ class MySQLBranchManager(BranchManager):
                     self._current_commit_hash = other_branch.head_commit_hash
                     self.current_state = other_branch.head_commit.vm_state
 
+                # Get all commits in the task
+                all_commits = (
+                    session.query(Commit).filter(Commit.task_id == self.task_id).all()
+                )
+
+                # Build a map of commit references
+                commit_refs = {}  # commit_hash -> count of children
+                for commit in all_commits:
+                    if commit.parent_hash:
+                        commit_refs[commit.parent_hash] = (
+                            commit_refs.get(commit.parent_hash, 0) + 1
+                        )
+
+                # Collect commits to delete by walking back until we hit a fork
+                commits_to_delete = set()
+                current_hash = branch.head_commit_hash
+
+                while current_hash:
+                    commit = self._get_commit(session, current_hash)
+                    if not commit:
+                        break
+
+                    # Skip initial commit (commit without parent)
+                    if not commit.parent_hash:
+                        break
+
+                    # If this commit is referenced by more than one commit
+                    # or is referenced by another branch, stop here
+                    ref_count = commit_refs.get(current_hash, 0)
+                    other_branch_exists = (
+                        session.query(Branch)
+                        .filter(
+                            Branch.task_id == self.task_id,
+                            Branch.name != branch_name,
+                            Branch.head_commit_hash == current_hash,
+                        )
+                        .first()
+                    ) is not None
+
+                    if ref_count > 1 or other_branch_exists:
+                        break
+
+                    commits_to_delete.add(current_hash)
+                    current_hash = commit.parent_hash
+
+                # Delete the collected commits
+                for commit_hash in commits_to_delete:
+                    commit = self._get_commit(session, commit_hash)
+                    if commit:
+                        session.delete(commit)
+
+                # Delete the branch
                 session.delete(branch)
                 session.commit()
                 return True
