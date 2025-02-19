@@ -129,6 +129,22 @@ class PlanExecutionVM:
 
         return Step(handler, seq_no, step_type, params)
 
+    def _get_step_description(
+        self, step_type: str, params: Dict[str, Any], seq_no: str
+    ) -> str:
+        if step_type == "calling" or "tool_params" in params:
+            return f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
+        else:
+            return f"Executed seq_no: {seq_no}, step: {step_type}"
+
+    def _get_step_input_parameters(
+        self, step_type: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if step_type == "calling" or "tool_params" in params:
+            return params.get("tool_params", {})
+        else:
+            return params
+
     def _log_step_execution(
         self,
         step_type: str,
@@ -137,12 +153,8 @@ class PlanExecutionVM:
         output_parameters: Dict[str, Any],
     ):
         """Log the execution of a step and prepare commit message."""
-        if step_type == "calling" or "tool_params" in params:
-            input_vars = params.get("tool_params", {})
-            description = f"Executed seq_no: {seq_no}, step: '{step_type}', tool: {params.get('tool_name', 'Unknown')}"
-        else:
-            input_vars = params
-            description = f"Executed seq_no: {seq_no}, step: {step_type}"
+        input_vars = self._get_step_input_parameters(step_type, params)
+        description = self._get_step_description(step_type, params, seq_no)
 
         input_parameters = {k: self._preview_value(v) for k, v in input_vars.items()}
 
@@ -255,6 +267,20 @@ class PlanExecutionVM:
                 self.state["errors"].append(
                     f"Failed to execute step {current_step.seq_no}: {step_result}"
                 )
+
+                commit_hash = self.branch_manager.commit_changes(
+                    commit_info={
+                        "type": CommitType.STEP_EXECUTION.value,
+                        "seq_no": current_step.seq_no,
+                        "description": self._get_step_description(
+                            current_step.step_type,
+                            current_step.parameters,
+                            current_step.seq_no,
+                        ),
+                        "execution_error": step_result,
+                    }
+                )
+
                 return {
                     "success": False,
                     "error": step_result,

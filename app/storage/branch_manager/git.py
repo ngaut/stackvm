@@ -139,7 +139,7 @@ class GitManager(BranchManager):
             vm_states = []
             for commit in commits:
                 commit_time = datetime.fromtimestamp(commit.committed_date)
-                seq_no, title, details, commit_type = parse_commit_message(
+                seq_no, description, details, commit_type = parse_commit_message(
                     commit.message
                 )
 
@@ -147,7 +147,7 @@ class GitManager(BranchManager):
                 vm_states.append(
                     {
                         "time": commit_time.isoformat(),
-                        "title": title,
+                        "title": description,
                         "details": details,
                         "commit_hash": commit.hexsha,
                         "seq_no": seq_no,
@@ -182,12 +182,14 @@ class GitManager(BranchManager):
         try:
             commit = self.repo.commit(commit_hash)
             commit_time = datetime.fromtimestamp(commit.committed_date)
-            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+            seq_no, description, details, commit_type = parse_commit_message(
+                commit.message
+            )
 
             vm_state = self.load_state(commit.hexsha)
             return {
                 "time": commit_time.isoformat(),
-                "title": title,
+                "title": description,
                 "details": details,
                 "commit_hash": commit.hexsha,
                 "seq_no": seq_no,

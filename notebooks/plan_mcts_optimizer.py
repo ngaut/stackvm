@@ -99,7 +99,9 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
 
         # Build the commit dictionary and establish parent-child relationships
         for commit in commits:
-            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+            seq_no, description, details, commit_type = parse_commit_message(
+                commit.message
+            )
             commits_dict[commit.commit_hash] = {
                 "commit_hash": commit.commit_hash,
                 "parent_hash": commit.parent_hash,
@@ -107,7 +109,7 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
                 "committed_at": commit.committed_at.isoformat(),
                 "children": [],  # Will be populated in next step
                 "seq_no": seq_no,
-                "title": title,
+                "description": description,
                 "details": details,
                 "commit_type": commit_type,
             }

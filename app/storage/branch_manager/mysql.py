@@ -316,14 +316,14 @@ class MySQLBranchManager(BranchManager):
                 if not commit:
                     break
 
-                seq_no, title, details, commit_type = parse_commit_message(
+                seq_no, description, details, commit_type = parse_commit_message(
                     commit.message
                 )
 
                 commits.append(
                     {
                         "time": commit.committed_at.isoformat(),
-                        "title": title,
+                        "title": description,
                         "details": details,
                         "commit_hash": commit.commit_hash,
                         "seq_no": seq_no,
@@ -355,11 +355,13 @@ class MySQLBranchManager(BranchManager):
                     f"Commit with hash '{latest_hash}' not found in branch '{branch_name}'."
                 )
 
-            seq_no, title, details, commit_type = parse_commit_message(commit.message)
+            seq_no, description, details, commit_type = parse_commit_message(
+                commit.message
+            )
 
             return {
                 "time": commit.committed_at.isoformat(),
-                "title": title,
+                "title": description,
                 "details": details,
                 "commit_hash": commit.commit_hash,
                 "seq_no": seq_no,
