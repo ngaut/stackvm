@@ -234,3 +234,51 @@ Return JSON array with scores in this format:
     except Exception as e:
         logger.error(f"Error evaluating multiple answers: {e}", exc_info=True)
         return []
+
+
+def evaluate_execution_error(
+    llm_client: LLMInterface,
+    goal: str,
+    plan: str,
+    error_message: str,
+    current_step: int,
+):
+    error_eval_prompt = f"""Analyze an execution error that occurred during plan execution. Suggest specific fixes.
+
+------------------------------------
+REQUIRED OUTPUT FORMAT:
+{{
+  "root_cause": "Concise technical explanation",
+  "plan_modification_suggestion": "Specific plan adjustment recommendations"
+}}
+
+------------------------------------
+EXAMPLE OUTPUT:
+{{
+  "root_cause": "Use the unavailable tool in calling instruction",
+  "plan_modification_suggestion": "Only use the available tool in calling instruction"
+}}
+
+Below are the execution context details:
+
+## Goal
+{goal}
+
+## Error Message
+{error_message}
+
+## Failing Step ({current_step})
+{plan[current_step]}
+
+## Full Plan
+{plan}
+
+Analyze the error systematically and provide actionable recovery guidance:
+"""
+
+    try:
+        response = llm_client.generate(error_eval_prompt)
+        return extract_json(response)
+    except Exception as e:
+        logger.error(f"Error evaluating execution error: {e}", exc_info=True)
+        return None

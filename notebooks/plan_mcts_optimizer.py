@@ -33,6 +33,7 @@ from app.core.plan.evaluator import (
     evaulate_answer,
     reflect_step_on_final_answer,
     evaluate_multiple_answers,
+    evaluate_execution_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,7 @@ def get_branch(task_id: str, head_commit_hash: str) -> str:
                 Branch.task_id == task_id, Branch.head_commit_hash == head_commit_hash
             )
         ).scalar_one()
+
         return branch.name
 
 
@@ -99,7 +101,7 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
 
         # Build the commit dictionary and establish parent-child relationships
         for commit in commits:
-            seq_no, description, details, commit_type = parse_commit_message(
+            seq_no, description, execution_result, commit_type = parse_commit_message(
                 commit.message
             )
             commits_dict[commit.commit_hash] = {
@@ -110,7 +112,7 @@ def get_task_commit_tree(task_id: str) -> Dict[str, Dict]:
                 "children": [],  # Will be populated in next step
                 "seq_no": seq_no,
                 "description": description,
-                "details": details,
+                "execution_result": execution_result,
                 "commit_type": commit_type,
             }
 
@@ -161,6 +163,7 @@ class MCTSState:
     commit_hash: Optional[str] = None
     final_answer: Optional[str] = None
     evaluation: Optional[Dict] = None
+    execution_result: Optional[Dict] = None
 
 
 class MCTSNode:
@@ -255,6 +258,9 @@ class MCTSNode:
                 "suggestion": f"Error during reflection: {str(e)}",
             }
 
+    def is_last_step(self) -> bool:
+        return self.state.seq_no >= 0 and self.state.seq_no == len(self.state.plan) - 1
+
 
 class MCTSPlanOptimizer:
     """MCTS-based plan optimizer"""
@@ -327,8 +333,8 @@ class MCTSPlanOptimizer:
                     final_answer=child_commit["vm_state"]
                     .get("variables", {})
                     .get("final_answer", None),
+                    execution_result=child_commit.get("execution_result", None),
                 )
-
                 # Create child node
                 child_node = MCTSNode(state=child_state, parent=parent_node)
 
@@ -388,6 +394,8 @@ class MCTSPlanOptimizer:
         def collect_nodes(node: MCTSNode):
             if node.optimization_suggestions:
                 all_nodes.append(node)
+            if not node.children and not node.is_last_step():
+                all_nodes.append(node)
             for child in node.children:
                 collect_nodes(child)
 
@@ -402,7 +410,9 @@ class MCTSPlanOptimizer:
             all_nodes, key=lambda n: n.get_ucb_score(self.exploration_weight)
         )
 
-        if not selected_node.optimization_suggestions:
+        if (
+            selected_node.children or selected_node.is_last_step()
+        ) and not selected_node.optimization_suggestions:
             return None
 
         logger.info(
@@ -414,46 +424,19 @@ class MCTSPlanOptimizer:
 
     def expand_node(self, node: MCTSNode) -> Optional[MCTSNode]:
         """Expand selected node with a new child"""
-        if not node.optimization_suggestions:
+
+        if node.optimization_suggestions:
+            current_branch = self._apply_reflection(node)
+        elif not node.children and not node.is_last_step():
+            current_branch = self._apply_execute(node)
+        else:
             return None
 
-        # Select random untried action
-        reflection = random.choice(node.optimization_suggestions)
-        node.optimization_suggestions.remove(reflection)
-
-        # Create new state by applying action
-        self._apply_reflection(node, reflection)
-
-    def _apply_reflection(self, node: MCTSNode, reflection: Dict):
-        """Apply an optimization suggestion to create a new state."""
-
-        current_commit_hash = node.state.commit_hash
-        branch_name = f"mcts_optimized_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        with SessionLocal() as session:
-            taskORM = session.execute(
-                select(TaskORM)
-                .options(joinedload(TaskORM.namespace))
-                .where(TaskORM.id == self.task_id)
-            ).scalar_one()
-            task = Task(taskORM, llm_client, reasoning_llm)
-
-        res = task.update(
-            new_branch_name=branch_name,
-            commit_hash=current_commit_hash,
-            suggestion=reflection["suggestion"],
-            source_branch=reflection["branch_name"],
-        )
-
-        logger.info(
-            "task update result: %s for %s(%s)", res, branch_name, current_commit_hash
-        )
-
-        if res.get("success", False) is False:
+        if current_branch is None:
             return None
 
-        current_branch = res.get("current_branch")
         # find the node from current_commit_hash to the current branch
+        current_commit_hash = node.state.commit_hash
         commits_dict = get_branch_commits(
             self.task_id, current_commit_hash, current_branch
         )
@@ -468,9 +451,65 @@ class MCTSPlanOptimizer:
         commits_dict[current_commit_hash] = {"children": [root_commit_hash]}
 
         # Build tree recursively
-        self._build_tree_recursive(node, root_commit_hash, commits_dict)
+        self._build_tree_recursive(node, current_commit_hash, commits_dict)
 
         return None
+
+    def _apply_execute(self, node: MCTSNode):
+        """Apply an optimization suggestion to create a new state."""
+
+        current_branch = get_branch(self.task_id, node.state.commit_hash)
+        logger.info(
+            "Re-execute node: %s(%s)", node.state.commit_hash, node.state.seq_no
+        )
+
+        with SessionLocal() as session:
+            taskORM = session.execute(
+                select(TaskORM)
+                .options(joinedload(TaskORM.namespace))
+                .where(TaskORM.id == self.task_id)
+            ).scalar_one()
+            task = Task(taskORM, llm_client, reasoning_llm)
+
+        task.execute(
+            node.state.commit_hash,
+        )
+
+        return current_branch
+
+    def _apply_reflection(self, node: MCTSNode):
+        """Apply an optimization suggestion to create a new state."""
+
+        logger.info("Update node: %s(%s)", node.state.commit_hash, node.state.seq_no)
+        current_commit_hash = node.state.commit_hash
+        branch_name = f"mcts_optimized_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        reflection = random.choice(node.optimization_suggestions)
+        node.optimization_suggestions.remove(reflection)
+
+        with SessionLocal() as session:
+            taskORM = session.execute(
+                select(TaskORM)
+                .options(joinedload(TaskORM.namespace))
+                .where(TaskORM.id == self.task_id)
+            ).scalar_one()
+            task = Task(taskORM, llm_client, reasoning_llm)
+
+        # Select random untried action
+        res = task.update(
+            new_branch_name=branch_name,
+            commit_hash=current_commit_hash,
+            suggestion=reflection["suggestion"],
+            source_branch=reflection["branch_name"],
+        )
+
+        logger.info(
+            "task update result: %s for %s(%s)",
+            res,
+            branch_name,
+            current_commit_hash,
+        )
+
+        return branch_name
 
     def evaluate_state(self, node: MCTSNode) -> Tuple[bool, float]:
         """Evaluate the quality of a state using the existing evaluation mechanism
@@ -507,13 +546,44 @@ class MCTSPlanOptimizer:
                 base_score = 1.0 if node.state.evaluation.get("accept", False) else 0.0
 
                 # TODO: Add bonus for other quality assessment
-
                 return {
                     "need_backprop": True,
                     "feedback": node.state.evaluation.get(
                         "plan_adjustment_suggestion", None
                     ),
                     "reward": base_score,
+                }
+            elif (
+                node.state.execution_result is not None
+                and node.state.execution_result.get("execution_error", False)
+            ):
+                goal_description = describe_goal(self.goal, self.metadata)
+                node.state.evaluation = evaluate_execution_error(
+                    evaluation_llm,
+                    goal_description,
+                    node.state.plan,
+                    node.state.execution_result.get("error_message", ""),
+                    node.state.seq_no,
+                )
+                logger.info(
+                    "evaluate execution error: %s(%s) response: %s",
+                    node.state.commit_hash,
+                    node.state.seq_no,
+                    node.state.evaluation,
+                )
+
+                if node.state.evaluation is None:
+                    return {
+                        "need_backprop": False,
+                        "reward": 0,
+                    }
+
+                return {
+                    "need_backprop": True,
+                    "feedback": node.state.evaluation.get(
+                        "plan_adjustment_suggestion", None
+                    ),
+                    "reward": 0,
                 }
             elif not node.children:
                 return {

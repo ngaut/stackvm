@@ -116,14 +116,16 @@ def print_node(node):
 
 
 if __name__ == "__main__":
-    last_run_time = datetime.utcnow() - timedelta(hours=2)  # Initial start time
+    last_run_time = datetime.utcnow() - timedelta(hours=24)  # Initial start time
 
     while True:  # Run forever
-        current_time = datetime.utcnow()
+        current_time = datetime.utcnow() - timedelta(minutes=10)
         logger.info("Round started at %s", current_time)
 
         try:
-            pending_tasks = get_evaluation_pending_tasks(start_time=last_run_time)
+            pending_tasks = get_evaluation_pending_tasks(
+                start_time=last_run_time, end_time=current_time
+            )
             logger.info("Found %d pending tasks", len(pending_tasks))
 
             for task in pending_tasks:
@@ -138,7 +140,7 @@ if __name__ == "__main__":
                 try:
                     logger.info("optimizing task %s", task_id)
                     optimizer = MCTSPlanOptimizer(
-                        task_id=task_id, max_iterations=3, time_limit_seconds=900
+                        task_id=task_id, max_iterations=5, time_limit_seconds=1800
                     )
                     print_node(optimizer.root)
                     optimizer.optimize()
