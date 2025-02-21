@@ -130,15 +130,19 @@ if __name__ == "__main__":
 
             for task in pending_tasks:
                 task_id = task["id"]
+                task
+
+                """
                 status = optimize_plan(task_id, "main", max_iteration=1)
                 logger.info("Task %s status: %s", task_id, status)
 
                 if status != "WAITING_FOR_EVALUATION":
                     logger.info("Task %s is not waiting for evaluation, skip", task_id)
                     continue
+                """
 
                 try:
-                    logger.info("optimizing task %s", task_id)
+                    logger.info("optimizing task %s created at %s", task_id, task["created_at"])
                     optimizer = MCTSPlanOptimizer(
                         task_id=task_id, max_iterations=5, time_limit_seconds=1800
                     )
