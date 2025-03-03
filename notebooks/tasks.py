@@ -2,12 +2,13 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
 import requests
-
 from app.config.database import SessionLocal
 from app.core.task.manager import TaskService
 from app.storage.models import Task, EvaluationStatus
 
 ts = TaskService()
+
+logger = logging.getLogger(__name__)
 
 
 def get_evaluation_pending_tasks(
@@ -75,7 +76,7 @@ def record_evaluation(
             task.evaluation_reason = evaluation_reason
             session.commit()
         except Exception as e:
-            logging.error(f"Failed to record evaluation for task {task_id}: {e}")
+            logger.error(f"Failed to record evaluation for task {task_id}: {e}")
             session.rollback()
             return False
 
@@ -95,7 +96,7 @@ def record_human_evaluation(
             task.human_feedback = feedback
             session.commit()
         except Exception as e:
-            logging.error(f"Failed to record human evaluation for task {task_id}: {e}")
+            logger.error(f"Failed to record human evaluation for task {task_id}: {e}")
             session.rollback()
             return False
 
