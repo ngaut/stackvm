@@ -36,7 +36,10 @@ class OpenAILikeProvider(BaseLLMProvider):
         if response.choices is None:
             raise Exception(f"LLM response is None: {response.error}")
 
-        if hasattr(response.choices[0].message, "reasoning_content"):
+        if (
+            hasattr(response.choices[0].message, "reasoning_content")
+            and response.choices[0].message.reasoning_content is not None
+        ):
             return (
                 "<think>"
                 + response.choices[0].message.reasoning_content
