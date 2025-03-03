@@ -12,18 +12,18 @@ from app.llm.interface import LLMInterface
 from app.config.settings import EVALUATION_LLM_PROVIDER, EVALUATION_LLM_MODEL
 from app.instructions import global_tools_hub
 
-from notebooks.plan_chat_optimizer import (
+from plan_optimization.plan_chat_optimizer import (
     get_task_answer,
     update_plan,
     execute_task_using_new_plan,
 )
-from notebooks.tasks import (
+from plan_optimization.tasks import (
     get_evaluation_pending_tasks,
     record_evaluation,
     record_human_evaluation,
 )
-from notebooks.plan_mcts_optimizer import MCTSPlanOptimizer
-from notebooks.tasks import save_best_plan_from_url
+from plan_optimization.plan_mcts_optimizer import MCTSPlanOptimizer
+from plan_optimization.tasks import save_best_plan_from_url
 
 
 logging.basicConfig(
