@@ -3,6 +3,8 @@ import logging
 from typing import Optional
 from datetime import datetime, timedelta
 import time
+import argparse
+import uuid
 
 from app.core.plan.evaluator import evaulate_answer
 from app.core.task.utils import describe_goal
@@ -115,12 +117,34 @@ def print_node(node):
         print_node(child)
 
 
+def uuid_to_int(uuid_str):
+    """Convert UUID string to integer using its hex representation"""
+    return int(uuid_str.replace("-", ""), 16)
+
+
 if __name__ == "__main__":
-    last_run_time = datetime.utcnow() - timedelta(hours=24)  # Initial start time
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--process_id",
+        type=int,
+        required=True,
+        help="Process ID (0 to num_processes-1)",
+    )
+    parser.add_argument(
+        "--num_processes", type=int, required=True, help="Total number of processes"
+    )
+    args = parser.parse_args()
+
+    if not (0 <= args.process_id < args.num_processes):
+        raise ValueError(f"Process ID must be between 0 and {args.num_processes-1}")
+
+    last_run_time = datetime.utcnow() - timedelta(hours=48)  # Initial start time
 
     while True:  # Run forever
         current_time = datetime.utcnow() - timedelta(minutes=10)
-        logger.info("Round started at %s", current_time)
+        logger.info(
+            f"Round started at {current_time} (Process {args.process_id}/{args.num_processes})"
+        )
 
         try:
             pending_tasks = get_evaluation_pending_tasks(
@@ -130,19 +154,23 @@ if __name__ == "__main__":
 
             for task in pending_tasks:
                 task_id = task["id"]
-                task
-
                 """
                 status = optimize_plan(task_id, "main", max_iteration=1)
                 logger.info("Task %s status: %s", task_id, status)
 
                 if status != "WAITING_FOR_EVALUATION":
                     logger.info("Task %s is not waiting for evaluation, skip", task_id)
-                    continue
                 """
+                # Convert UUID to integer and check if this process should handle this task
+                task_num = uuid_to_int(task_id)
+                if task_num % args.num_processes != args.process_id:
+                    continue
 
+                logger.info(f"Process {args.process_id} handling task {task_id}")
                 try:
-                    logger.info("optimizing task %s created at %s", task_id, task["created_at"])
+                    logger.info(
+                        "optimizing task %s created at %s", task_id, task["created_at"]
+                    )
                     optimizer = MCTSPlanOptimizer(
                         task_id=task_id, max_iterations=5, time_limit_seconds=1800
                     )
