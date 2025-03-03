@@ -211,7 +211,6 @@ The reasoning model is specifically used for:
     - `global_tools_hub.py`: Global tool registry
 
 - `alembic/`: Database migration scripts
-- `notebooks/`: Jupyter notebooks for maintanence
 
 ## Features
 

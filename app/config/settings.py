@@ -56,12 +56,16 @@ DATABASE_URI = os.environ.get("DATABASE_URI") or os.environ.get(
 )
 SESSION_POOL_SIZE: int = os.environ.get("SESSION_POOL_SIZE", 40)
 
-# Existing settings
-# must use tmp path, DO NOT EDIT
+# Get project root directory
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+
+# Update path definitions to use PROJECT_ROOT
+VM_SPEC_PATH = os.path.join(PROJECT_ROOT, "spec.md")
+PLAN_EXAMPLE_PATH = os.path.join(PROJECT_ROOT, "plan_example.md")
 GIT_REPO_PATH = os.environ.get("GIT_REPO_PATH", "/tmp/stack_vm/runtime/")
 GENERATED_FILES_DIR = os.environ.get("GENERATED_FILES_DIR", "/tmp/stack_vm/generated/")
-VM_SPEC_PATH = os.path.join(os.getcwd(), "spec.md")
-PLAN_EXAMPLE_PATH = os.path.join(os.getcwd(), "plan_example.md")
 
 if not os.path.exists(GIT_REPO_PATH):
     try:
