@@ -1,7 +1,9 @@
 import pandas as pd
 import json
 
-local_sample_df = pd.read_pickle("notebooks/local_samples.pkl")
+file_path = "./local_samples.pkl"
+
+local_sample_df = pd.read_pickle(file_path)
 start_index = 175
 
 for index, row in local_sample_df.iterrows():
@@ -28,11 +30,11 @@ for index, row in local_sample_df.iterrows():
     local_sample_df.at[index, 'is_valid'] = (response != 'n')
     
     if index % 10 == 0:
-        local_sample_df.to_pickle("notebooks/local_samples.pkl")
+        local_sample_df.to_pickle(file_path)
         print("Progress saved...")
 
 
-local_sample_df.to_pickle("notebooks/local_samples.pkl")
+local_sample_df.to_pickle(file_path)
 print("\nReview complete. Final results saved.")
 
 valid_count = local_sample_df['is_valid'].sum()
