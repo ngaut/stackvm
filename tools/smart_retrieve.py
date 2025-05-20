@@ -246,7 +246,7 @@ class MetaGraph:
         3. Relationships should capture the intended actions, comparisons, or connections between entities.
         4. Then, Generate 2-4 search queries to collect the information used to answer the Query.
 
-        Please analyze this query and return a meta-graph representation in the following JSON format:
+        Please analyze this query and return a meta-graph representation in the following JSON format (surround with ```json and ``` and contains three sections: entities, relationships, initial_queries):
         ```json
         {{
             "entities": [
@@ -279,16 +279,26 @@ class MetaGraph:
 
         # Generate graph components using LLM
         response = self.llm_client.generate(prompt)
-        graph_components = extract_json(response)
+        try:
+            graph_components = extract_json(response)
+        except ValueError as e:
+            logger.error(
+                f"Failed to extract JSON from LLM response in _generate_meta_graph. Response: {response}. Error: {e}"
+            )
+            # Return a default empty structure or handle as appropriate
+            graph_components = {"entities": [], "relationships": [], "initial_queries": []}
 
-        for entity in graph_components["entities"]:
+        for entity in graph_components.get("entities", []): # Use .get for safety
             self.add_entity(entity)
 
         # Add relationships
-        for rel in graph_components["relationships"]:
+        for rel in graph_components.get("relationships", []): # Use .get for safety
             self.add_relationship(rel)
 
-        self.initial_queries = graph_components["initial_queries"]
+        self.initial_queries = graph_components.get("initial_queries", []) # Use .get for safety
+        if not self.initial_queries:
+            logger.warning("No initial queries found in meta-graph. Using the query itself.")
+            self.initial_queries = [query]
 
     def add_entity(self, entity):
         self.entities[entity["name"]] = entity
