@@ -67,14 +67,13 @@ class BedrockProvider(BaseLLMProvider):
         if token_count > 65536:
             logger.warning(f"Prompt is too long. Token count: {token_count}")
             full_prompt = f"{context[:65536]}\n{prompt}" if context else prompt
-            token_count = count_tokens(full_prompt)
 
         messages = [{"role": "user", "content": [{"text": full_prompt}]}]
 
         response = self.client.converse(
             modelId=self.model,
             inferenceConfig={
-                "maxTokens": kwargs.get("max_tokens", token_count + 100),
+                "maxTokens": kwargs.get("max_tokens", 8192),
                 "temperature": kwargs.get("temperature", 0.6),
             },
             messages=messages,
@@ -100,7 +99,6 @@ class BedrockProvider(BaseLLMProvider):
         if token_count > 65536:
             logger.warning(f"Prompt is too long. Token count: {token_count}")
             full_prompt = f"{context[:65536]}\n{prompt}" if context else prompt
-            token_count = count_tokens(full_prompt)
 
         messages = [{"role": "user", "content": [{"text": full_prompt}]}]
 
@@ -108,7 +106,7 @@ class BedrockProvider(BaseLLMProvider):
             response_stream = self.client.converse_stream(
                 modelId=self.model,
                 inferenceConfig={
-                    "maxTokens": kwargs.get("max_tokens", token_count + 100),
+                    "maxTokens": kwargs.get("max_tokens", 8192),
                     "temperature": kwargs.get("temperature", 0.6),
                 },
                 messages=messages,
