@@ -156,8 +156,10 @@ def vector_search(query, top_k=10):
             # "gpt-4"
         )  # Automatically selects the appropriate encoding
     except Exception as e:
-        logger.error("Failed to initialize the token encoder: %s", str(e))
-        encoding = tiktoken.get_encoding("cl100k_base")
+        logger.warning("Failed to initialize the token encoder: %s", str(e))
+        encoding = tiktoken.encoding_for_model(
+            "gpt-4o"
+        )
 
     url = f"{AUTOFLOW_BASE_URL}/api/v1/admin/embedding_retrieve"
     json_payload = {
