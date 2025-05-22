@@ -76,7 +76,11 @@ Now, let's generate the plan.
      ```
    - Ensure that the "tool_params" object contains all necessary parameters for the specific tool being called.
 
-The final step of the plan must be assign the final output result to the 'final_answer' variable.
+5. the plan should be in a json array format, surround by ```json and ```, and can be parsed by json.loads().
+
+  - Ensure that in the generated JSON, if a string value itself contains double quotes (`"`), these double quotes MUST be correctly escaped as `\"`.
+  - The final step of the plan must be assign the final output result to the 'final_answer' variable.
+
 You should response in the following format:
 
 <think>...</think>
