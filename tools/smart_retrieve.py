@@ -630,4 +630,4 @@ def retrieve_knowledge_graph(query):
     - **Focus Queries on General TiDB Knowledge:**  Target your queries towards general, shared knowledge about TiDB concepts and relationships.  Avoid queries that are specific to a user's environment or seek private data like configurations or versions, which is out of scope of this tool.
     """
 
-    return smart_retrieve(query)
+    return smart_retrieve(query, max_iterations=1)
