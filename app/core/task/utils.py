@@ -21,6 +21,9 @@ def describe_goal(goal: str, metadata: Dict[str, Any]) -> str:
     if metadata:
         response_format = metadata.get("response_format", {})
 
+        if response_format is None:
+            response_format = {}
+
         # Add background information if present
         background = response_format.get("Background") or response_format.get(
             "background"
