@@ -9,7 +9,7 @@ readme = "README.md"
 python = "^3.10"
 gitpython = "^3.1.43"
 flask = "^3.0.3"
-openai = "^1.51.2"
+openai = "^1.82.0"
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
 alembic = "^1.13.3"
@@ -26,6 +26,8 @@ boto3 = "1.35.93"
 pandas = "^2.2.3"
 tqdm = "^4.67.1"
 datasets = "^3.3.2"
+httpx = "^0.28.1"
+httpcore = "^1.0.9"
 
 
 [build-system]
